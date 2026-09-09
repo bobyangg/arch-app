@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Arch Premium, pricing</title>
+<style>
+:root{
+  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
+  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B;
+  --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
+  --serif: ui-serif, "New York", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--night); color:var(--limestone); font-family:var(--sans); zoom:1.9;}
+.phone{width:393px; height:640px; background:var(--night); overflow:hidden; position:relative;}
+.scroll{padding:0 20px;}
+.safetop{height:44px;}
+
+.t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.t-body{font-size:17px; line-height:24px;}
+.t-footnote{font-size:13px; line-height:18px;}
+.hairline{height:.5px; background:var(--hairline);}
+
+.row{display:flex; gap:12px; padding:16px 0; align-items:flex-start;}
+.av{width:52px; height:52px; border-radius:26px; flex:none;}
+.row .body{flex:1; min-width:0;}
+.row .line1{display:flex; align-items:baseline; gap:8px;}
+.row .name{font-size:15px; line-height:20px; font-weight:600;}
+.row .time{margin-left:auto; font-size:13px; line-height:18px; color:var(--mortar);}
+.row .line2{display:flex; gap:8px; align-items:flex-start; margin-top:4px;}
+.row .prev{font-size:13px; line-height:18px; color:var(--mortar); flex:1;
+           display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.row.unread .prev{color:var(--limestone);}
+.dot{width:8px; height:8px; border-radius:4px; background:var(--lamp); margin-top:5px; flex:none;}
+.rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
+
+.benefit{padding:14px 0;}
+.benefit .bt{font-size:15px; line-height:20px; font-weight:600;}
+.benefit .bd{font-size:13px; line-height:18px; color:var(--mortar); margin-top:4px;}
+.plan{background:var(--stone); border-radius:12px; padding:16px; display:flex;
+      align-items:baseline; margin-bottom:12px;}
+.plan.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px rgba(237,231,221,.30);}
+.plan .d{font-size:15px; line-height:20px; font-weight:600;}
+.plan .pm{font-size:13px; line-height:18px; color:var(--mortar); margin-top:4px;}
+.plan .right{margin-left:auto; text-align:right;}
+.plan .tot{font-size:15px; line-height:20px; font-weight:600;}
+.plan .rec{font-size:13px; line-height:18px; color:var(--mortar); margin-top:4px;}
+
+.btn{height:52px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+     font-size:15px; font-weight:600;}
+.btn-primary{background:var(--lamp); color:var(--night);}
+.btn-quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btn-text{height:44px; display:flex; align-items:center; justify-content:center;
+          font-size:15px; font-weight:600; color:var(--mortar);}
+
+.tabbar{background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+        display:flex; padding:8px 0 4px; position:absolute; left:0; right:0; bottom:0;}
+.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+.tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+.tab.on .lbl{color:var(--lamp);}
+.glyphwrap{width:26px; height:26px; position:relative;}
+.badge{position:absolute; top:-5px; right:-9px; min-width:16px; height:16px; border-radius:8px;
+       background:var(--lamp); color:var(--night); font-size:11px; font-weight:600;
+       display:flex; align-items:center; justify-content:center;}
+</style></head><body>
+<div class="phone"><div class="scroll"><div style="height:24px;"></div><div class="t-footnote" style="color:var(--mortar); margin-bottom:16px;">continued from the benefits list</div><div class="plan "><div><div class="d">One month</div><div class="pm">$24.99 a month</div></div><div class="right"><div class="tot">$24.99</div></div></div>
+<div class="plan sel"><div><div class="d">Three months</div><div class="pm">$17.99 a month</div></div><div class="right"><div class="tot">$53.97</div><div class="rec">Recommended</div></div></div>
+<div class="plan "><div><div class="d">Twelve months</div><div class="pm">$11.99 a month</div></div><div class="right"><div class="tot">$143.88</div></div></div><div class="btn btn-primary" style="margin-top:20px;">Subscribe for $53.97</div><div class="t-footnote" style="color:var(--mortar); text-align:center; margin-top:12px;">Payment is charged to your Apple account. Renews until you cancel, which you can do in Settings.</div><div class="btn-text">Restore purchases</div></div><div class="tabbar"><div class="tab on"><div class="glyphwrap"><svg id="g-prem" width="26" height="26" viewBox="0 0 26 26"></svg></div><div class="lbl">Premium</div></div><div class="tab "><div class="glyphwrap"><svg id="g-daily" width="26" height="26" viewBox="0 0 26 26"></svg></div><div class="lbl">Daily 5</div></div><div class="tab "><div class="glyphwrap"><svg id="g-msg" width="26" height="26" viewBox="0 0 26 26"></svg><div class="badge">1</div></div><div class="lbl">Messages</div></div><div class="tab "><div class="glyphwrap"><svg id="g-you" width="26" height="26" viewBox="0 0 26 26"></svg></div><div class="lbl">You</div></div></div></div>
+<script>
+var C = {mortar:'#8D949E', lamp:'#F0A44B'};
+var ACTIVE = "prem";
+function pt(cx,cy,r,deg){var a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
+function archMarkPath(W){
+  var r=0.42*W, cx=W/2, cy=0.59*W, foot=0.90*W;
+  return 'M'+(cx-r)+','+foot+' V'+cy+' A'+r+','+r+' 0 0 1 '+(cx+r)+','+cy+' V'+foot+' M0,0 H'+W;
+}
+function svgPath(el,d,color,sw){
+  var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',d); p.setAttribute('fill','none'); p.setAttribute('stroke',color);
+  p.setAttribute('stroke-width',sw); p.setAttribute('stroke-linecap','round');
+  p.setAttribute('stroke-linejoin','round'); el.appendChild(p); return p;
+}
+function tint(k){ return k===ACTIVE ? C.lamp : C.mortar; }
+function weight(k){ return k===ACTIVE ? 2.25 : 1.75; }
+(function(){ var el=document.getElementById('g-prem'); if(!el) return;
+  var sw=weight('prem'), i=sw/2, w=20, h=24, ox=3, oy=1, t=w*0.16;
+  svgPath(el,'M'+(ox+i)+','+(oy+i)+' L'+(ox+w-i)+','+(oy+i)+' L'+(ox+w-t)+','+(oy+h-i)+
+             ' L'+(ox+t)+','+(oy+h-i)+' Z', tint('prem'), sw);
+})();
+(function(){ var el=document.getElementById('g-daily'); if(!el) return;
+  var sw=weight('daily'), W=26-sw;
+  var p=svgPath(el, archMarkPath(W), tint('daily'), sw);
+  p.setAttribute('transform','translate('+(sw/2)+','+((26-W*0.9-sw)/2+sw/2)+')');
+})();
+(function(){ var el=document.getElementById('g-msg'); if(!el) return;
+  var sw=weight('msg'), i=sw/2, w=24-sw, h=24-sw, ox=1+i, oy=1+i, bb=oy+h*0.76, c=w*0.22;
+  svgPath(el,'M'+ox+','+(oy+c)+' Q'+ox+','+oy+' '+(ox+c)+','+oy+
+             ' L'+(ox+w-c)+','+oy+' Q'+(ox+w)+','+oy+' '+(ox+w)+','+(oy+c)+
+             ' L'+(ox+w)+','+(bb-c)+' Q'+(ox+w)+','+bb+' '+(ox+w-c)+','+bb+
+             ' L'+(ox+w*0.44)+','+bb+' L'+(ox+w*0.18)+','+(oy+h)+' L'+(ox+w*0.28)+','+bb+
+             ' L'+(ox+c)+','+bb+' Q'+ox+','+bb+' '+ox+','+(bb-c)+' Z', tint('msg'), sw);
+})();
+(function(){ var el=document.getElementById('g-you'); if(!el) return;
+  var sw=weight('you'), i=sw/2, w=24-sw, h=24-sw, ox=1+i, oy=1+i;
+  var hr=w*0.17, hcx=ox+w/2, hcy=oy+hr, sr=w*0.46, scy=oy+h*0.52+sr;
+  var cc=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  cc.setAttribute('cx',hcx); cc.setAttribute('cy',hcy); cc.setAttribute('r',hr);
+  cc.setAttribute('fill','none'); cc.setAttribute('stroke',tint('you'));
+  cc.setAttribute('stroke-width',sw); el.appendChild(cc);
+  var a=pt(hcx,scy,sr,190), b=pt(hcx,scy,sr,350);
+  svgPath(el,'M'+a[0]+','+a[1]+' A'+sr+','+sr+' 0 0 1 '+b[0]+','+b[1], tint('you'), sw);
+})();
+(function(){ var el=document.getElementById('mast'); if(!el) return;
+  var sw=3, W=48-sw;
+  var p=svgPath(el, archMarkPath(W), C.lamp, sw);
+  p.setAttribute('transform','translate('+(sw/2)+','+(sw/2)+')');
+})();
+</script></body></html>
