@@ -70,7 +70,7 @@ struct DailyFiveView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.m) {
-            Text("Your five")
+            Text(headerTitle)
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
 
@@ -84,6 +84,16 @@ struct DailyFiveView: View {
         }
         .padding(.top, ArchSpacing.m)
         .padding(.bottom, ArchSpacing.xl)
+    }
+
+    /// Premium buys a sixth slot, so the header counts what you actually hold.
+    /// The tab keeps its fixed name; this line describes your roster.
+    private var headerTitle: String {
+        switch roster.capacity {
+        case 5:  return "Your five"
+        case 6:  return "Your six"
+        default: return "Your roster"
+        }
     }
 
     private var people: some View {

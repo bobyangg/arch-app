@@ -82,9 +82,9 @@ struct ArchMark: Shape {
 
         var path = Path()
 
-        // The deck.
-        path.move(to: CGPoint(x: origin.x, y: origin.y))
-        path.addLine(to: CGPoint(x: origin.x + width, y: origin.y))
+        // Subpath order matters only when `trim` is animating: the arch is drawn
+        // first and the deck lands across it, which is the order an arch bridge is
+        // actually built in.
 
         // The arch: left pier, span, right pier.
         path.move(to: CGPoint(x: centre.x - radius, y: footY))
@@ -96,6 +96,10 @@ struct ArchMark: Shape {
             delta: .degrees(180)
         )
         path.addLine(to: CGPoint(x: centre.x + radius, y: footY))
+
+        // The deck.
+        path.move(to: CGPoint(x: origin.x, y: origin.y))
+        path.addLine(to: CGPoint(x: origin.x + width, y: origin.y))
 
         return trim >= 1 ? path : path.trimmedPath(from: 0, to: max(0, trim))
     }

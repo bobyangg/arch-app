@@ -346,6 +346,14 @@ enum MockData {
         .filled(nadia), .filled(teo), .filled(priya), .filled(marcus), .filled(lena)
     ])
 
+    /// A subscriber's roster: six slots rather than five. The arch draws six
+    /// voussoirs, so the indicator generalises without a second design.
+    static let rosterPremium = Roster(slots: [
+        .filled(nadia), .filled(teo), .filled(priya),
+        .filled(marcus), .filled(lena),
+        .empty(id: "slot-6", refillsAt: hours(14))
+    ])
+
     /// Three people and two open slots, refilling at different times.
     static let rosterPartial = Roster(slots: [
         .filled(nadia),
@@ -445,26 +453,34 @@ enum MockData {
 
     // MARK: Premium
 
+    // Premium changes what you can do with your slots and what you can say about
+    // yourself. It does not buy you scores, rankings, or anything about who has
+    // looked at you — none of which exist in Arch.
     static let premiumBenefits: [PremiumBenefit] = [
         PremiumBenefit(
             id: "b1",
-            title: "See who liked you",
-            detail: "The people who set a stone on your profile, before they come up in your day."
+            title: "Refill a slot today",
+            detail: "Fill an open slot straight away instead of waiting for tomorrow."
         ),
         PremiumBenefit(
             id: "b2",
-            title: "Reopen yesterday",
-            detail: "Go back through yesterday's five once, for the one you moved past too quickly."
+            title: "A sixth slot",
+            detail: "Hold six people at once instead of five."
         ),
         PremiumBenefit(
             id: "b3",
+            title: "Tips for your profile",
+            detail: "Specific notes on your photos and answers, and what to change."
+        ),
+        PremiumBenefit(
+            id: "b4",
             title: "Six prompts instead of three",
             detail: "More room to be specific about yourself."
         ),
         PremiumBenefit(
-            id: "b4",
+            id: "b5",
             title: "Finer preferences",
-            detail: "Choose your five on the things you actually care about, not only distance and age."
+            detail: "Choose who reaches you on the things you actually care about, not only distance and age."
         )
     ]
 
