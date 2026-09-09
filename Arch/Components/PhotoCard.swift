@@ -19,45 +19,58 @@ struct PhotoPlaceholder: View {
     }
 }
 
-/// A single photograph in the profile scroll, with its own like affordance. The
-/// affordance belongs to this photo — that is the whole point of the pattern.
+/// A single photograph in a profile scroll.
+///
+/// There is no like button here. In the profile detail, tapping the card selects
+/// it, and the selection is carried into the message composer as quoted context —
+/// the card is the control, so no per-item buttons exist anywhere in the app.
 struct PhotoCard: View {
     let photo: Photo
+    /// Editing, on your own profile. Never a like.
     var affordance: CardAffordance = .none
     /// Where this photo sits in the profile, for VoiceOver.
     var position: Int = 1
+    var aspectRatio: CGFloat = 4.0 / 5.0
+    /// Selected as the thing the first message will be about.
+    var isSelected: Bool = false
+    var onTap: (() -> Void)?
 
     var body: some View {
+        if let onTap {
+            Button(action: onTap) { card }
+                .buttonStyle(PressScaleStyle(scale: 0.985))
+                .accessibilityLabel("Photo \(position)")
+                .accessibilityHint("Write your message about this photo")
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        } else {
+            card
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Photo \(position)")
+        }
+    }
+
+    private var card: some View {
         PhotoPlaceholder(toneIndex: photo.toneIndex)
-            .aspectRatio(4.0 / 5.0, contentMode: .fit)
+            .aspectRatio(aspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous)
+                    .strokeBorder(isSelected ? ArchColor.lampQuiet : Color.clear, lineWidth: 1)
+            )
             .overlay(alignment: .bottomTrailing) {
                 CardAffordanceView(affordance: affordance, subject: "photo \(position)")
                     .padding(ArchSpacing.xs)
             }
-            .accessibilityElement(children: .contain)
-            .accessibilityLabel("Photo \(position)")
+            .animation(ArchMotion.quick, value: isSelected)
     }
 }
 
 #Preview("Photo card") {
     ScrollView {
         VStack(spacing: ArchSpacing.cardGap) {
-            PhotoCard(
-                photo: MockData.nadia.photos[0],
-                affordance: .like(isLiked: false, action: {}),
-                position: 1
-            )
-            PhotoCard(
-                photo: MockData.nadia.photos[1],
-                affordance: .like(isLiked: true, action: {}),
-                position: 2
-            )
-            PhotoCard(
-                photo: MockData.you.photos[0],
-                affordance: .edit(action: {}),
-                position: 1
-            )
+            PhotoCard(photo: MockData.nadia.photos[0], position: 1)
+            PhotoCard(photo: MockData.nadia.photos[1], position: 2, isSelected: true, onTap: {})
+            PhotoCard(photo: MockData.you.photos[0], affordance: .edit(action: {}), position: 1)
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.xxl)

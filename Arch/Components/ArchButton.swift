@@ -5,6 +5,9 @@ import SwiftUI
 /// Arch has exactly two button weights. `lamp` is the only colour that invites
 /// action, so only the primary button carries it; everything secondary is a quiet
 /// outline that stays clearly available without competing.
+///
+/// Some decisions get neither weight. Confirming a dismissal is the clearest
+/// example: it is the user's to make, so the app puts no colour behind it.
 struct ArchButton: View {
     enum Kind {
         case primary
@@ -13,26 +16,31 @@ struct ArchButton: View {
 
     let title: String
     var kind: Kind = .primary
+    /// Reduced to an inert, low-contrast state. Used by the composer's send
+    /// action while there is nothing to send.
+    var isEnabled: Bool = true
     let action: () -> Void
 
     var body: some View {
         Button(title, action: action)
-            .buttonStyle(ArchButtonStyle(kind: kind))
+            .buttonStyle(ArchButtonStyle(kind: kind, isEnabled: isEnabled))
+            .disabled(!isEnabled)
     }
 }
 
 struct ArchButtonStyle: ButtonStyle {
     var kind: ArchButton.Kind = .primary
+    var isEnabled: Bool = true
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .archText(.subhead)
-            .foregroundStyle(kind == .primary ? ArchColor.night : ArchColor.mortar)
+            .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .frame(height: 52)
             .background(
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .fill(kind == .primary ? ArchColor.lamp : Color.clear)
+                    .fill(fill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
@@ -43,59 +51,67 @@ struct ArchButtonStyle: ButtonStyle {
             )
             .opacity(configuration.isPressed ? 0.82 : 1)
             .animation(ArchMotion.quick, value: configuration.isPressed)
+            .animation(ArchMotion.quick, value: isEnabled)
+    }
+
+    // An inactive primary button steps down a surface rather than dimming the
+    // accent. Fading `lamp` out turns it into a muddy brown, which reads as
+    // damage rather than as "not yet".
+    private var fill: Color {
+        guard kind == .primary else { return .clear }
+        return isEnabled ? ArchColor.lamp : ArchColor.stoneRaised
+    }
+
+    private var foreground: Color {
+        guard kind == .primary else { return ArchColor.mortar }
+        return isEnabled ? ArchColor.night : ArchColor.mortar
     }
 }
 
-// MARK: - The like affordance
-
-/// You do not like a person in Arch, you like one specific photo or one specific
-/// answer — so this button belongs to a card, never to a screen.
-///
-/// It is a keystone, not a heart. Liking something is setting a stone; when both
-/// people have set one, the arch closes. Unset it reads as an outlined stone
-/// waiting to be placed; set, it fills with lamplight.
-struct KeystoneLikeButton: View {
-    var isLiked: Bool
-    /// Completes the sentence "Like ..." for VoiceOver.
-    var subject: String = "this"
+/// A text-only action, for the quietest thing on a screen: dismissing someone from
+/// the profile detail, or backing out of a confirmation. Never `lamp`.
+struct ArchTextButton: View {
+    let title: String
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
-            KeystoneShape()
-                .fill(isLiked ? ArchColor.lamp : ArchColor.stone)
-                .overlay(
-                    KeystoneShape()
-                        .strokeBorder(isLiked ? Color.clear : ArchColor.lamp, lineWidth: 1.5)
-                )
-                .frame(width: 34, height: 38)
-                .frame(width: ArchSpacing.minimumTapTarget, height: ArchSpacing.minimumTapTarget)
+            Text(title)
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.mortar)
+                .frame(maxWidth: .infinity)
+                .frame(height: ArchSpacing.minimumTapTarget)
                 .contentShape(Rectangle())
         }
-        .buttonStyle(KeystonePressStyle())
-        .accessibilityLabel(isLiked ? "Liked \(subject)" : "Like \(subject)")
-        .accessibilityAddTraits(isLiked ? [.isSelected] : [])
+        .buttonStyle(PressScaleStyle(scale: 1))
     }
 }
 
-private struct KeystonePressStyle: ButtonStyle {
+// MARK: - Press feedback
+
+/// Shared press feedback: a small, quick scale. Nothing bounces.
+struct PressScaleStyle: ButtonStyle {
+    var scale: CGFloat = 0.92
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1)
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .opacity(configuration.isPressed ? 0.7 : 1)
             .animation(ArchMotion.quick, value: configuration.isPressed)
     }
 }
 
 // MARK: - Card affordances
 
-/// What sits in the bottom-right corner of a photo or prompt card. The same two
-/// cards serve the day's five and your own profile; only this changes.
+/// What sits in the bottom-right corner of a photo or prompt card.
+///
+/// There is no like. Arch has no mutual-match gate: if you want to talk to someone
+/// in your five, you message them. The only card affordance left is editing your
+/// own profile.
 enum CardAffordance {
-    /// Someone else's card: set a stone on it.
-    case like(isLiked: Bool, action: () -> Void)
-    /// Your own card: edit it.
+    /// Your own card, on the You tab.
     case edit(action: () -> Void)
-    /// A card pinned for context, in a message thread. Nothing to do.
+    /// Someone else's card. Nothing to do to it directly.
     case none
 }
 
@@ -105,8 +121,6 @@ struct CardAffordanceView: View {
 
     var body: some View {
         switch affordance {
-        case .like(let isLiked, let action):
-            KeystoneLikeButton(isLiked: isLiked, subject: subject, action: action)
         case .edit(let action):
             Button(action: action) {
                 Image(systemName: "pencil")
@@ -117,7 +131,7 @@ struct CardAffordanceView: View {
                     .frame(width: ArchSpacing.minimumTapTarget, height: ArchSpacing.minimumTapTarget)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(KeystonePressStyle())
+            .buttonStyle(PressScaleStyle())
             .accessibilityLabel("Edit \(subject)")
         case .none:
             EmptyView()
@@ -130,14 +144,12 @@ struct CardAffordanceView: View {
 #Preview("Buttons") {
     VStack(spacing: ArchSpacing.m) {
         ArchButton(title: "Send a message", action: {})
-        ArchButton(title: "Not for me", kind: .quiet, action: {})
+        ArchButton(title: "Send", isEnabled: false, action: {})
+        ArchButton(title: "Dismiss", kind: .quiet, action: {})
+        ArchTextButton(title: "Cancel", action: {})
 
-        HStack(spacing: ArchSpacing.xl) {
-            KeystoneLikeButton(isLiked: false, subject: "this photo", action: {})
-            KeystoneLikeButton(isLiked: true, subject: "this photo", action: {})
-            CardAffordanceView(affordance: .edit(action: {}), subject: "this photo")
-        }
-        .padding(.top, ArchSpacing.xl)
+        CardAffordanceView(affordance: .edit(action: {}), subject: "this photo")
+            .padding(.top, ArchSpacing.xl)
     }
     .padding(ArchSpacing.screenMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)

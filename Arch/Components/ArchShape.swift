@@ -104,7 +104,7 @@ struct ArchMark: Shape {
 // MARK: - The keystone
 
 /// A single voussoir seen face-on: wider at the extrados than at the intrados.
-/// This is the like affordance and the Premium tab glyph — never a heart, never a crown.
+/// This is the Premium tab glyph — never a crown, never a star.
 struct KeystoneShape: InsettableShape {
     /// Fraction of the width taken off each bottom corner.
     var taper: CGFloat = 0.16
@@ -135,42 +135,41 @@ struct KeystoneShape: InsettableShape {
 
 // MARK: - The band
 
-/// Layout for the Daily Arch: five voussoirs springing from a common centre, with
-/// the centre stone drawn proud of the band on both faces so it reads as the
-/// keystone with no colour change at all.
+/// Layout for the five slots of the Daily 5, drawn as the five voussoirs of an
+/// arch springing from a common centre.
+///
+/// All five stones are identical. An earlier version drew the centre stone proud
+/// of the band as a keystone, which was right when the middle of the arch marked a
+/// match locking — but the five slots are equal, and a proud centre stone would
+/// claim that the third-ranked person matters more than the others. The keystone
+/// motif lives on in `KeystoneShape` and `ArchMark`, where it is still true.
 struct ArchBand {
     var count: Int = 5
     /// The mortar joint left open either side of each stone.
     var joint: Angle = .degrees(1.3)
     /// Radial thickness of the band.
     var thickness: CGFloat = 24
-    /// How far the keystone stands proud of the extrados.
-    var outerProud: CGFloat = 5
-    /// How far it drops below the intrados.
-    var innerProud: CGFloat = 4
+    /// Room left around the extrados so a stroked outline does not clip.
+    var strokeAllowance: CGFloat = 1
 
-    var keystoneIndex: Int { count / 2 }
     private var step: Double { 180.0 / Double(count) }
 
-    func isKeystone(_ index: Int) -> Bool { index == keystoneIndex }
-
-    /// Height needed to draw the band at a given width without clipping the keystone.
+    /// Height needed to draw the band at a given width.
     func height(forWidth width: CGFloat) -> CGFloat {
-        width / 2 + outerProud
+        width / 2 + strokeAllowance
     }
 
     private func extrados(in size: CGSize) -> CGFloat {
-        max(1, min(size.width / 2, size.height) - outerProud)
+        max(1, min(size.width / 2, size.height) - strokeAllowance)
     }
 
     func segment(_ index: Int, in size: CGSize) -> ArchSegment {
         let base = extrados(in: size)
-        let proud = isKeystone(index)
         return ArchSegment(
             startAngle: .degrees(180 + Double(index) * step + joint.degrees),
             endAngle: .degrees(180 + Double(index + 1) * step - joint.degrees),
-            outerRadius: base + (proud ? outerProud : 0),
-            innerRadius: max(1, base - thickness - (proud ? innerProud : 0))
+            outerRadius: base,
+            innerRadius: max(1, base - thickness)
         )
     }
 }

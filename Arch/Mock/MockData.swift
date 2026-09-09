@@ -57,6 +57,45 @@ struct Person: Identifiable, Hashable {
     var avatarToneIndex: Int { photos.first?.toneIndex ?? 0 }
 }
 
+/// One of the five slots. There are always exactly five: a slot is either holding
+/// someone or waiting for tomorrow. Nothing is ever "finished".
+///
+/// A slot says nothing about *why* it is empty. You dismissing someone and someone
+/// dismissing you produce the identical state, because the app never tells you
+/// which happened.
+enum RosterSlot: Identifiable, Hashable {
+    case filled(Person)
+    case empty(id: String, refillsAt: Date)
+
+    var id: String {
+        switch self {
+        case .filled(let person): return person.id
+        case .empty(let id, _):   return id
+        }
+    }
+
+    var person: Person? {
+        if case .filled(let person) = self { return person }
+        return nil
+    }
+
+    var refillsAt: Date? {
+        if case .empty(_, let date) = self { return date }
+        return nil
+    }
+}
+
+/// The five slots. The roster is always five long; the screen draws the people
+/// first and groups the open slots underneath.
+struct Roster: Hashable {
+    var slots: [RosterSlot]
+
+    var people: [Person] { slots.compactMap(\.person) }
+    var openSlots: [RosterSlot] { slots.filter { $0.person == nil } }
+    var filledCount: Int { people.count }
+    var capacity: Int { slots.count }
+}
+
 struct Message: Identifiable, Hashable {
     let id: String
     let text: String
@@ -67,15 +106,14 @@ struct Message: Identifiable, Hashable {
 struct Conversation: Identifiable, Hashable {
     let id: String
     let person: Person
-    /// The photo or prompt the first like landed on. Pinned to the top of the
-    /// thread so neither person has to remember why they are talking.
-    let opening: ProfileItem
+    /// The photo or prompt the first message quoted, if it quoted one. Pinned to
+    /// the top of the thread so neither person has to remember why they started.
+    let opening: ProfileItem?
     let messages: [Message]
     let unreadCount: Int
     /// Pre-formatted for the list; a real build would format a Date here.
     let lastActivity: String
 
-    var isNew: Bool { messages.isEmpty }
     var preview: String { messages.last?.text ?? "" }
 }
 
@@ -295,27 +333,40 @@ enum MockData {
         ]
     )
 
-    // MARK: Connections and messages
+    // MARK: Roster states
 
-    /// People you have connected with but not yet written to.
-    static let newConnections: [Conversation] = [
-        Conversation(
-            id: "c-priya",
-            person: priya,
-            opening: priya.items[3],
-            messages: [],
-            unreadCount: 0,
-            lastActivity: "Connected today"
-        ),
-        Conversation(
-            id: "c-marcus",
-            person: marcus,
-            opening: marcus.items[1],
-            messages: [],
-            unreadCount: 0,
-            lastActivity: "Connected yesterday"
-        )
-    ]
+    // Refill times are relative so the previews always read sensibly. A real build
+    // would take these from the server.
+    private static func hours(_ count: Double) -> Date {
+        Date().addingTimeInterval(count * 3600)
+    }
+
+    /// Five people, no gaps. The arch holds.
+    static let rosterFull = Roster(slots: [
+        .filled(nadia), .filled(teo), .filled(priya), .filled(marcus), .filled(lena)
+    ])
+
+    /// Three people and two open slots, refilling at different times.
+    static let rosterPartial = Roster(slots: [
+        .filled(nadia),
+        .filled(priya),
+        .filled(lena),
+        .empty(id: "slot-4", refillsAt: hours(14)),
+        .empty(id: "slot-5", refillsAt: hours(38))
+    ])
+
+    /// One person, four open slots. The state that has to look intentional rather
+    /// than broken — the outlined stones keep the arch legible, and the open slots
+    /// are quieter than the person, not louder.
+    static let rosterNearlyEmpty = Roster(slots: [
+        .filled(teo),
+        .empty(id: "slot-2", refillsAt: hours(14)),
+        .empty(id: "slot-3", refillsAt: hours(14)),
+        .empty(id: "slot-4", refillsAt: hours(38)),
+        .empty(id: "slot-5", refillsAt: hours(62))
+    ])
+
+    // MARK: Messages
 
     static let conversations: [Conversation] = [
         Conversation(
