@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Settings</title>
+<style>
+:root{
+  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
+  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B;
+  --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
+  --serif: ui-serif, "New York", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--night); color:var(--limestone); font-family:var(--sans); zoom:2;}
+.phone{width:393px; height:430px; background:var(--night); overflow:hidden; position:relative;}
+.pad{padding:0 20px;}
+
+.t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.t-prompt{font-family:var(--serif); font-size:19px; line-height:26px;}
+.t-bodyL{font-size:20px; line-height:28px;}
+.t-body{font-size:17px; line-height:24px;}
+.t-subhead{font-size:15px; line-height:20px; font-weight:600;}
+.t-footnote{font-size:13px; line-height:18px;}
+.t-caption{font-size:12px; line-height:16px; font-weight:500;}
+.mortar{color:var(--mortar);}
+.hairline{height:.5px; background:var(--hairline);}
+
+.hdr{display:flex; align-items:baseline; gap:12px; padding:16px 20px 16px;}
+.hdr .sp{margin-left:auto;}
+.gear{width:20px; height:20px; color:var(--mortar); font-size:17px; line-height:20px;}
+.pencil{width:36px; height:36px; border-radius:18px; background:var(--stoneRaised);
+        display:flex; align-items:center; justify-content:center; color:var(--limestone);
+        font-size:15px; flex:none;}
+
+.vitals{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+.vital{background:var(--stone); border-radius:12px; padding:8px 12px;
+       font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+
+.chip{background:var(--stone); border-radius:12px; padding:8px 12px;
+      font-size:13px; line-height:18px; color:var(--limestone);}
+.chip-add{border:1px solid var(--quiet); background:transparent; color:var(--mortar);
+          border-radius:12px; padding:8px 12px; font-size:13px; line-height:18px;}
+.chips{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+
+.promptcard{background:var(--stone); border-radius:20px; padding:24px; position:relative;}
+.promptcard .q{color:var(--mortar); margin-bottom:12px;}
+.promptcard .pencil{position:absolute; right:12px; bottom:12px;}
+
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:12px;}
+.slot{aspect-ratio:1; border-radius:12px; position:relative;}
+.slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:12px;
+         background:rgba(15,19,25,.75); color:var(--limestone); font-size:12px;
+         display:flex; align-items:center; justify-content:center;}
+.slot-add{background:var(--stone); display:flex; align-items:center; justify-content:center;
+          color:var(--mortar); font-size:17px;}
+
+.arow{background:var(--stone); border-radius:12px; padding:12px; display:flex;
+      align-items:center; gap:12px; margin-bottom:8px;}
+.arow .h{color:var(--mortar); font-size:15px;}
+.arow .q{font-size:13px; line-height:18px; color:var(--limestone);
+         white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+.group{background:var(--stone); border-radius:20px; overflow:hidden; margin-top:8px;}
+.srow{display:flex; align-items:center; gap:12px; padding:16px;}
+.srow .t{font-size:17px; line-height:24px;}
+.srow .d{margin-left:auto; font-size:13px; line-height:18px; color:var(--mortar);}
+.srow .c{color:var(--mortar); font-size:12px;}
+.srule{height:.5px; background:var(--hairline); margin-left:16px;}
+.slabel{font-size:13px; line-height:18px; color:var(--mortar); margin:24px 0 0 4px;}
+</style></head><body>
+<div class="phone"><div style="display:flex; align-items:center; gap:12px; padding:8px 20px 8px 8px;"><div style="width:44px; text-align:center; font-size:15px;">&#8249;</div><div class="t-titleM">Settings</div></div><div class="hairline"></div><div class="pad" style="padding-top:12px;"><div class="slabel" style="margin-top:8px;">Account</div><div class="group"><div class="srow"><div class="t">Phone number</div><div class="d">+1 (917) 555 0142</div><div class="c">&#8250;</div></div><div class="srule"></div><div class="srow"><div class="t">Email</div><div class="d">sam@example.com</div><div class="c">&#8250;</div></div><div class="srule"></div><div class="srow"><div class="t">Arch Premium</div><div class="d">Not subscribed</div><div class="c">&#8250;</div></div></div><div class="slabel">Notifications</div><div class="group"><div class="srow"><div class="t">Your daily five</div><div class="d">9:00</div><div class="c">&#8250;</div></div><div class="srule"></div><div class="srow"><div class="t">New people</div><div class="d">On</div><div class="c">&#8250;</div></div></div></div></div></body></html>

@@ -9,7 +9,8 @@ import SwiftUI
 ///
 /// **There is no like.** Tapping a photo or an answer selects it as the thing your
 /// first message will be about, and the bottom bar relabels to say so. That is the
-/// only thing a tap on a card does.
+/// only thing a tap on a card does. The interests block is the one thing here that
+/// is not tappable — a two-word tag is not something you can write a reply to.
 struct ProfileDetailView: View {
     let person: Person
     let onDismiss: () -> Void
@@ -93,27 +94,44 @@ struct ProfileDetailView: View {
             .padding(.bottom, ArchSpacing.xl)
     }
 
+    /// Order comes from `Person.scrollRows`, so this screen and the You tab cannot
+    /// drift into different interleaves.
     private var scrollBody: some View {
         VStack(spacing: ArchSpacing.cardGap) {
-            ForEach(Array(person.items.dropFirst().enumerated()), id: \.element.id) { index, item in
-                switch item {
-                case .photo(let photo):
-                    PhotoCard(
-                        photo: photo,
-                        position: index + 2,
-                        isSelected: selected?.id == item.id,
-                        onTap: { toggle(item) }
-                    )
-                case .prompt(let prompt):
-                    PromptCard(
-                        prompt: prompt,
-                        isSelected: selected?.id == item.id,
-                        onTap: { toggle(item) }
-                    )
-                }
+            ForEach(person.scrollRows) { row in
+                rowView(row)
             }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: ProfileRow) -> some View {
+        switch row {
+        case .item(let item):
+            switch item {
+            case .photo(let photo):
+                PhotoCard(
+                    photo: photo,
+                    position: photoPosition(photo),
+                    isSelected: selected?.id == item.id,
+                    onTap: { toggle(item) }
+                )
+            case .prompt(let prompt):
+                PromptCard(
+                    prompt: prompt,
+                    isSelected: selected?.id == item.id,
+                    onTap: { toggle(item) }
+                )
+            }
+        case .interests:
+            // Not selectable, and not a `ProfileItem` — see `InterestsBlock`.
+            InterestsBlock(interests: person.interests)
+        }
+    }
+
+    private func photoPosition(_ photo: Photo) -> Int {
+        (person.photos.firstIndex(of: photo) ?? 0) + 1
     }
 
     private var backButton: some View {
@@ -174,7 +192,7 @@ struct ProfileDetailView: View {
     NavigationStack {
         ProfileDetailView(
             person: MockData.teo,
-            selecting: MockData.teo.items[1],
+            selecting: .prompt(MockData.teo.prompts[0]),
             onDismiss: {},
             onSend: { _, _ in }
         )
