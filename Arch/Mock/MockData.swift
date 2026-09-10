@@ -17,8 +17,22 @@ struct Photo: Identifiable, Hashable {
     let toneIndex: Int
 }
 
-/// A profile is a single vertical scroll of alternating photos and written prompts.
-/// You react to one of these, not to the person as a whole.
+/// Three short, self-written tags. Free text rather than a fixed list, because a
+/// fixed list produces "Travel" and "Coffee" and Arch is built on people being
+/// specific about themselves.
+struct Interest: Identifiable, Hashable {
+    let id: String
+    let text: String
+
+    /// Short enough to sit on one chip without wrapping.
+    static let characterLimit = 24
+}
+
+/// The things in a profile you can react to.
+///
+/// Interests are deliberately **not** in here. This is the type the message
+/// composer quotes, and it should only ever hold something you can write *about*.
+/// A two-word tag is not a statement you can respond to.
 enum ProfileItem: Identifiable, Hashable {
     case photo(Photo)
     case prompt(Prompt)
@@ -31,30 +45,173 @@ enum ProfileItem: Identifiable, Hashable {
     }
 }
 
+/// One row of the profile scroll *below* the lead photo, which both profile
+/// screens render separately at full bleed.
+///
+/// This exists so the interests block has somewhere to live in the sequence
+/// without being a `ProfileItem` — see the note on `ProfileItem` above.
+enum ProfileRow: Identifiable, Hashable {
+    case item(ProfileItem)
+    case interests
+
+    var id: String {
+        switch self {
+        case .item(let item): return item.id
+        case .interests:      return "interests"
+        }
+    }
+}
+
 struct Person: Identifiable, Hashable {
+    // `var` throughout: your own profile is edited in place by `ProfileStore`.
+    // Other people's copies are never mutated — nothing hands them to a store.
     let id: String
-    let name: String
-    let age: Int
-    let neighbourhood: String
-    let height: String
-    let work: String
-    let items: [ProfileItem]
+    var name: String
+    var age: Int
+    var neighbourhood: String
+    var city: String
+    var height: String
+    var work: String
 
-    /// Small chips near the top of the profile, in reading order.
+    /// Ordered. `photos[0]` is the main photo — the one the roster shows — and
+    /// reordering is the only way to change which that is.
+    var photos: [Photo]
+    /// Ordered. Up to three answers.
+    var prompts: [Prompt]
+    /// Up to three.
+    var interests: [Interest]
+
+    // MARK: Requirements
+
+    static let photoLimit = 6
+    /// Four is the floor for a live profile. Onboarding, the You tab and
+    /// arrange mode all read this rather than each deciding for themselves.
+    static let requiredPhotos = 4
+    static let requiredPrompts = 3
+    static let requiredInterests = 3
+
+    // MARK: Derived
+
+    /// Built in one place so no view joins these two fields its own way.
+    var location: String { "\(neighbourhood), \(city)" }
+
+    /// Four facts, in reading order. Wraps to two rows more often than not, since
+    /// "Crown Heights, Brooklyn" is a wide chip.
     var vitals: [String] {
-        ["\(age)", neighbourhood, height, work]
+        ["\(age)", location, height, work]
     }
 
-    var photos: [Photo] {
-        items.compactMap { if case .photo(let photo) = $0 { return photo } else { return nil } }
-    }
-
-    var prompts: [Prompt] {
-        items.compactMap { if case .prompt(let prompt) = $0 { return prompt } else { return nil } }
-    }
+    var mainPhoto: Photo? { photos.first }
 
     /// Tone used for the avatar wherever the person appears in a list.
-    var avatarToneIndex: Int { photos.first?.toneIndex ?? 0 }
+    var avatarToneIndex: Int { mainPhoto?.toneIndex ?? 0 }
+
+    /// The display order of the profile scroll, derived rather than authored:
+    /// photos and answers alternate, photo first, with any leftover photos
+    /// appended. No view builds its own interleave.
+    var items: [ProfileItem] {
+        var result: [ProfileItem] = []
+        var photoIndex = 0
+        var promptIndex = 0
+
+        while photoIndex < photos.count || promptIndex < prompts.count {
+            if photoIndex < photos.count {
+                result.append(.photo(photos[photoIndex]))
+                photoIndex += 1
+            }
+            if promptIndex < prompts.count {
+                result.append(.prompt(prompts[promptIndex]))
+                promptIndex += 1
+            }
+        }
+        return result
+    }
+
+    /// Where the interests block is drawn: immediately after the second photo.
+    /// With fewer than two photos it falls to the end rather than disappearing.
+    var interestsIndex: Int {
+        var photosSeen = 0
+        for (index, item) in items.enumerated() {
+            if case .photo = item {
+                photosSeen += 1
+                if photosSeen == 2 { return index + 1 }
+            }
+        }
+        return items.count
+    }
+
+    /// The scroll below the lead photo: every item except the first, with the
+    /// interests block dropped in after the second photo.
+    ///
+    /// Both your profile and other people's read this, so neither can drift into
+    /// its own ordering.
+    var scrollRows: [ProfileRow] {
+        let all = items
+        guard !all.isEmpty else { return [.interests] }
+
+        var rows: [ProfileRow] = []
+        for (index, item) in all.enumerated() {
+            // Index 0 is the lead photo, drawn full bleed above the scroll.
+            if index > 0 { rows.append(.item(item)) }
+            if index + 1 == interestsIndex { rows.append(.interests) }
+        }
+        return rows
+    }
+
+    // MARK: Completeness
+
+    /// What the profile still needs, in plain words. Empty when it is finished.
+    ///
+    /// Deliberately a list of things rather than a number. "60% complete" is a
+    /// score, and Arch does not show scores.
+    /// Answers that actually say something.
+    ///
+    /// Onboarding seeds three empty prompts so `ProfileStore.updateAnswer` has
+    /// somewhere to write, so counting `prompts` would report an untouched profile
+    /// as finished.
+    var answeredPrompts: [Prompt] {
+        prompts.filter { !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    var missing: [String] {
+        shortfall(Self.requiredPhotos - photos.count, "photo", "photos")
+            + shortfall(Self.requiredInterests - interests.count, "interest", "interests")
+            + shortfall(Self.requiredPrompts - answeredPrompts.count, "answer", "answers")
+    }
+
+    private func shortfall(_ count: Int, _ singular: String, _ plural: String) -> [String] {
+        guard count > 0 else { return [] }
+        return [count == 1 ? "one more \(singular)" : "\(spelled(count)) more \(plural)"]
+    }
+
+    var isComplete: Bool { missing.isEmpty }
+
+    /// Where onboarding starts. The three prompts are seeded empty so there is
+    /// something to write answers into; `answeredPrompts` is what decides whether
+    /// they count.
+    static var empty: Person {
+        Person(
+            id: "you",
+            name: "",
+            age: 0,
+            neighbourhood: "",
+            city: "",
+            height: "",
+            work: "",
+            photos: [],
+            prompts: MockData.startingPrompts,
+            interests: []
+        )
+    }
+
+    private func spelled(_ value: Int) -> String {
+        switch value {
+        case 1: return "one"
+        case 2: return "two"
+        case 3: return "three"
+        default: return "\(value)"
+        }
+    }
 }
 
 /// One of the five slots. There are always exactly five: a slot is either holding
@@ -131,6 +288,16 @@ struct PremiumPlan: Identifiable, Hashable {
     let isRecommended: Bool
 }
 
+/// One compatibility question.
+///
+/// The answers are never shown on a profile and never add up to a score — see the
+/// questionnaire intro copy, which says so out loud.
+struct QuestionnaireQuestion: Identifiable, Hashable {
+    let id: String
+    let text: String
+    let options: [String]
+}
+
 struct SettingsRow: Identifiable, Hashable {
     let id: String
     let title: String
@@ -147,7 +314,7 @@ struct SettingsSection: Identifiable, Hashable {
 
 enum MockData {
 
-    // MARK: Today's five
+    // MARK: People
 
     static let people: [Person] = [nadia, teo, priya, marcus, lena]
 
@@ -156,28 +323,36 @@ enum MockData {
         name: "Nadia",
         age: 29,
         neighbourhood: "Gowanus",
+        city: "Brooklyn",
         height: "5 ft 7",
         work: "Structural engineer",
-        items: [
-            .photo(Photo(id: "nadia-p1", toneIndex: 0)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "nadia-p1", toneIndex: 0),
+            Photo(id: "nadia-p2", toneIndex: 3),
+            Photo(id: "nadia-p3", toneIndex: 1),
+            Photo(id: "nadia-p4", toneIndex: 5)
+        ],
+        prompts: [
+            Prompt(
                 id: "nadia-q1",
                 question: "The last thing I read twice",
                 answer: "A field guide to bridges I found in my grandad's garage. Half of it is tables of load limits and I still went back to the beginning."
-            )),
-            .photo(Photo(id: "nadia-p2", toneIndex: 3)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "nadia-q2",
                 question: "Where I go when I need to think",
                 answer: "The walkway on the Manhattan Bridge, heading the unpopular direction so nobody is walking at me."
-            )),
-            .photo(Photo(id: "nadia-p3", toneIndex: 1)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "nadia-q3",
                 question: "Something I am slower at than everyone else",
                 answer: "Ordering. I will read the entire menu twice and then get whatever you got."
-            )),
-            .photo(Photo(id: "nadia-p4", toneIndex: 5))
+            )
+        ],
+        interests: [
+            Interest(id: "nadia-i1", text: "Bridge inspections"),
+            Interest(id: "nadia-i2", text: "Long-distance walking"),
+            Interest(id: "nadia-i3", text: "Brutalist car parks")
         ]
     )
 
@@ -186,28 +361,36 @@ enum MockData {
         name: "Teo",
         age: 33,
         neighbourhood: "Ridgewood",
+        city: "Queens",
         height: "6 ft",
         work: "Pastry cook",
-        items: [
-            .photo(Photo(id: "teo-p1", toneIndex: 4)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "teo-p1", toneIndex: 4),
+            Photo(id: "teo-p2", toneIndex: 2),
+            Photo(id: "teo-p3", toneIndex: 0),
+            Photo(id: "teo-p4", toneIndex: 3)
+        ],
+        prompts: [
+            Prompt(
                 id: "teo-q1",
                 question: "A thing I have changed my mind about",
                 answer: "That working nights was temporary. It has been four years and I have stopped apologising for being awake at three."
-            )),
-            .photo(Photo(id: "teo-p2", toneIndex: 2)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "teo-q2",
                 question: "The best argument I have lost",
                 answer: "My sister spent an entire drive to Hudson convincing me that sourdough is mostly theatre. She is right. I have kept doing it anyway."
-            )),
-            .photo(Photo(id: "teo-p3", toneIndex: 0)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "teo-q3",
                 question: "Where I go when I need to think",
                 answer: "The all-night laundromat on Fresh Pond. Warm, and loud in a way that is not people talking to you."
-            )),
-            .photo(Photo(id: "teo-p4", toneIndex: 3))
+            )
+        ],
+        interests: [
+            Interest(id: "teo-i1", text: "Night baking"),
+            Interest(id: "teo-i2", text: "Laundromats"),
+            Interest(id: "teo-i3", text: "Dulce de leche")
         ]
     )
 
@@ -216,28 +399,36 @@ enum MockData {
         name: "Priya",
         age: 27,
         neighbourhood: "Crown Heights",
+        city: "Brooklyn",
         height: "5 ft 4",
         work: "Restores film cameras",
-        items: [
-            .photo(Photo(id: "priya-p1", toneIndex: 2)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "priya-p1", toneIndex: 2),
+            Photo(id: "priya-p2", toneIndex: 5),
+            Photo(id: "priya-p3", toneIndex: 1),
+            Photo(id: "priya-p4", toneIndex: 4)
+        ],
+        prompts: [
+            Prompt(
                 id: "priya-q1",
                 question: "Something I am slower at than everyone else",
                 answer: "Replying. It is not avoidance. I write the message, put the phone down, and find it three days later still sitting there."
-            )),
-            .photo(Photo(id: "priya-p2", toneIndex: 5)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "priya-q2",
                 question: "The last thing I read twice",
                 answer: "The service manual for a Rolleiflex, in German, which I do not read. The exploded diagrams are enough."
-            )),
-            .photo(Photo(id: "priya-p3", toneIndex: 1)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "priya-q3",
                 question: "A thing I have changed my mind about",
                 answer: "Digital. I was insufferable about it for about six years. Now I mostly want the picture."
-            )),
-            .photo(Photo(id: "priya-p4", toneIndex: 4))
+            )
+        ],
+        interests: [
+            Interest(id: "priya-i1", text: "Rolleiflex repair"),
+            Interest(id: "priya-i2", text: "Darkroom printing"),
+            Interest(id: "priya-i3", text: "German manuals")
         ]
     )
 
@@ -246,28 +437,36 @@ enum MockData {
         name: "Marcus",
         age: 31,
         neighbourhood: "Bed-Stuy",
+        city: "Brooklyn",
         height: "5 ft 11",
         work: "Nurse, emergency",
-        items: [
-            .photo(Photo(id: "marcus-p1", toneIndex: 1)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "marcus-p1", toneIndex: 1),
+            Photo(id: "marcus-p2", toneIndex: 4),
+            Photo(id: "marcus-p3", toneIndex: 3),
+            Photo(id: "marcus-p4", toneIndex: 0)
+        ],
+        prompts: [
+            Prompt(
                 id: "marcus-q1",
                 question: "Where I go when I need to think",
                 answer: "Prospect Park at eight in the morning after a shift, when it is only dog people and me, all of us quiet."
-            )),
-            .photo(Photo(id: "marcus-p2", toneIndex: 4)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "marcus-q2",
                 question: "A thing I have changed my mind about",
                 answer: "That I would get used to it. You do not. You get better at leaving it at the door, which is a different skill."
-            )),
-            .photo(Photo(id: "marcus-p3", toneIndex: 3)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "marcus-q3",
                 question: "The best argument I have lost",
                 answer: "A patient's grandmother explained that I was holding a mop wrong. She had cleaned offices for forty years. I hold it her way now."
-            )),
-            .photo(Photo(id: "marcus-p4", toneIndex: 0))
+            )
+        ],
+        interests: [
+            Interest(id: "marcus-i1", text: "Dawn in Prospect Park"),
+            Interest(id: "marcus-i2", text: "Mop technique"),
+            Interest(id: "marcus-i3", text: "Sleeping through noise")
         ]
     )
 
@@ -276,61 +475,118 @@ enum MockData {
         name: "Lena",
         age: 30,
         neighbourhood: "Bushwick",
+        city: "Brooklyn",
         height: "5 ft 9",
         work: "Translator",
-        items: [
-            .photo(Photo(id: "lena-p1", toneIndex: 5)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "lena-p1", toneIndex: 5),
+            Photo(id: "lena-p2", toneIndex: 0),
+            Photo(id: "lena-p3", toneIndex: 2),
+            Photo(id: "lena-p4", toneIndex: 1)
+        ],
+        prompts: [
+            Prompt(
                 id: "lena-q1",
                 question: "Something I am slower at than everyone else",
                 answer: "Jokes in English. I get there, about four seconds after the table has moved on to something else."
-            )),
-            .photo(Photo(id: "lena-p2", toneIndex: 0)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "lena-q2",
                 question: "The last thing I read twice",
                 answer: "A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."
-            )),
-            .photo(Photo(id: "lena-p3", toneIndex: 2)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "lena-q3",
                 question: "Where I go when I need to think",
                 answer: "The Q platform at Kings Highway. It is above ground, so you can watch weather arrive from a long way off."
-            )),
-            .photo(Photo(id: "lena-p4", toneIndex: 1))
+            )
+        ],
+        interests: [
+            Interest(id: "lena-i1", text: "Untranslatable tenses"),
+            Interest(id: "lena-i2", text: "Above-ground platforms"),
+            Interest(id: "lena-i3", text: "Portuguese poetry")
+        ]
+    )
+
+    static let hana = Person(
+        id: "hana",
+        name: "Hana",
+        age: 28,
+        neighbourhood: "Greenpoint",
+        city: "Brooklyn",
+        height: "5 ft 6",
+        work: "Landscape architect",
+        photos: [Photo(id: "hana-p1", toneIndex: 2)],
+        prompts: [
+            Prompt(
+                id: "hana-q1",
+                question: "A thing I have changed my mind about",
+                answer: "Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."
+            )
+        ],
+        interests: [
+            Interest(id: "hana-i1", text: "Street trees"),
+            Interest(id: "hana-i2", text: "Drainage"),
+            Interest(id: "hana-i3", text: "Chairs outdoors")
         ]
     )
 
     // MARK: Your own profile
 
+    /// A finished profile: six photos, three answers, three interests.
     static let you = Person(
         id: "you",
         name: "Sam",
         age: 30,
         neighbourhood: "Fort Greene",
+        city: "Brooklyn",
         height: "5 ft 10",
         work: "Sound engineer",
-        items: [
-            .photo(Photo(id: "you-p1", toneIndex: 3)),
-            .prompt(Prompt(
+        photos: [
+            Photo(id: "you-p1", toneIndex: 3),
+            Photo(id: "you-p2", toneIndex: 1),
+            Photo(id: "you-p3", toneIndex: 4),
+            Photo(id: "you-p4", toneIndex: 0),
+            Photo(id: "you-p5", toneIndex: 2),
+            Photo(id: "you-p6", toneIndex: 5)
+        ],
+        prompts: [
+            Prompt(
                 id: "you-q1",
                 question: "Where I go when I need to think",
                 answer: "The bench at the top of the hill in Fort Greene Park, early, before the tennis courts start up."
-            )),
-            .photo(Photo(id: "you-p2", toneIndex: 1)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "you-q2",
                 question: "Something I am slower at than everyone else",
                 answer: "Leaving. I will say goodbye at the door and still be there twenty minutes later, coat on."
-            )),
-            .photo(Photo(id: "you-p3", toneIndex: 4)),
-            .prompt(Prompt(
+            ),
+            Prompt(
                 id: "you-q3",
                 question: "The best argument I have lost",
                 answer: "A drummer once explained why the click track was not the problem. It was me. It was me for about a year."
-            )),
-            .photo(Photo(id: "you-p4", toneIndex: 0))
+            )
+        ],
+        interests: [
+            Interest(id: "you-i1", text: "Room tone"),
+            Interest(id: "you-i2", text: "Click tracks"),
+            Interest(id: "you-i3", text: "Fort Greene Park")
         ]
+    )
+
+    /// The same profile part-way through being filled in — four photos, two
+    /// answers, two interests. Drives the incomplete state of the You tab.
+    static let youIncomplete = Person(
+        id: "you",
+        name: "Sam",
+        age: 30,
+        neighbourhood: "Fort Greene",
+        city: "Brooklyn",
+        height: "5 ft 10",
+        work: "Sound engineer",
+        photos: Array(you.photos.prefix(3)),
+        prompts: Array(you.prompts.prefix(2)),
+        interests: Array(you.interests.prefix(2))
     )
 
     // MARK: Roster states
@@ -380,7 +636,7 @@ enum MockData {
         Conversation(
             id: "c-nadia",
             person: nadia,
-            opening: nadia.items[1],
+            opening: .prompt(nadia.prompts[0]),
             messages: [
                 Message(id: "m1", text: "The load limit tables. That is the part that got you back to the start?", isOutgoing: true, timestamp: "Tuesday"),
                 Message(id: "m2", text: "It is the only honest writing in the whole book. Everything else is a photograph of a bridge with a paragraph telling you it is beautiful.", isOutgoing: false, timestamp: "Tuesday"),
@@ -393,7 +649,7 @@ enum MockData {
         Conversation(
             id: "c-teo",
             person: teo,
-            opening: teo.items[5],
+            opening: .prompt(teo.prompts[2]),
             messages: [
                 Message(id: "m5", text: "A laundromat is a genuinely good answer and I am annoyed I did not think of it", isOutgoing: true, timestamp: "Monday"),
                 Message(id: "m6", text: "It is the last indoor place you can sit for an hour without buying anything.", isOutgoing: false, timestamp: "Monday"),
@@ -405,7 +661,7 @@ enum MockData {
         Conversation(
             id: "c-lena",
             person: lena,
-            opening: lena.items[3],
+            opening: .prompt(lena.prompts[1]),
             messages: [
                 Message(id: "m8", text: "What did the translator give up", isOutgoing: true, timestamp: "Sunday"),
                 Message(id: "m9", text: "The tense. Portuguese has one that means something happened and is still happening to you. English makes you pick.", isOutgoing: false, timestamp: "Sunday"),
@@ -416,28 +672,9 @@ enum MockData {
             lastActivity: "Sunday"
         ),
         Conversation(
-            id: "c-old",
-            person: Person(
-                id: "hana",
-                name: "Hana",
-                age: 28,
-                neighbourhood: "Greenpoint",
-                height: "5 ft 6",
-                work: "Landscape architect",
-                items: [
-                    .photo(Photo(id: "hana-p1", toneIndex: 2)),
-                    .prompt(Prompt(
-                        id: "hana-q1",
-                        question: "A thing I have changed my mind about",
-                        answer: "Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."
-                    ))
-                ]
-            ),
-            opening: .prompt(Prompt(
-                id: "hana-q1",
-                question: "A thing I have changed my mind about",
-                answer: "Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."
-            )),
+            id: "c-hana",
+            person: hana,
+            opening: .prompt(hana.prompts[0]),
             messages: [
                 Message(id: "m12", text: "Thursday still good?", isOutgoing: false, timestamp: "Last week"),
                 Message(id: "m13", text: "Thursday is good. I will find somewhere with chairs outside.", isOutgoing: true, timestamp: "Last week")
@@ -502,7 +739,7 @@ enum MockData {
         ]),
         SettingsSection(id: "s2", title: "Notifications", rows: [
             SettingsRow(id: "s2r1", title: "Your daily five", detail: "9:00"),
-            SettingsRow(id: "s2r2", title: "New connections", detail: "On"),
+            SettingsRow(id: "s2r2", title: "New people", detail: "On"),
             SettingsRow(id: "s2r3", title: "Messages", detail: "On")
         ]),
         SettingsSection(id: "s3", title: "Discovery", rows: [
@@ -524,6 +761,38 @@ enum MockData {
     ]
 
     // MARK: Onboarding
+
+    /// The three questions onboarding assigns. Choosing your own is a later job.
+    static let startingPrompts: [Prompt] = [
+        Prompt(id: "you-q1", question: "Where I go when I need to think", answer: ""),
+        Prompt(id: "you-q2", question: "Something I am slower at than everyone else", answer: ""),
+        Prompt(id: "you-q3", question: "The best argument I have lost", answer: "")
+    ]
+
+    /// Four stand-ins for the real set. Adding the rest is a data change — the
+    /// question screen does not care how many there are.
+    static let questionnaire: [QuestionnaireQuestion] = [
+        QuestionnaireQuestion(
+            id: "qq1",
+            text: "When something is bothering you, do you want to talk it through or sit with it first?",
+            options: ["Talk it through", "Sit with it first", "Genuinely depends"]
+        ),
+        QuestionnaireQuestion(
+            id: "qq2",
+            text: "How much of your week is planned in advance?",
+            options: ["Most of it", "Some of it", "Almost none of it"]
+        ),
+        QuestionnaireQuestion(
+            id: "qq3",
+            text: "Someone cancels plans an hour before. What is your honest first reaction?",
+            options: ["Relief", "Irritation", "Neither, genuinely"]
+        ),
+        QuestionnaireQuestion(
+            id: "qq4",
+            text: "Do you want to be living in this city in ten years?",
+            options: ["Yes", "No", "I have no idea"]
+        )
+    ]
 
     static let onboardingHeadline = "Five people a day"
     static let onboardingBody = "Every morning Arch picks five people it thinks you would actually like. You read them properly, you decide, and then you are done until tomorrow."

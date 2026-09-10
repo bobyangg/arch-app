@@ -82,7 +82,7 @@ struct MessageComposerSheet: View {
                 Text(person.name)
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.limestone)
-                Text(person.neighbourhood)
+                Text(person.location)
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
             }
@@ -180,7 +180,7 @@ struct QuotedBlock: View {
 #Preview("Composer with an answer quoted") {
     MessageComposerSheet(
         person: MockData.nadia,
-        quoted: MockData.nadia.items[1],
+        quoted: .prompt(MockData.nadia.prompts[0]),
         onSend: { _ in }
     )
     .frame(height: 520)
@@ -190,7 +190,7 @@ struct QuotedBlock: View {
 #Preview("Composer with a photo quoted") {
     MessageComposerSheet(
         person: MockData.priya,
-        quoted: MockData.priya.items[2],
+        quoted: .photo(MockData.priya.photos[1]),
         onSend: { _ in }
     )
     .frame(height: 520)

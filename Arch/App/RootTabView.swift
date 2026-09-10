@@ -7,6 +7,10 @@ import SwiftUI
 /// which is what a tab bar is supposed to do.
 struct RootTabView: View {
     @State private var selection: ArchTab = .daily
+    /// Built by onboarding and handed over, so the profile you filled in is the
+    /// one the You tab edits.
+    let profile: ProfileStore
+
     @State private var store = DailyFiveStore()
 
     var body: some View {
@@ -37,7 +41,7 @@ struct RootTabView: View {
                 )
             }
             tab(.you) {
-                YouPlaceholderView()
+                YouProfileView(store: profile)
             }
         }
     }
@@ -55,6 +59,6 @@ struct RootTabView: View {
 }
 
 #Preview("App shell") {
-    RootTabView()
+    RootTabView(profile: ProfileStore(person: MockData.you))
         .preferredColorScheme(.dark)
 }

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Photos</title>
+<style>
+:root{
+  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
+  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B;
+  --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
+  --serif: ui-serif, "New York", Georgia, serif;
+  --sans: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
+.phone{width:393px; height:620px; background:var(--night); overflow:hidden;
+       position:relative; display:flex; flex-direction:column;}
+.pad{padding:0 20px;}
+
+.t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500;}
+.t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.t-prompt{font-family:var(--serif); font-size:19px; line-height:26px;}
+.t-body{font-size:17px; line-height:24px;}
+.t-callout{font-size:16px; line-height:22px;}
+.t-footnote{font-size:13px; line-height:18px;}
+.mortar{color:var(--mortar);}
+
+.topbar{padding:8px 20px 12px 8px;}
+.back{width:44px; height:44px; display:flex; align-items:center;
+      justify-content:center; font-size:15px;}
+.rule{display:flex; gap:4px; padding:0 20px;}
+.seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);}
+.seg.on{background:var(--lamp);}
+
+.body{flex:1; padding:24px 20px 0;}
+.foot{padding:0 20px 8px;}
+.btn{height:52px; border-radius:12px; display:flex; align-items:center;
+     justify-content:center; font-size:15px; font-weight:600;}
+.btn-primary{background:var(--lamp); color:var(--night);}
+.btn-off{background:var(--stoneRaised); color:var(--mortar);}
+.btn-text{height:44px; display:flex; align-items:center; justify-content:center;
+          font-size:15px; font-weight:600; color:var(--mortar);}
+
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.slot{aspect-ratio:1; border-radius:12px; position:relative;}
+.slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px;
+         border-radius:12px; background:rgba(15,19,25,.75); color:var(--limestone);
+         font-size:12px; display:flex; align-items:center; justify-content:center;}
+.slot-add{background:var(--stone); display:flex; align-items:center;
+          justify-content:center; color:var(--mortar); font-size:17px;}
+
+.opt{background:var(--stone); border-radius:12px; padding:16px; font-size:17px;
+     line-height:24px; margin-bottom:8px;}
+.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px rgba(237,231,221,.30);}
+</style></head><body>
+<div class="phone"><div class="topbar"><div class="back">&#8249;</div></div><div class="rule"><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div></div><div class="body"><div class="t-titleL">Photos</div><div class="t-body mortar" style="margin-top:12px;">At least 4, up to 6. The first one is what people see in their five.</div><div class="grid" style="margin-top:24px;"><div class="slot" style="background:linear-gradient(#333941,#2C3138);"></div><div class="slot" style="background:linear-gradient(#3B322A,#332B24);"></div><div class="slot" style="background:linear-gradient(#443329,#3B2C23);"></div><div class="slot slot-add">+</div></div><div class="t-footnote mortar" style="margin-top:12px;">One more photo.</div></div><div class="foot"><div class="btn btn-off">Continue</div></div></div></body></html>

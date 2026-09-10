@@ -157,7 +157,7 @@ struct MessageBubble: View {
             conversation: Conversation(
                 id: "c-new",
                 person: MockData.priya,
-                opening: MockData.priya.items[1],
+                opening: .prompt(MockData.priya.prompts[0]),
                 messages: [
                     Message(
                         id: "m-new",
