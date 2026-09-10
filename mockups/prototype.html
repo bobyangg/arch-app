@@ -1,0 +1,963 @@
+<title>Arch Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<style>
+:root{
+  /* The Arch palette, verbatim. */
+  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
+  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B; --verdigris:#4E8C7D;
+  --hairline:rgba(141,148,158,.12);
+  --quiet:rgba(141,148,158,.20);
+  --lampQuiet:rgba(240,164,75,.45);
+  --selected:rgba(237,231,221,.30);
+  --surround:#05070A;
+
+  /* New York on Apple devices; Source Serif 4 everywhere else. */
+  --serif: ui-serif, "New York", "Source Serif 4", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+
+  --r-photo:24px; --r-card:20px; --r-control:12px; --r-sheet:28px; --r-detail:8px;
+  --s-xxs:4px; --s-xs:8px; --s-s:12px; --s-m:16px; --s-l:20px;
+  --s-xl:24px; --s-xxl:32px; --s-xxxl:48px;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background:var(--surround); color:var(--limestone); font-family:var(--sans);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; text-align:left;}
+:focus-visible{outline:2px solid var(--lamp); outline-offset:2px;}
+
+/* ---- the device ---- */
+#device{
+  width:393px; height:852px; max-width:100vw; max-height:100dvh;
+  background:var(--night); position:relative; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+@media (min-width:460px) and (min-height:900px){
+  #device{border-radius:44px; box-shadow:0 0 0 10px #14181f, 0 30px 80px rgba(0,0,0,.7);}
+}
+@media (max-width:459px), (max-height:899px){
+  #device{width:100vw; height:100dvh;}
+}
+
+/* ---- type scale ---- */
+.display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500; letter-spacing:.5px;}
+.titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.prompt{font-family:var(--serif); font-size:19px; line-height:26px; font-weight:400;}
+.bodyL{font-size:20px; line-height:28px;}
+.body{font-size:17px; line-height:24px;}
+.callout{font-size:16px; line-height:22px;}
+.subhead{font-size:15px; line-height:20px; font-weight:600;}
+.footnote{font-size:13px; line-height:18px;}
+.caption{font-size:12px; line-height:16px; font-weight:500;}
+.mortar{color:var(--mortar);}
+.limestone{color:var(--limestone);}
+
+/* ---- scroll region ---- */
+.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;}
+.pad{padding-left:var(--s-l); padding-right:var(--s-l);}
+.safetop{height:env(safe-area-inset-top,0px);}
+.hairline{height:.5px; background:var(--hairline);}
+
+/* ---- chrome ---- */
+.navbar{display:flex; align-items:center; gap:var(--s-s); padding:8px 20px 8px 8px; flex:none;}
+.iconbtn{width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+         font-size:17px; color:var(--limestone); flex:none;}
+.iconbtn.round{width:36px; height:36px; border-radius:18px; background:var(--stone);}
+
+.tabbar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+        display:flex; padding:8px 0 calc(4px + env(safe-area-inset-bottom,0px));}
+.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+.tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+.tab[aria-selected="true"] .lbl{color:var(--lamp);}
+.glyph{width:26px; height:26px; position:relative;}
+.badge{position:absolute; top:-5px; right:-9px; min-width:16px; height:16px; border-radius:8px;
+       background:var(--lamp); color:var(--night); font-size:11px; font-weight:600;
+       display:flex; align-items:center; justify-content:center; padding:0 4px;}
+
+/* ---- pieces ---- */
+.photo{border-radius:var(--r-photo); width:100%;}
+.chips{display:flex; flex-wrap:wrap; gap:var(--s-xs);}
+.chip{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+      font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+.interest{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+          font-size:13px; line-height:18px; color:var(--limestone);}
+.interest.add{background:none; border:1px solid var(--quiet); color:var(--mortar);}
+
+.card{background:var(--stone); border-radius:var(--r-card); padding:var(--s-xl); position:relative;}
+.card.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+.photo.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+
+.btn{height:52px; border-radius:var(--r-control); display:flex; align-items:center;
+     justify-content:center; font-size:15px; font-weight:600; width:100%;}
+.btn.primary{background:var(--lamp); color:var(--night);}
+.btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
+.btn.quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btntext{height:44px; display:flex; align-items:center; justify-content:center;
+         font-size:15px; font-weight:600; color:var(--mortar); width:100%;}
+
+.slotcard{height:112px; background:var(--stone); border:1px solid var(--hairline);
+          border-radius:var(--r-photo); display:flex; flex-direction:column;
+          align-items:center; justify-content:center; gap:4px;}
+
+.bottombar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+           padding:12px 20px calc(4px + env(safe-area-inset-bottom,0px));}
+
+/* ---- rows ---- */
+.row{display:flex; gap:var(--s-s); padding:var(--s-m) 0; align-items:flex-start;}
+.avatar{width:52px; height:52px; border-radius:26px; flex:none;}
+.rowbody{flex:1; min-width:0;}
+.rowline{display:flex; align-items:baseline; gap:var(--s-xs);}
+.dot{width:8px; height:8px; border-radius:4px; background:var(--lamp); margin-top:5px; flex:none;}
+.rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
+
+/* ---- bubbles ---- */
+.bubble{border-radius:var(--r-card); padding:10px 14px; font-size:16px; line-height:22px;
+        max-width:80%; display:inline-block;}
+.bubble.out{background:var(--stoneRaised);}
+.bubble.in{background:var(--stone);}
+.msg{display:flex; flex-direction:column; gap:4px; margin-bottom:var(--s-s);}
+.msg.out{align-items:flex-end;}
+.quoted{background:var(--stoneRaised); border-radius:var(--r-control); padding:var(--s-s);}
+
+/* ---- sheets ---- */
+#scrim{position:absolute; inset:0; background:rgba(15,19,25,.72); opacity:0;
+       transition:opacity .25s ease; pointer-events:none; z-index:20;}
+#scrim.on{opacity:1; pointer-events:auto;}
+#sheet{position:absolute; left:0; right:0; bottom:0; background:var(--stone);
+       border-radius:var(--r-sheet) var(--r-sheet) 0 0; z-index:21;
+       padding:0 20px calc(16px + env(safe-area-inset-bottom,0px));
+       transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.8,.2,1);
+       max-height:88%; overflow-y:auto;}
+#sheet.on{transform:translateY(0);}
+.grabber{width:36px; height:5px; border-radius:3px; background:var(--mortar);
+         opacity:.4; margin:8px auto 12px;}
+
+/* ---- inputs ---- */
+.field{background:var(--night); border-radius:var(--r-control); padding:12px;
+       display:flex; align-items:center; gap:var(--s-s);}
+.field.onNight{background:var(--stone);}
+.field input, .field textarea{
+  flex:1; background:none; border:0; color:var(--limestone);
+  font-family:var(--sans); font-size:16px; line-height:22px; outline:none; resize:none;}
+.field input::placeholder, .field textarea::placeholder{color:var(--mortar);}
+.field .lbl{font-size:13px; color:var(--mortar); width:108px; flex:none;}
+
+/* ---- settings ---- */
+.group{background:var(--stone); border-radius:var(--r-card); overflow:hidden;}
+.srow{display:flex; align-items:center; gap:var(--s-s); padding:var(--s-m);}
+.srow .t{font-size:17px; line-height:24px; flex:1;}
+.srule{height:.5px; background:var(--hairline); margin-left:var(--s-m);}
+
+/* ---- onboarding ---- */
+.rule{display:flex; gap:4px;}
+.seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);
+     transition:background .25s ease;}
+.seg.on{background:var(--lamp);}
+.opt{background:var(--stone); border-radius:var(--r-control); padding:var(--s-m);
+     font-size:17px; line-height:24px;}
+.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-xs);}
+.slot{aspect-ratio:1; border-radius:var(--r-control); position:relative;}
+.slot.add{background:var(--stone); display:flex; align-items:center; justify-content:center;
+          color:var(--mortar); font-size:20px;}
+.slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:12px;
+         background:rgba(15,19,25,.75); display:flex; align-items:center;
+         justify-content:center; font-size:12px;}
+
+/* ---- motion ---- */
+.leaving{overflow:hidden;}
+.stone-drop{transition:transform .3s ease-in, opacity .3s ease-in;
+            transform:translateY(14px); opacity:0;}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important; animation-duration:.01ms !important;}
+}
+
+/* stacking helpers */
+.v{display:flex; flex-direction:column;}
+.gap-xxs{gap:4px;} .gap-xs{gap:8px;} .gap-s{gap:12px;} .gap-m{gap:16px;}
+.gap-l{gap:20px;} .gap-xl{gap:24px;} .gap-xxl{gap:32px;}
+.mt-s{margin-top:12px;} .mt-m{margin-top:16px;} .mt-l{margin-top:20px;}
+.mt-xl{margin-top:24px;} .mt-xxl{margin-top:32px;} .mt-xxxl{margin-top:48px;}
+.pb-xxxl{padding-bottom:48px;}
+.center{text-align:center;}
+.spread{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+</style>
+
+<div id="device">
+  <div id="root" class="v" style="flex:1; min-height:0;"></div>
+  <div id="scrim"></div>
+  <div id="sheet"></div>
+</div>
+
+<script>
+/* ============================ data ============================ */
+const TONES=[["#29313C","#232A34"],["#3B322A","#332B24"],["#2B3733","#25302C"],
+             ["#333941","#2C3138"],["#443329","#3B2C23"],["#4A4640","#413E38"]];
+const tone=i=>`background:linear-gradient(${TONES[i%6][0]},${TONES[i%6][1]})`;
+
+const P=(id,name,age,hood,city,h,work,photos,prompts,interests)=>
+  ({id,name,age,hood,city,h,work,photos,prompts,interests});
+
+const PEOPLE=[
+ P("nadia","Nadia",29,"Gowanus","Brooklyn","5 ft 7","Structural engineer",[0,3,1,5],
+   [["The last thing I read twice","A field guide to bridges I found in my grandad's garage. Half of it is tables of load limits and I still went back to the beginning."],
+    ["Where I go when I need to think","The walkway on the Manhattan Bridge, heading the unpopular direction so nobody is walking at me."],
+    ["Something I am slower at than everyone else","Ordering. I will read the entire menu twice and then get whatever you got."]],
+   ["Bridge inspections","Long-distance walking","Brutalist car parks"]),
+ P("teo","Teo",33,"Ridgewood","Queens","6 ft","Pastry cook",[4,2,0,3],
+   [["A thing I have changed my mind about","That working nights was temporary. It has been four years and I have stopped apologising for being awake at three."],
+    ["The best argument I have lost","My sister spent an entire drive to Hudson convincing me that sourdough is mostly theatre. She is right. I have kept doing it anyway."],
+    ["Where I go when I need to think","The all-night laundromat on Fresh Pond. Warm, and loud in a way that is not people talking to you."]],
+   ["Night baking","Laundromats","Dulce de leche"]),
+ P("priya","Priya",27,"Crown Heights","Brooklyn","5 ft 4","Restores film cameras",[2,5,1,4],
+   [["Something I am slower at than everyone else","Replying. It is not avoidance. I write the message, put the phone down, and find it three days later still sitting there."],
+    ["The last thing I read twice","The service manual for a Rolleiflex, in German, which I do not read. The exploded diagrams are enough."],
+    ["A thing I have changed my mind about","Digital. I was insufferable about it for about six years. Now I mostly want the picture."]],
+   ["Rolleiflex repair","Darkroom printing","German manuals"]),
+ P("marcus","Marcus",31,"Bed-Stuy","Brooklyn","5 ft 11","Nurse, emergency",[1,4,3,0],
+   [["Where I go when I need to think","Prospect Park at eight in the morning after a shift, when it is only dog people and me, all of us quiet."],
+    ["A thing I have changed my mind about","That I would get used to it. You do not. You get better at leaving it at the door, which is a different skill."],
+    ["The best argument I have lost","A patient's grandmother explained that I was holding a mop wrong. She had cleaned offices for forty years. I hold it her way now."]],
+   ["Dawn in Prospect Park","Mop technique","Sleeping through noise"]),
+ P("lena","Lena",30,"Bushwick","Brooklyn","5 ft 9","Translator",[5,0,2,1],
+   [["Something I am slower at than everyone else","Jokes in English. I get there, about four seconds after the table has moved on to something else."],
+    ["The last thing I read twice","A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."],
+    ["Where I go when I need to think","The Q platform at Kings Highway. It is above ground, so you can watch weather arrive from a long way off."]],
+   ["Untranslatable tenses","Above-ground platforms","Portuguese poetry"])];
+
+const YOU=P("you","Sam",30,"Fort Greene","Brooklyn","5 ft 10","Sound engineer",[3,1,4,0,2,5],
+  [["Where I go when I need to think","The bench at the top of the hill in Fort Greene Park, early, before the tennis courts start up."],
+   ["Something I am slower at than everyone else","Leaving. I will say goodbye at the door and still be there twenty minutes later, coat on."],
+   ["The best argument I have lost","A drummer once explained why the click track was not the problem. It was me. It was me for about a year."]],
+  ["Room tone","Click tracks","Fort Greene Park"]);
+
+const HANA=P("hana","Hana",28,"Greenpoint","Brooklyn","5 ft 6","Landscape architect",[2],
+  [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
+  ["Street trees","Drainage","Chairs outdoors"]);
+
+const BENEFITS=[["Refill a slot today","Fill an open slot straight away instead of waiting for tomorrow."],
+ ["A sixth slot","Hold six people at once instead of five."],
+ ["Tips for your profile","Specific notes on your photos and answers, and what to change."],
+ ["Six prompts instead of three","More room to be specific about yourself."],
+ ["Finer preferences","Choose who reaches you on the things you actually care about, not only distance and age."]];
+const PLANS=[["One month","$24.99","$24.99 a month",0],["Three months","$53.97","$17.99 a month",1],
+ ["Twelve months","$143.88","$11.99 a month",0]];
+const SETTINGS=[["Account",[["Phone number","+1 (917) 555 0142"],["Email","sam@example.com"],["Arch Premium","Not subscribed"]]],
+ ["Notifications",[["Your daily five","9:00"],["New people","On"],["Messages","On"]]],
+ ["Discovery",[["Distance","Within 10 miles"],["Age range","26 to 36"],["Looking for","Something serious"],["Pause my profile",null]]],
+ ["Privacy",[["Who can see me",null],["Blocked people","None"],["Download your data",null]]],
+ ["Help",[["How Arch works",null],["Safety",null],["Contact us",null]]]];
+const QUESTIONS=[
+ ["When something is bothering you, do you want to talk it through or sit with it first?",["Talk it through","Sit with it first","Genuinely depends"]],
+ ["How much of your week is planned in advance?",["Most of it","Some of it","Almost none of it"]],
+ ["Someone cancels plans an hour before. What is your honest first reaction?",["Relief","Irritation","Neither, genuinely"]],
+ ["Do you want to be living in this city in ten years?",["Yes","No","I have no idea"]]];
+
+/* ============================ state ============================ */
+const S={
+  tab:"daily",
+  stacks:{premium:[],daily:[],messages:[],you:[]},
+  slots:PEOPLE.map(p=>({person:p})),
+  selected:null,
+  convos:[
+    {id:"nadia",person:PEOPLE[0],open:["prompt",0],unread:1,when:"9:14",msgs:[
+      ["out","The load limit tables. That is the part that got you back to the start?","Tuesday"],
+      ["in","It is the only honest writing in the whole book. Everything else is a photograph of a bridge with a paragraph telling you it is beautiful.","Tuesday"],
+      ["out","Fair. Do you have a favourite one in the city or is that like asking about children","Tuesday"],
+      ["in","Hell Gate. Nobody walks it, nobody photographs it, it just quietly holds up trains. I will take you to look at it from underneath if you want, which is a sentence I hear as I type it.","9:14"]]},
+    {id:"teo",person:PEOPLE[1],open:["prompt",2],unread:0,when:"Monday",msgs:[
+      ["out","A laundromat is a genuinely good answer and I am annoyed I did not think of it","Monday"],
+      ["in","It is the last indoor place you can sit for an hour without buying anything.","Monday"],
+      ["out","Well now I want to know your second-best one","Monday"]]},
+    {id:"lena",person:PEOPLE[4],open:["prompt",1],unread:0,when:"Sunday",msgs:[
+      ["out","What did the translator give up","Sunday"],
+      ["in","The tense. Portuguese has one that means something happened and is still happening to you. English makes you pick.","Sunday"],
+      ["out","That is going to bother me all week","Sunday"],["in","Good.","Sunday"]]},
+    {id:"hana",person:HANA,open:["prompt",0],unread:0,when:"Last week",msgs:[
+      ["in","Thursday still good?","Last week"],
+      ["out","Thursday is good. I will find somewhere with chairs outside.","Last week"]]}],
+  you:JSON.parse(JSON.stringify(YOU)),
+  plan:1,
+  onboarding:null
+};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const stack=()=>S.stacks[S.tab];
+const current=()=>stack()[stack().length-1]||null;   // not `top` — window.top exists
+const push=v=>{stack().push(v); render();};
+const pop=()=>{stack().pop(); render();};
+
+/* ============================ the arch ============================ */
+function archSVG(filled,total,w,dropIndex){
+  const joint=1.3, thick=18, allow=1, step=180/total;
+  const H=w/2+allow, cx=w/2, cy=H, base=Math.min(w/2,H)-allow;
+  const pt=(r,d)=>{const a=d*Math.PI/180; return [cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+  let paths="";
+  for(let i=0;i<total;i++){
+    const a0=180+i*step+joint, a1=180+(i+1)*step-joint;
+    const o0=pt(base,a0),o1=pt(base,a1),i1=pt(base-thick,a1),i0=pt(base-thick,a0);
+    const d=`M${o0} A${base},${base} 0 0 1 ${o1} L${i1} A${base-thick},${base-thick} 0 0 0 ${i0} Z`;
+    const on=i<filled;
+    const drop=(i===dropIndex)?' class="stone-drop"':'';
+    paths+=on
+      ? `<path${drop} d="${d}" fill="var(--lamp)"/>`
+      : `<path d="${d}" fill="none" stroke="rgba(141,148,158,.30)" stroke-width="1"/>`;
+  }
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" aria-hidden="true">${paths}</svg>`;
+}
+function markSVG(size,stroke,color){
+  const W=size-stroke, r=.42*W, cx=W/2, cy=.59*W, foot=.90*W;
+  const d=`M${cx-r},${foot} V${cy} A${r},${r} 0 0 1 ${cx+r},${cy} V${foot} M0,0 H${W}`;
+  return `<svg width="${size}" height="${size*.9}" viewBox="0 0 ${size} ${size*.9}" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-linecap="round" stroke-linejoin="round"
+      transform="translate(${stroke/2},${stroke/2})"/></svg>`;
+}
+
+/* ============================ tab glyphs ============================ */
+function glyph(kind,active){
+  const c=active?"var(--lamp)":"var(--mortar)", sw=active?2.25:1.75;
+  if(kind==="daily") return markSVG(26,sw,c);
+  if(kind==="premium"){
+    const w=20,h=24,ox=3,oy=1,i=sw/2,t=w*.16;
+    return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path
+      d="M${ox+i},${oy+i} L${ox+w-i},${oy+i} L${ox+w-t},${oy+h-i} L${ox+t},${oy+h-i} Z"
+      fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`;}
+  if(kind==="messages"){
+    const i=sw/2,w=24-sw,h=24-sw,ox=1+i,oy=1+i,bb=oy+h*.76,k=w*.22;
+    return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="
+      M${ox},${oy+k} Q${ox},${oy} ${ox+k},${oy} L${ox+w-k},${oy} Q${ox+w},${oy} ${ox+w},${oy+k}
+      L${ox+w},${bb-k} Q${ox+w},${bb} ${ox+w-k},${bb} L${ox+w*.44},${bb}
+      L${ox+w*.18},${oy+h} L${ox+w*.28},${bb} L${ox+k},${bb} Q${ox},${bb} ${ox},${bb-k} Z"
+      fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+  const i=sw/2,w=24-sw,h=24-sw,ox=1+i,oy=1+i;
+  const hr=w*.17,hcx=ox+w/2,hcy=oy+hr,sr=w*.46,scy=oy+h*.52+sr;
+  const p=(d)=>{const a=d*Math.PI/180; return [hcx+sr*Math.cos(a),scy+sr*Math.sin(a)];};
+  const A=p(190),B=p(350);
+  return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+    <circle cx="${hcx}" cy="${hcy}" r="${hr}" fill="none" stroke="${c}" stroke-width="${sw}"/>
+    <path d="M${A} A${sr},${sr} 0 0 1 ${B}" fill="none" stroke="${c}" stroke-width="${sw}"
+      stroke-linecap="round"/></svg>`;
+}
+
+/* ============================ shared bits ============================ */
+const vitals=p=>`<div class="chips">
+  <div class="chip">${p.age}</div><div class="chip">${esc(p.hood)}, ${esc(p.city)}</div>
+  <div class="chip">${esc(p.h)}</div><div class="chip">${esc(p.work)}</div></div>`;
+
+const photoBox=(t,ar,extra="")=>`<div class="photo ${extra}" style="${tone(t)}; aspect-ratio:${ar}"></div>`;
+
+function interestsBlock(p,own){
+  const chips=p.interests.map(t=>`<div class="interest">${esc(t)}</div>`).join("")
+    +(own&&p.interests.length<3?`<div class="interest add">+ Add an interest</div>`:"");
+  return `<div class="v gap-s"><div class="spread"><div class="prompt mortar">Interests</div>
+    ${own?`<button class="iconbtn round" data-a="editInterests">✎</button>`:""}</div>
+    <div class="chips">${chips}</div></div>`;
+}
+
+/* profile scroll order: photos and answers alternate, interests after photo 2 */
+function rows(p){
+  const out=[]; let i=0,j=0;
+  while(i<p.photos.length||j<p.prompts.length){
+    if(i<p.photos.length) out.push(["photo",i++]);
+    if(j<p.prompts.length) out.push(["prompt",j++]);
+  }
+  let seen=0,at=out.length;
+  for(let k=0;k<out.length;k++){ if(out[k][0]==="photo"){seen++; if(seen===2){at=k+1;break;}} }
+  out.splice(at,0,["interests",0]);
+  return out.slice(1); // the lead photo is drawn separately
+}
+
+function navbar(title,right){
+  return `<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
+    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>
+    <div class="hairline"></div>`;
+}
+
+/* ============================ screens ============================ */
+function dailyRoot(){
+  const people=S.slots.filter(s=>s.person).map(s=>s.person);
+  const open=S.slots.filter(s=>!s.person);
+  const title=S.slots.length===6?"Your six":"Your five";
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
+      <div class="titleL">${title}</div>
+      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div>
+      <div class="hairline"></div></div>`;
+  h+=`<div class="v gap-xxl">`;
+  people.forEach(p=>{
+    h+=`<div class="v gap-s" data-card="${p.id}">
+      <button data-a="open" data-id="${p.id}" style="display:block;width:100%">
+        ${photoBox(p.photos[0],"3/4")}</button>
+      <div class="spread" style="align-items:baseline">
+        <button class="titleM" data-a="open" data-id="${p.id}">${esc(p.name)}</button>
+        <button class="iconbtn" data-a="dismiss" data-id="${p.id}"
+          style="margin-right:-12px" aria-label="Dismiss ${esc(p.name)}">✕</button></div>
+      ${vitals(p)}</div>`;
+  });
+  h+=`</div>`;
+  if(open.length){
+    h+=`<div class="hairline mt-xxxl"></div>
+      <div class="footnote mortar mt-m">New people arrive in these slots.</div>
+      <div class="v gap-m mt-m">`;
+    open.forEach(s=>{h+=`<div class="slotcard"><div class="body">${s.when}</div>
+      <div class="footnote mortar">${s.left}</div></div>`;});
+    h+=`</div>`;
+  }
+  return h+`</div></div>`;
+}
+
+function profile(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  const sel=S.selected;
+  let h=`<div class="screen"><div class="pb-xxxl">
+    <div style="position:relative">${photoBox(p.photos[0],"4/5")}
+      <button class="iconbtn round" data-a="back"
+        style="position:absolute; left:12px; top:calc(12px + env(safe-area-inset-top,0px))">‹</button></div>
+    <div class="pad v gap-s mt-l"><div class="titleL">${esc(p.name)}</div>${vitals(p)}</div>
+    <div class="pad footnote mortar mt-l">Tap a photo or answer to write about it.</div>
+    <div class="pad v gap-xxl mt-xl">`;
+  rows(p).forEach(([kind,i])=>{
+    if(kind==="photo"){
+      const k=`photo-${i}`;
+      h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
+        ${photoBox(p.photos[i],"4/5",sel===k?"sel":"")}</button>`;
+    } else if(kind==="prompt"){
+      const k=`prompt-${i}`, q=p.prompts[i];
+      h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
+        <div class="card ${sel===k?"sel":""}"><div class="prompt mortar">${esc(q[0])}</div>
+        <div class="bodyL mt-s">${esc(q[1])}</div></div></button>`;
+    } else { h+=interestsBlock(p,false); }
+  });
+  h+=`</div></div></div>
+    <div class="bottombar"><button class="btn primary" data-a="compose" data-id="${p.id}">
+      ${sel?"Write about this":"Send a message"}</button>
+      <button class="btntext" data-a="dismiss" data-id="${p.id}">Dismiss</button></div>`;
+  return h;
+}
+
+function messagesRoot(){
+  if(!S.convos.length){
+    return `<div class="screen"><div class="pad v gap-s"
+      style="height:100%; justify-content:center; padding-bottom:80px">
+      <div class="titleM">No conversations yet</div>
+      <div class="body mortar">When you write to someone in your five, the conversation appears here.</div>
+      <button class="btn quiet mt-m" data-a="goDaily">Open your five</button></div></div>`;
+  }
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="titleL" style="padding:16px 0 20px">Messages</div>`;
+  S.convos.forEach((c,i)=>{
+    const last=c.msgs[c.msgs.length-1];
+    h+=`<button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
+      <div class="row"><div class="avatar" style="${tone(c.person.photos[0])}"></div>
+      <div class="rowbody"><div class="rowline"><div class="subhead">${esc(c.person.name)}</div>
+        <div style="flex:1"></div><div class="footnote mortar">${esc(c.when)}</div></div>
+      <div style="display:flex; gap:8px; margin-top:4px">
+        <div class="footnote ${c.unread?"limestone":"mortar"}" style="flex:1">${esc(last[1])}</div>
+        ${c.unread?'<div class="dot"></div>':""}</div></div></div></button>`;
+    if(i<S.convos.length-1) h+=`<div class="rowrule"></div>`;
+  });
+  return h+`</div></div>`;
+}
+
+function thread(id){
+  const c=S.convos.find(x=>x.id===id); c.unread=0;
+  const q=c.person.prompts[c.open[1]];
+  let h=`<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
+    <div class="avatar" style="width:32px;height:32px;border-radius:16px;${tone(c.person.photos[0])}"></div>
+    <div class="subhead">${esc(c.person.name)}</div></div><div class="hairline"></div>
+    <div class="screen"><div class="pad" style="padding-top:20px; padding-bottom:20px">
+      <div class="quoted" style="margin-bottom:16px">
+        <div class="footnote mortar">${esc(q[0])}</div>
+        <div class="callout mt-xxs" style="margin-top:4px">${esc(q[1])}</div></div>`;
+  c.msgs.forEach(m=>{
+    h+=`<div class="msg ${m[0]==="out"?"out":""}">
+      <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
+      <div class="footnote mortar">${esc(m[2])}</div></div>`;
+  });
+  return h+`</div></div>
+    <div class="bottombar" style="display:flex; gap:8px; align-items:center">
+      <div class="field onNight" style="flex:1"><input placeholder="Message" id="threadInput"></div>
+      <button class="iconbtn" data-a="threadSend"
+        style="background:var(--lamp); color:var(--night); border-radius:18px; width:36px; height:36px">↑</button></div>`;
+}
+
+function premiumRoot(){
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="v gap-s" style="padding-top:16px">
+      <div class="titleL">Arch Premium</div>
+      <div class="body mortar">More room in your roster, and more room to say who you are.</div></div>
+    <div class="mt-xxxl">`;
+  BENEFITS.forEach(([t,d],i)=>{
+    h+=`<div class="v gap-xxs" style="padding:16px 0">
+      <div class="subhead">${esc(t)}</div><div class="footnote mortar">${esc(d)}</div></div>`;
+    if(i<BENEFITS.length-1) h+=`<div class="hairline"></div>`;
+  });
+  h+=`</div><div class="v gap-s mt-xxxl">`;
+  PLANS.forEach(([d,total,per,rec],i)=>{
+    h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
+      <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
+        border-radius:var(--r-control); ${S.plan===i?"box-shadow:inset 0 0 0 1px var(--selected)":""}">
+        <div><div class="subhead">${d}</div><div class="footnote mortar">${per}</div></div>
+        <div style="flex:1"></div>
+        <div style="text-align:right"><div class="subhead">${total}</div>
+          ${rec?'<div class="footnote mortar">Recommended</div>':""}</div></div></button>`;
+  });
+  h+=`</div><button class="btn primary mt-l">Subscribe for ${PLANS[S.plan][1]}</button>
+    <div class="footnote mortar center mt-s">Payment is charged to your Apple account.
+      Renews until you cancel, which you can do in Settings.</div>
+    <div class="btntext">Restore purchases</div>`;
+  return h+`</div></div>`;
+}
+
+function youRoot(){
+  const p=S.you;
+  const missing=[];
+  if(p.photos.length<4) missing.push(p.photos.length===3?"one more photo":`${4-p.photos.length} more photos`);
+  if(p.interests.length<3) missing.push(p.interests.length===2?"one more interest":"more interests");
+  let h=`<div class="navbar" style="padding-left:20px">
+      <div class="titleL">You</div><div style="flex:1"></div>
+      <button class="footnote mortar" data-a="arrange" style="padding:8px">Arrange</button>
+      <button class="iconbtn" data-a="settings" style="color:var(--mortar)">⚙</button></div>
+    <div class="screen"><div class="pb-xxxl">
+      ${photoBox(p.photos[0],"4/5")}
+      <div class="pad v gap-s mt-l"><div class="spread">
+        <div class="titleL">${esc(p.name)}</div>
+        <button class="iconbtn round" data-a="editDetails">✎</button></div>
+        ${vitals(p)}</div>`;
+  if(missing.length) h+=`<div class="pad footnote mortar mt-m">Add ${missing.join(" and ")} to finish your profile.</div>`;
+  h+=`<div class="pad v gap-xxl mt-xl">`;
+  rows(p).forEach(([kind,i])=>{
+    if(kind==="photo") h+=`<button data-a="arrange" style="display:block;width:100%">${photoBox(p.photos[i],"4/5")}</button>`;
+    else if(kind==="prompt") h+=`<div class="card"><div class="prompt mortar">${esc(p.prompts[i][0])}</div>
+      <div class="bodyL mt-s">${esc(p.prompts[i][1])}</div>
+      <button class="iconbtn round" data-a="editAnswer" data-i="${i}"
+        style="position:absolute; right:12px; bottom:12px">✎</button></div>`;
+    else h+=interestsBlock(p,true);
+  });
+  return h+`</div></div></div>`;
+}
+
+function arrange(){
+  const p=S.you, canRemove=p.photos.length>4;
+  let slots=p.photos.map((t,i)=>`<div class="slot" style="${tone(t)}">
+    ${canRemove?`<button class="x" data-a="rmPhoto" data-i="${i}">✕</button>`:""}</div>`).join("");
+  if(p.photos.length<6) slots+=`<button class="slot add" data-a="addPhoto">+</button>`;
+  const caption=p.photos.length<=4
+    ? "The first photo is what people see in their five. You need at least 4 photos, so add one before removing another."
+    : "The first photo is what people see in their five. Drag to reorder.";
+  let h=navbar("Arrange",`<button class="subhead mortar" data-a="back" style="padding:8px">Done</button>`);
+  h+=`<div class="screen"><div class="pad pb-xxxl mt-l">
+    <div class="prompt mortar">Photos</div>
+    <div class="grid3 mt-s">${slots}</div>
+    <div class="footnote mortar mt-m">${caption}</div>
+    <div class="prompt mortar mt-xxl">Answers</div><div class="v gap-xs mt-s">`;
+  p.prompts.forEach((q,i)=>{h+=`<div class="srow" style="border-radius:var(--r-control);
+    background:var(--stone); padding:12px"><div class="mortar">☰</div>
+    <div class="footnote" style="flex:1; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap">${esc(q[0])}</div></div>`;});
+  return h+`</div></div></div>`;
+}
+
+function settings(){
+  let h=navbar("Settings");
+  h+=`<div class="screen"><div class="pad pb-xxxl mt-l"><div class="v gap-xl">`;
+  SETTINGS.forEach(([title,rowsIn])=>{
+    h+=`<div class="v gap-xs"><div class="footnote mortar" style="padding-left:4px">${title}</div>
+      <div class="group">`;
+    rowsIn.forEach(([t,d],i)=>{
+      h+=`<button data-a="setting" data-t="${esc(t)}" data-d="${esc(d||"")}" style="display:block;width:100%">
+        <div class="srow"><div class="t">${esc(t)}</div>
+        ${d?`<div class="footnote mortar">${esc(d)}</div>`:""}
+        <div class="caption mortar">›</div></div></button>`;
+      if(i<rowsIn.length-1) h+=`<div class="srule"></div>`;
+    });
+    h+=`</div></div>`;
+  });
+  h+=`<button class="group" data-a="replayOnboarding" style="display:block;width:100%">
+      <div class="srow"><div class="t">Replay onboarding</div><div class="caption mortar">›</div></div></button>
+    <div class="group"><div class="srow"><div class="t mortar">Sign out</div></div></div>
+    <div class="footnote mortar center">Arch 1.0</div></div></div></div>`;
+  return h;
+}
+
+function settingDetail(t,d){
+  return navbar(t)+`<div class="screen"><div class="pad v gap-s mt-xl">
+    ${d?`<div class="titleM">${esc(d)}</div>`:""}
+    <div class="body mortar">The controls for this setting are not built yet.</div></div></div>`;
+}
+
+/* ============================ onboarding ============================ */
+const STEPS=["verify","identity","about","photos","answers","interests","questions","notifications"];
+function onboarding(){
+  const o=S.onboarding;
+  if(o.welcome){
+    return `<div class="screen"><div class="pad v" style="height:100%; padding:48px 20px">
+      <div style="flex:1"></div>${markSVG(84,4,"var(--lamp)")}
+      <div class="display mt-m">Arch</div><div style="flex:1"></div>
+      <div class="titleL">Five people a day</div>
+      <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
+        actually like. You read them properly, you decide, and then you are done until tomorrow.</div>
+      <div style="flex:1"></div>
+      <button class="btn primary" data-a="obStart">Get started</button></div></div>`;
+  }
+  const step=STEPS[o.step];
+  const inQ=o.q!==null&&o.q!==undefined;
+  const total=inQ?QUESTIONS.length:STEPS.length, cur=inQ?o.q+1:o.step+1;
+  let segs=""; for(let i=0;i<total;i++) segs+=`<div class="seg ${i<cur?"on":""}"></div>`;
+  let body="",foot="",cta="Continue",enabled=true;
+
+  if(step==="verify"&&!o.sent){
+    body=`<div class="titleL">Your number</div>
+      <div class="body mortar mt-s">Arch verifies every number. It is the main thing keeping this
+        from filling up with accounts that are not people.</div>
+      <div style="display:flex; gap:8px" class="mt-xl">
+        <div class="field onNight" style="flex:none"><span class="mortar">+1</span></div>
+        <div class="field onNight" style="flex:1"><input id="obPhone" inputmode="tel"
+          placeholder="917 555 0142" value="${esc(o.phone)}"></div></div>
+      <div class="footnote mortar mt-xl">Your number is never shown to anyone and never appears
+        on your profile.</div>`;
+    cta="Send a code"; enabled=o.phone.replace(/\D/g,"").length>=7;
+  } else if(step==="verify"){
+    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field onNight center"
+      style="flex:1; justify-content:center; height:56px"><span class="titleM">${o.code[i]||""}</span></div>`;
+    body=`<div class="titleL">Check your messages</div>
+      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(o.phone)}.</div>
+      <div style="display:flex; gap:8px" class="mt-xl">${boxes}</div>
+      <input id="obCode" inputmode="numeric" maxlength="6" value="${esc(o.code)}"
+        style="position:absolute; opacity:.001; width:1px; height:1px">
+      <button class="footnote mortar mt-xl" data-a="obResend">Send it again</button>`;
+    cta="Verify"; enabled=o.code.length===6;
+  } else if(step==="identity"){
+    body=`<div class="titleL">Your name</div>
+      <div class="body mortar mt-s">This is what people see. Your email is only for signing in.</div>
+      <div class="v gap-xs mt-xl">
+        <div class="field onNight"><div class="lbl">Name</div><input id="obName" value="${esc(o.name)}" placeholder="Sam"></div>
+        <div class="field onNight"><div class="lbl">Email</div><input id="obEmail" value="${esc(o.email)}" placeholder="sam@example.com"></div></div>`;
+    enabled=o.name.trim()&&o.email.includes("@");
+  } else if(step==="about"){
+    const loc=[o.hood.trim(),o.city.trim()].filter(Boolean).join(", ");
+    body=`<div class="titleL">About you</div>
+      <div class="body mortar mt-s">Four facts that sit under your name.</div>
+      <div class="v gap-xs mt-xl">
+        <div class="field onNight"><div class="lbl">Age</div><input id="obAge" inputmode="numeric" value="${esc(o.age)}" placeholder="30"></div>
+        <div class="field onNight"><div class="lbl">Neighbourhood</div><input id="obHood" value="${esc(o.hood)}" placeholder="Fort Greene"></div>
+        <div class="field onNight"><div class="lbl">City</div><input id="obCity" value="${esc(o.city)}" placeholder="Brooklyn"></div>
+        <div class="field onNight"><div class="lbl">Height</div><input id="obHeight" value="${esc(o.height)}" placeholder="5 ft 10"></div>
+        <div class="field onNight"><div class="lbl">Work</div><input id="obWork" value="${esc(o.work)}" placeholder="Sound engineer"></div></div>
+      ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
+        <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
+    enabled=o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim();
+  } else if(step==="photos"){
+    let slots=o.photos.map((t,i)=>`<div class="slot" style="${tone(t)}">
+      <button class="x" data-a="obRmPhoto" data-i="${i}">✕</button></div>`).join("");
+    if(o.photos.length<6) slots+=`<button class="slot add" data-a="obAddPhoto">+</button>`;
+    const short=Math.max(0,4-o.photos.length);
+    body=`<div class="titleL">Photos</div>
+      <div class="body mortar mt-s">At least 4, up to 6. The first one is what people see in their five.</div>
+      <div class="grid3 mt-xl">${slots}</div>
+      <div class="footnote mortar mt-s">${short===0?`You can add ${6-o.photos.length} more.`
+        :short===1?"One more photo.":`${short} more photos.`}</div>`;
+    enabled=o.photos.length>=4;
+  } else if(step==="answers"){
+    body=`<div class="titleL">Three answers</div>
+      <div class="body mortar mt-s">This is the part people actually read.</div><div class="v gap-m mt-xl">`;
+    o.answers.forEach((a,i)=>{body+=`<div class="v gap-xs">
+      <div class="prompt mortar">${esc(YOU.prompts[i][0])}</div>
+      <div class="field onNight"><textarea rows="3" data-ob="answer" data-i="${i}"
+        placeholder="Answer it properly.">${esc(a)}</textarea></div></div>`;});
+    body+=`</div>`;
+    enabled=o.answers.filter(a=>a.trim()).length>=3;
+  } else if(step==="interests"){
+    const ex=["Night baking","Rolleiflex repair","Above-ground platforms"];
+    body=`<div class="titleL">Three interests</div>
+      <div class="body mortar mt-s">Short and specific. "Bridge inspections" tells someone more
+        than "travel" ever will.</div><div class="v gap-xs mt-xl">`;
+    o.interests.forEach((t,i)=>{body+=`<div class="field onNight"><input maxlength="24"
+      data-ob="interest" data-i="${i}" value="${esc(t)}" placeholder="${ex[i]}"></div>`;});
+    body+=`</div>`;
+    enabled=o.interests.filter(t=>t.trim()).length>=3;
+  } else if(step==="questions"&&!inQ){
+    body=`<div class="titleL">A few questions</div>
+      <div class="body mortar mt-s">These are how Arch decides who reaches your five.</div>
+      <div class="v gap-m mt-xl">
+        <div class="body">Your answers are not on your profile.</div>
+        <div class="body">Nobody else sees them.</div>
+        <div class="body">They do not add up to a score, and Arch will never show you a percentage.</div></div>
+      <div class="footnote mortar mt-xl">${QUESTIONS.length} questions. There is no wrong answer.</div>`;
+    cta="Start";
+  } else if(step==="questions"){
+    const [q,opts]=QUESTIONS[o.q];
+    body=`<div class="titleM">${esc(q)}</div><div class="v gap-xs mt-xl">`;
+    opts.forEach(opt=>{body+=`<button data-a="obAnswer" data-o="${esc(opt)}" style="display:block;width:100%">
+      <div class="opt ${o.qa[o.q]===opt?"sel":""}">${esc(opt)}</div></button>`;});
+    body+=`</div>`;
+  } else {
+    body=`<div class="titleL">Notifications</div>
+      <div class="body mortar mt-s">Two kinds, and nothing else.</div>
+      <div class="v gap-m mt-xl">
+        <div class="body">One in the morning, when your five are ready.</div>
+        <div class="body">One when somebody writes to you.</div></div>
+      <div class="footnote mortar mt-xl">No reminders to come back, and nothing at all in the evening.</div>`;
+    cta="Allow notifications";
+  }
+
+  if(!inQ){
+    foot=`<div class="bottombar"><button class="btn primary" data-a="obNext" ${enabled?"":"disabled"}>${cta}</button>
+      ${step==="notifications"?`<button class="btntext" data-a="obFinish">Not now</button>`:""}</div>`;
+  }
+  return `<div class="v" style="flex:none; padding-bottom:12px"><div class="safetop"></div>
+      <div style="display:flex; padding-left:8px">
+        ${o.step>0||o.sent||inQ?`<button class="iconbtn" data-a="obBack">‹</button>`
+          :`<div style="width:44px;height:44px"></div>`}</div>
+      <div class="rule pad">${segs}</div></div>
+    <div class="screen"><div class="pad pb-xxxl" style="padding-top:24px; position:relative">${body}</div></div>${foot}`;
+}
+
+/* ============================ render ============================ */
+function render(){
+  const r=document.getElementById("root");
+  if(S.onboarding){ r.innerHTML=onboarding(); return; }
+  const t=current();
+  let screen;
+  if(!t){
+    screen={premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
+  } else if(t.name==="profile") screen=profile(t.id);
+  else if(t.name==="thread") screen=thread(t.id);
+  else if(t.name==="arrange") screen=arrange();
+  else if(t.name==="settings") screen=settings();
+  else if(t.name==="settingDetail") screen=settingDetail(t.t,t.d);
+
+  const hideTabs=t&&(t.name==="thread");
+  const unread=S.convos.reduce((a,c)=>a+c.unread,0);
+  const tabs=["premium","daily","messages","you"].map(k=>{
+    const label={premium:"Premium",daily:"Daily 5",messages:"Messages",you:"You"}[k];
+    const badge=(k==="messages"&&unread)?`<div class="badge">${unread}</div>`:"";
+    return `<button class="tab" data-a="tab" data-k="${k}" aria-selected="${S.tab===k}">
+      <div class="glyph">${glyph(k,S.tab===k)}${badge}</div><div class="lbl">${label}</div></button>`;
+  }).join("");
+  r.innerHTML=screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
+}
+
+/* ============================ sheets ============================ */
+function openSheet(html){
+  const s=document.getElementById("sheet"), sc=document.getElementById("scrim");
+  s.innerHTML=`<div class="grabber"></div>`+html;
+  requestAnimationFrame(()=>{s.classList.add("on"); sc.classList.add("on");});
+}
+function closeSheet(){
+  document.getElementById("sheet").classList.remove("on");
+  document.getElementById("scrim").classList.remove("on");
+}
+function dismissSheet(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  openSheet(`<div class="v gap-s" style="padding-top:8px">
+    <div class="titleM">Dismiss ${esc(p.name)}?</div>
+    <div class="body mortar">${esc(p.name)} leaves your five. The slot fills with someone new
+      tomorrow. You cannot undo this.</div></div>
+    <button class="btn quiet mt-xxl" data-a="confirmDismiss" data-id="${id}">Dismiss ${esc(p.name)}</button>
+    <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
+function composerSheet(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  let q="";
+  if(S.selected){
+    const [kind,i]=S.selected.split("-");
+    q=kind==="prompt"
+      ? `<div class="quoted mt-m"><div class="footnote mortar">${esc(p.prompts[+i][0])}</div>
+         <div class="callout" style="margin-top:4px; display:-webkit-box; -webkit-line-clamp:2;
+           -webkit-box-orient:vertical; overflow:hidden">${esc(p.prompts[+i][1])}</div></div>`
+      : `<div class="quoted mt-m" style="display:flex; gap:12px; align-items:center">
+         <div style="width:40px; height:50px; border-radius:8px; ${tone(p.photos[+i])}"></div>
+         <div class="footnote mortar">About this photo</div></div>`;
+  }
+  openSheet(`<div style="display:flex; gap:12px; align-items:center; padding-top:8px">
+      <div style="width:44px; height:44px; border-radius:12px; ${tone(p.photos[0])}"></div>
+      <div><div class="subhead">${esc(p.name)}</div>
+        <div class="footnote mortar">${esc(p.hood)}, ${esc(p.city)}</div></div></div>
+    ${q}
+    <div class="field mt-m" style="align-items:flex-start"><textarea id="composeText" rows="5"
+      placeholder="${S.selected?"Say something about it.":"Start a conversation."}"></textarea></div>
+    <button class="btn primary mt-m" data-a="send" data-id="${id}">Send</button>`);
+  setTimeout(()=>document.getElementById("composeText")?.focus(),320);
+}
+
+/* ============================ the dismissal ============================ */
+function performDismiss(id){
+  closeSheet();
+  const idx=S.slots.findIndex(s=>s.person&&s.person.id===id);
+  if(idx<0) return;
+  // Come back to the roster first, so nothing vanishes under the cursor.
+  S.stacks.daily=[]; S.tab="daily"; render();
+
+  const filled=S.slots.filter(s=>s.person).length;
+  const card=document.querySelector(`[data-card="${id}"]`);
+  const stones=document.querySelectorAll("#arch path");
+  const stone=stones[filled-1];
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const finish=()=>{
+    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:"About 14 hours"};
+    S.selected=null; render();
+  };
+  if(!card||reduce){ setTimeout(finish,120); return; }
+
+  if(stone) stone.classList.add("stone-drop");
+  card.style.height=card.offsetHeight+"px";
+  card.classList.add("leaving");
+  requestAnimationFrame(()=>{
+    card.style.transition="height .26s ease-in, opacity .26s ease-in, margin .26s ease-in";
+    card.style.height="0px"; card.style.opacity="0"; card.style.marginBottom="-32px";
+  });
+  setTimeout(finish,320);
+}
+
+/* ============================ events ============================ */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-a]"); if(!el) return;
+  const a=el.dataset.a, id=el.dataset.id, o=S.onboarding;
+
+  const acts={
+    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();},
+    open:()=>{S.selected=null; push({name:"profile",id});},
+    back:()=>pop(),
+    select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
+    dismiss:()=>dismissSheet(id),
+    closeSheet:()=>closeSheet(),
+    confirmDismiss:()=>performDismiss(id),
+    compose:()=>composerSheet(id),
+    thread:()=>push({name:"thread",id}),
+    goDaily:()=>{S.tab="daily"; render();},
+    plan:()=>{S.plan=+el.dataset.i; render();},
+    arrange:()=>push({name:"arrange"}),
+    settings:()=>push({name:"settings"}),
+    setting:()=>push({name:"settingDetail",t:el.dataset.t,d:el.dataset.d}),
+    addPhoto:()=>{S.you.photos.push(S.you.photos.length%6); render();},
+    rmPhoto:()=>{S.you.photos.splice(+el.dataset.i,1); render();},
+    editInterests:()=>openSheet(`<div class="titleM" style="padding-top:8px">Interests</div>
+      <div class="footnote mortar mt-s">Three things you are actually into.</div>
+      <div class="v gap-xs mt-m">${S.you.interests.map(t=>
+        `<div class="field"><input value="${esc(t)}" maxlength="24"></div>`).join("")}</div>
+      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    editDetails:()=>openSheet(`<div class="titleM" style="padding-top:8px">Your details</div>
+      <div class="v gap-xs mt-m">
+        ${[["Name",S.you.name],["Age",S.you.age],["Neighbourhood",S.you.hood],["City",S.you.city],
+           ["Height",S.you.h],["Work",S.you.work]].map(([l,v])=>
+        `<div class="field"><div class="lbl">${l}</div><input value="${esc(v)}"></div>`).join("")}</div>
+      <div class="footnote mortar mt-s">Your neighbourhood and city show together, as
+        ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
+      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    editAnswer:()=>{const i=+el.dataset.i;
+      openSheet(`<div class="prompt mortar" style="padding-top:8px">${esc(S.you.prompts[i][0])}</div>
+        <div class="field mt-m" style="align-items:flex-start">
+          <textarea rows="6">${esc(S.you.prompts[i][1])}</textarea></div>
+        <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+        <button class="btntext" data-a="closeSheet">Cancel</button>`);},
+    replayOnboarding:()=>{startOnboarding(); },
+    threadSend:()=>{
+      const i=document.getElementById("threadInput"); if(!i||!i.value.trim()) return;
+      const c=S.convos.find(x=>x.id===current().id);
+      c.msgs.push(["out",i.value.trim(),"Just now"]); c.when="Just now"; render();
+      const sc=document.querySelector(".screen"); if(sc) sc.scrollTop=sc.scrollHeight;
+    },
+    send:()=>{
+      const t=document.getElementById("composeText");
+      const text=(t&&t.value.trim())||"";
+      if(!text) return;
+      const p=[...PEOPLE,HANA].find(x=>x.id===id);
+      let c=S.convos.find(x=>x.id===id);
+      const openRef=S.selected&&S.selected.startsWith("prompt")
+        ? ["prompt",+S.selected.split("-")[1]] : ["prompt",0];
+      if(!c){ c={id,person:p,open:openRef,unread:0,when:"Just now",msgs:[]}; S.convos.unshift(c); }
+      c.msgs.push(["out",text,"Just now"]); c.when="Just now";
+      closeSheet(); S.selected=null;
+      S.tab="messages"; S.stacks.messages=[{name:"thread",id}]; render();
+    },
+    /* onboarding */
+    obStart:()=>{o.welcome=false; render();},
+    obBack:()=>{
+      if(o.q!==null&&o.q!==undefined){ o.q=o.q===0?null:o.q-1; render(); return; }
+      if(o.step===0&&o.sent){ o.sent=false; o.code=""; render(); return; }
+      if(o.step>0){ o.step--; render(); }
+    },
+    obResend:()=>{el.textContent="Code sent again";},
+    obAddPhoto:()=>{o.photos.push(o.photos.length%6); render();},
+    obRmPhoto:()=>{o.photos.splice(+el.dataset.i,1); render();},
+    obAnswer:()=>{
+      o.qa[o.q]=el.dataset.o; render();
+      setTimeout(()=>{
+        if(o.q+1<QUESTIONS.length) o.q++;
+        else { o.q=null; o.step=STEPS.indexOf("notifications"); }
+        render();
+      },260);
+    },
+    obNext:()=>{
+      const step=STEPS[o.step];
+      if(step==="verify"&&!o.sent){ o.sent=true; render(); return; }
+      if(step==="questions"&&(o.q===null||o.q===undefined)){ o.q=0; render(); return; }
+      if(step==="notifications"){ finishOnboarding(); return; }
+      o.step++; render();
+    },
+    obFinish:()=>finishOnboarding()
+  };
+  if(acts[a]){ e.preventDefault(); acts[a](); }
+});
+
+/* live input */
+document.addEventListener("input",e=>{
+  const t=e.target, o=S.onboarding;
+  if(o){
+    const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
+               obHood:"hood",obCity:"city",obHeight:"height",obWork:"work"};
+    if(map[t.id]){
+      o[map[t.id]]=t.id==="obCode"?t.value.replace(/\D/g,"").slice(0,6):t.value;
+      const btn=document.querySelector('[data-a="obNext"]');
+      if(t.id==="obCode"){ render(); document.getElementById("obCode")?.focus(); return; }
+      if(btn) refreshCTA();
+      return;
+    }
+    if(t.dataset.ob==="answer"){ o.answers[+t.dataset.i]=t.value; refreshCTA(); return; }
+    if(t.dataset.ob==="interest"){ o.interests[+t.dataset.i]=t.value; refreshCTA(); return; }
+  }
+});
+function refreshCTA(){
+  const o=S.onboarding, step=STEPS[o.step];
+  let ok=true;
+  if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
+  else if(step==="verify") ok=o.code.length===6;
+  else if(step==="identity") ok=!!o.name.trim()&&o.email.includes("@");
+  else if(step==="about") ok=!!(o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim());
+  else if(step==="answers") ok=o.answers.filter(a=>a.trim()).length>=3;
+  else if(step==="interests") ok=o.interests.filter(t=>t.trim()).length>=3;
+  const btn=document.querySelector('[data-a="obNext"]');
+  if(btn) btn.disabled=!ok;
+}
+
+function startOnboarding(){
+  S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
+    age:"",hood:"",city:"",height:"",work:"",photos:[],answers:["","",""],
+    interests:["","",""],q:null,qa:{}};
+  render();
+}
+function finishOnboarding(){
+  const o=S.onboarding;
+  if(o.name.trim()){
+    S.you.name=o.name.trim(); S.you.age=o.age||S.you.age; S.you.hood=o.hood||S.you.hood;
+    S.you.city=o.city||S.you.city; S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
+    if(o.photos.length>=4) S.you.photos=o.photos.slice();
+    o.answers.forEach((a,i)=>{ if(a.trim()) S.you.prompts[i][1]=a.trim(); });
+    const ints=o.interests.filter(t=>t.trim());
+    if(ints.length) S.you.interests=ints;
+  }
+  S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],you:[]};
+  render();
+}
+
+render();
+</script>
