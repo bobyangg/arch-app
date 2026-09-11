@@ -288,26 +288,6 @@ struct PremiumPlan: Identifiable, Hashable {
     let isRecommended: Bool
 }
 
-/// One compatibility question.
-///
-/// The answers are never shown on a profile and never add up to a score — see the
-/// questionnaire intro copy, which says so out loud.
-struct QuestionnaireQuestion: Identifiable, Hashable {
-    let id: String
-    let text: String
-    let options: [String]
-}
-
-/// What a settings row does when you touch it.
-///
-/// A row either goes somewhere or flips — never both. A switch hidden behind a
-/// push is the classic settings mistake: you tap expecting a screen and something
-/// silently changes instead.
-enum SettingsControl: Hashable {
-    case push
-    case toggle(Bool)
-}
-
 struct SettingsRow: Identifiable, Hashable {
     let id: String
     let title: String
@@ -747,31 +727,6 @@ enum MockData {
     static let startingPrompts: [Prompt] = PromptLibrary.starting.enumerated().map { index, question in
         Prompt(id: "you-q\(index + 1)", question: question.text, answer: "")
     }
-
-    /// Four stand-ins for the real set. Adding the rest is a data change — the
-    /// question screen does not care how many there are.
-    static let questionnaire: [QuestionnaireQuestion] = [
-        QuestionnaireQuestion(
-            id: "qq1",
-            text: "When something is bothering you, do you want to talk it through or sit with it first?",
-            options: ["Talk it through", "Sit with it first", "Genuinely depends"]
-        ),
-        QuestionnaireQuestion(
-            id: "qq2",
-            text: "How much of your week is planned in advance?",
-            options: ["Most of it", "Some of it", "Almost none of it"]
-        ),
-        QuestionnaireQuestion(
-            id: "qq3",
-            text: "Someone cancels plans an hour before. What is your honest first reaction?",
-            options: ["Relief", "Irritation", "Neither, genuinely"]
-        ),
-        QuestionnaireQuestion(
-            id: "qq4",
-            text: "Do you want to be living in this city in ten years?",
-            options: ["Yes", "No", "I have no idea"]
-        )
-    ]
 
     static let onboardingHeadline = "Five people a day"
     static let onboardingBody = "Every morning Arch picks five people it thinks you would actually like. You read them properly, you decide, and then you are done until tomorrow."
