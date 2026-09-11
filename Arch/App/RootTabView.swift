@@ -12,6 +12,7 @@ struct RootTabView: View {
     let profile: ProfileStore
 
     @State private var store = DailyFiveStore()
+    @State private var settings = SettingsStore()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -25,7 +26,7 @@ struct RootTabView: View {
     private var content: some View {
         ZStack {
             tab(.premium) {
-                PremiumView()
+                PremiumView(isSubscribed: settings.isSubscribed)
             }
             tab(.daily) {
                 DailyFiveView(
@@ -41,7 +42,11 @@ struct RootTabView: View {
                 )
             }
             tab(.you) {
-                YouProfileView(store: profile)
+                YouProfileView(
+                    store: profile,
+                    settings: settings,
+                    onOpenPremium: { selection = .premium }
+                )
             }
         }
     }

@@ -3,10 +3,13 @@ import SwiftUI
 /// Settings.
 ///
 /// A grouped list on `stone` rather than a system `List`, so the surfaces match the
-/// rest of the app instead of arriving with their own greys. Every row goes
-/// somewhere — nothing here dead-ends.
+/// rest of the app instead of arriving with their own greys. The rows are derived
+/// from `SettingsStore`, so a detail line always shows the live value.
 struct SettingsView: View {
-    var sections: [SettingsSection] = MockData.settingsSections
+    let store: SettingsStore
+    /// Sends the reader to the Premium tab, since a paywall inside a settings push
+    /// would be the same screen in two places.
+    var onOpenPremium: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
 
@@ -15,7 +18,7 @@ struct SettingsView: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: ArchSpacing.xl) {
-                    ForEach(sections) { section in
+                    ForEach(store.sections) { section in
                         group(section)
                     }
                     signOut
@@ -30,7 +33,7 @@ struct SettingsView: View {
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: SettingsRow.self) { row in
-            SettingsDetailView(row: row)
+            SettingsDetailView(row: row, store: store, onOpenPremium: onOpenPremium)
         }
     }
 
@@ -69,10 +72,7 @@ struct SettingsView: View {
 
             VStack(spacing: 0) {
                 ForEach(Array(section.rows.enumerated()), id: \.element.id) { index, row in
-                    NavigationLink(value: row) {
-                        SettingsRowView(row: row)
-                    }
-                    .buttonStyle(PressScaleStyle(scale: 1))
+                    rowView(row)
 
                     if index < section.rows.count - 1 {
                         Rectangle()
@@ -86,6 +86,20 @@ struct SettingsView: View {
                 RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
                     .fill(ArchColor.stone)
             )
+            .animation(ArchMotion.standard, value: section.rows.count)
+        }
+    }
+
+    @ViewBuilder
+    private func rowView(_ row: SettingsRow) -> some View {
+        switch row.control {
+        case .push:
+            NavigationLink(value: row) {
+                SettingsRowView(row: row)
+            }
+            .buttonStyle(PressScaleStyle(scale: 1))
+        case .toggle:
+            SettingsToggleRow(row: row, store: store)
         }
     }
 
@@ -116,6 +130,7 @@ struct SettingsView: View {
     }
 }
 
+/// A row that goes somewhere. Chevron, and the live value beside it.
 struct SettingsRowView: View {
     let row: SettingsRow
 
@@ -144,9 +159,41 @@ struct SettingsRowView: View {
     }
 }
 
+/// A row that flips. No chevron — nothing to go to.
+struct SettingsToggleRow: View {
+    let row: SettingsRow
+    let store: SettingsStore
+
+    var body: some View {
+        Toggle(isOn: Binding(
+            get: { store.isOn(row.id) },
+            set: { _ in store.toggle(row.id) }
+        )) {
+            Text(row.title)
+                .archText(.body)
+                .foregroundStyle(ArchColor.limestone)
+        }
+        .tint(ArchColor.lamp)
+        .padding(.horizontal, ArchSpacing.m)
+        .padding(.vertical, ArchSpacing.s + 2)
+    }
+}
+
 #Preview("Settings") {
     NavigationStack {
-        SettingsView()
+        SettingsView(store: SettingsStore())
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Settings, notifications off") {
+    NavigationStack {
+        SettingsView(store: {
+            let s = SettingsStore()
+            s.dailyFiveAlert = false
+            s.isPaused = true
+            return s
+        }())
     }
     .preferredColorScheme(.dark)
 }
