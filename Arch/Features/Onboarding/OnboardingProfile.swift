@@ -7,6 +7,8 @@ import SwiftUI
 struct OnboardingPhotos: View {
     let store: OnboardingStore
 
+    @State private var isPicking = false
+
     private var profile: ProfileStore { store.profile }
 
     var body: some View {
@@ -21,15 +23,21 @@ struct OnboardingPhotos: View {
                     photos: profile.person.photos,
                     canAdd: profile.canAddPhoto,
                     canRemove: profile.canRemovePhoto,
+                    uploads: profile.uploads,
                     onMove: { profile.movePhoto(id: $0, to: $1) },
-                    onAdd: { profile.addPhoto() },
-                    onRemove: { profile.removePhoto(id: $0) }
+                    onAdd: { isPicking = true },
+                    onRemove: { profile.removePhoto(id: $0) },
+                    onFinishUpload: { profile.finishUpload(id: $0) },
+                    onRetryUpload: { profile.retryUpload(id: $0) }
                 )
 
                 Text(store.photoShortfallText)
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
             }
+        }
+        .sheet(isPresented: $isPicking) {
+            PhotoPickerView(slotsLeft: profile.slotsLeft) { profile.addPhotos($0) }
         }
     }
 }

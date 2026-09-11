@@ -88,16 +88,24 @@ final class OnboardingStore {
         }
     }
 
+    /// A photo that did not upload is not a photo yet, so it does not count
+    /// towards the four. Letting it count would walk somebody out of onboarding
+    /// with three photographs on their profile and a fourth that never arrived.
     var photoShortfall: Int {
-        max(0, Person.requiredPhotos - person.photos.count)
+        max(0, Person.requiredPhotos - (person.photos.count - profile.failedUploads))
     }
 
     /// Names the gap rather than leaving a dead button to be guessed at.
     var photoShortfallText: String {
+        if profile.failedUploads > 0 {
+            return profile.failedUploads == 1
+                ? "One photo did not upload. Tap it to try again."
+                : "\(ArchCopy.capitalisedWord(profile.failedUploads)) photos did not upload. Tap them to try again."
+        }
         switch photoShortfall {
-        case 0: return "You can add \(Person.photoLimit - person.photos.count) more."
+        case 0: return "You can add \(ArchCopy.word(Person.photoLimit - person.photos.count)) more."
         case 1: return "One more photo."
-        default: return "\(photoShortfall) more photos."
+        default: return "\(ArchCopy.capitalisedWord(photoShortfall)) more photos."
         }
     }
 

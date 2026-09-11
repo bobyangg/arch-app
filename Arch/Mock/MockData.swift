@@ -17,6 +17,19 @@ struct Photo: Identifiable, Hashable {
     let toneIndex: Int
 }
 
+/// One photo in the phone's library, as far as a design build can know about it.
+///
+/// It carries a shape as well as a tone, because a library full of 4:5 photographs
+/// would make the crop step look pointless — and the whole reason the crop step
+/// exists is that almost nothing anybody has on their phone is already 4:5.
+struct LibraryPhoto: Identifiable, Hashable {
+    let id: String
+    /// Index into `ArchColor.materials`.
+    let toneIndex: Int
+    /// Width over height.
+    let aspect: CGFloat
+}
+
 /// Three short, self-written tags. Free text rather than a fixed list, because a
 /// fixed list produces "Travel" and "Coffee" and Arch is built on people being
 /// specific about themselves.
@@ -280,12 +293,7 @@ struct Roster: Hashable {
     var name: String { "your \(word)" }
 
     private var word: String {
-        switch capacity {
-        case 5:  return "five"
-        case 6:  return "six"
-        case 7:  return "seven"
-        default: return "roster"
-        }
+        (5...7).contains(capacity) ? ArchCopy.word(capacity) : "roster"
     }
 }
 
@@ -758,12 +766,13 @@ enum MockData {
         .filled(priya), .filled(marcus), .filled(hana), .filled(ines), .filled(dev)
     ])
 
-    /// A subscriber's roster: six slots rather than five. The arch draws six
+    /// A subscriber's roster: seven slots rather than five. The arch draws seven
     /// voussoirs, so the indicator generalises without a second design.
     static let rosterPremium = Roster(slots: [
         .filled(priya), .filled(marcus), .filled(hana),
         .filled(ines), .filled(dev),
-        .empty(id: "slot-6", refillsAt: hours(14), opening: .yours)
+        .empty(id: "slot-6", refillsAt: hours(14), opening: .yours),
+        .empty(id: "slot-7", refillsAt: hours(14), opening: .yours)
     ])
 
     /// Three people and two open slots, refilling at different times.
@@ -883,6 +892,32 @@ enum MockData {
             title: "A review of your profile",
             detail: "Which of your photos and answers people write about, and specific notes on what to change."
         )
+    ]
+
+    /// A phone's camera roll: portraits, squares, a few landscapes, one panorama.
+    ///
+    /// Eighteen is enough to scroll and not so many that the grid becomes the
+    /// point. The tones repeat on purpose — a real roll is mostly the same few
+    /// rooms.
+    static let photoLibrary: [LibraryPhoto] = [
+        LibraryPhoto(id: "lib-1",  toneIndex: 3, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-2",  toneIndex: 1, aspect: 1),
+        LibraryPhoto(id: "lib-3",  toneIndex: 5, aspect: 4.0 / 3.0),
+        LibraryPhoto(id: "lib-4",  toneIndex: 0, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-5",  toneIndex: 2, aspect: 9.0 / 16.0),
+        LibraryPhoto(id: "lib-6",  toneIndex: 4, aspect: 1),
+        LibraryPhoto(id: "lib-7",  toneIndex: 0, aspect: 16.0 / 9.0),
+        LibraryPhoto(id: "lib-8",  toneIndex: 3, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-9",  toneIndex: 5, aspect: 1),
+        LibraryPhoto(id: "lib-10", toneIndex: 2, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-11", toneIndex: 1, aspect: 4.0 / 3.0),
+        LibraryPhoto(id: "lib-12", toneIndex: 4, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-13", toneIndex: 0, aspect: 1),
+        LibraryPhoto(id: "lib-14", toneIndex: 3, aspect: 9.0 / 16.0),
+        LibraryPhoto(id: "lib-15", toneIndex: 2, aspect: 4.0 / 3.0),
+        LibraryPhoto(id: "lib-16", toneIndex: 5, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-17", toneIndex: 1, aspect: 3.0 / 4.0),
+        LibraryPhoto(id: "lib-18", toneIndex: 4, aspect: 21.0 / 9.0)
     ]
 
     /// What people have picked out of your profile when they wrote to you.

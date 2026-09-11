@@ -173,7 +173,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .knobR{position:absolute; top:9px; width:26px; height:26px; border-radius:13px;
        background:var(--lamp); touch-action:none;}
 
-/* ---- onboarding ---- 
+/* ---- onboarding ---- */
 .rule{display:flex; gap:4px;}
 .seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);
      transition:background .25s ease;}
@@ -182,7 +182,25 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
      font-size:17px; line-height:24px;}
 .opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
 .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-xs);}
-.slot{aspect-ratio:1; border-radius:var(--r-control); position:relative;}
+.slot{aspect-ratio:1; border-radius:var(--r-control); position:relative; overflow:hidden;}
+
+/* ---- the picker ---- */
+.picknum{position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:11px;
+         background:var(--lamp); color:var(--night); font-size:11px; line-height:14px;
+         font-weight:600; display:flex; align-items:center; justify-content:center;}
+/* Uploading is a wait, not an event: a rule filling along the bottom edge rather
+   than a spinner parked on top of the photograph. */
+.upbar{position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(15,19,25,.45);}
+.upbar i{display:block; height:100%; width:0; background:var(--lamp);
+         animation:upfill 1.4s linear forwards;}
+@keyframes upfill{to{width:100%}}
+/* No red. A photo that did not arrive is not the reader's fault. */
+.failface{position:absolute; inset:0; display:flex; flex-direction:column; gap:2px;
+          align-items:center; justify-content:center; color:var(--mortar); font-size:15px;}
+.failface span{font-size:11px; line-height:14px; font-weight:600;}
+.cropstage{position:relative; padding:28px; overflow:hidden; touch-action:none;}
+.cropframe{position:relative; width:100%; aspect-ratio:4/5; border-radius:var(--r-photo);
+           border:1px solid var(--quiet); box-shadow:0 0 0 9999px rgba(15,19,25,.55);}
 .slot.add{background:var(--stone); display:flex; align-items:center; justify-content:center;
           color:var(--mortar); font-size:20px;}
 .slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:12px;
@@ -317,6 +335,17 @@ const BENEFITS=[["Seven people instead of five","Two more slots. The same care c
    has none. This is the photo or answer somebody quoted in the composer, which is a
    signal the app genuinely has rather than one the review has to invent. */
 const WRITTEN={"prompt-2":4,"photo-1":3,"prompt-0":2,"photo-0":1};
+/* A camera roll: portraits, squares, a couple of landscapes, one panorama. The
+   shapes are the point — a library that was already 4:5 would make the crop step
+   look like ceremony. */
+const LIBRARY=[[3,3/4],[1,1],[5,4/3],[0,3/4],[2,9/16],[4,1],[0,16/9],[3,3/4],[5,1],
+               [2,3/4],[1,4/3],[4,3/4],[0,1],[3,9/16],[2,4/3],[5,3/4],[1,3/4],[4,21/9]];
+/* Arch writes small numbers out. "Add 2 photos" is a receipt; "Add two photos" is
+   a sentence. */
+const NUM=["zero","one","two","three","four","five","six","seven"];
+const numWord=n=>NUM[n]||String(n);
+const capWord=n=>{const w=numWord(n); return w[0].toUpperCase()+w.slice(1);};
+
 const PLANS=[["One month","$24.99","$24.99 a month",0],["Three months","$53.97","$17.99 a month",1],
  ["Twelve months","$143.88","$11.99 a month",0]];
 const SETTINGS=[["Account",[["Phone number","+1 (917) 555 0142"],["Email","sam@example.com"],["Arch Premium","Not subscribed"]]],
@@ -448,8 +477,18 @@ const S={
        visibility:"Anyone Arch picks me for",blocked:[]},
   edit:null,
   report:{reason:null,block:true,sent:false},
-  onboarding:null
+  onboarding:null,
+  /* null, or {target, left, ids, step, zoom, ox, oy}. step -1 is the library grid. */
+  picker:null,
+  /* One batch of three shows the failed upload once, so the state is discoverable
+     without becoming a nuisance. A real build has no such arrangement. */
+  failOnce:true
 };
+/* Parallel to photos: null, or {id, state}. Its own array so that adding and
+   removing splice both together and an upload can never end up attached to the
+   wrong photograph. */
+S.you.up=S.you.photos.map(()=>null);
+let UID=0;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const stack=()=>S.stacks[S.tab];
 const current=()=>stack()[stack().length-1]||null;   // not `top` — window.top exists
@@ -863,14 +902,162 @@ function reviewRoot(){
   return h+`</div></div>`;
 }
 
+/* One photo grid, used by arrange mode and by onboarding, so the two cannot drift
+   apart. Four is the floor everywhere, which is why the ✕ disappears at exactly
+   four rather than letting you walk off it. */
+function photoSlots(target,acts){
+  const ps=target.photos, up=target.up||[], canRemove=ps.length>4;
+  let h="";
+  ps.forEach((t,i)=>{
+    const u=up[i], failed=u&&u.state==="failed", loading=u&&u.state==="uploading";
+    const x=(canRemove&&!loading)?`<button class="x" data-a="${acts.rm}" data-i="${i}">✕</button>`:"";
+    if(failed){
+      h+=`<div class="slot" style="background:var(--stone)">
+        <button class="failface" data-a="${acts.retry}" data-i="${i}"
+          aria-label="This photo did not upload. Try again.">↻<span>Again</span></button>
+        ${x}</div>`;
+      return;
+    }
+    h+=`<div class="slot" style="${tone(t)}${loading?"; opacity:.55":""}">${x}
+      ${loading?`<div class="upbar"><i></i></div>`:""}</div>`;
+  });
+  if(ps.length<6) h+=`<button class="slot add" data-a="${acts.add}">+</button>`;
+  return h;
+}
+
+/* ============================ the photo picker ============================ */
+function openPicker(target){
+  const t=target==="ob"?S.onboarding:S.you;
+  S.picker={target, left:6-t.photos.length, ids:[], step:-1, zoom:100, ox:0, oy:0};
+  render();
+}
+function pickerTarget(){ return S.picker.target==="ob"?S.onboarding:S.you; }
+
+/* The mark on a chosen tile is a number, not a tick: the order you tap is the
+   order they land in your profile, and slot one is the photo people see in their
+   five. Unchosen tiles carry no empty ring — a ring on every tile is a control on
+   every tile, and one sentence explains the mechanic instead. */
+function pickerRoot(){
+  const pk=S.picker, left=pk.left-pk.ids.length;
+  const line=pk.ids.length===0
+    ? "Tap to choose. "+(pk.left===1?"One slot left.":capWord(pk.left)+" slots left.")
+    : left===0
+      ? "They are added in the order you tap them. "+(pk.ids.length===1
+          ?"That is your last slot.":"That is every slot you have left.")
+      : "They are added in the order you tap them. "+(left===1
+          ?"One slot left.":capWord(left)+" slots left.");
+  const label=pk.ids.length===0?"Add photos"
+    :pk.ids.length===1?"Add one photo":"Add "+numWord(pk.ids.length)+" photos";
+  let h=`<div class="navbar" style="padding-left:8px">
+      <button class="iconbtn" data-a="pickClose" aria-label="Close without adding anything">✕</button>
+      <div class="titleM">Add photos</div></div><div class="hairline"></div>
+    <div class="pad footnote mortar" style="padding-top:16px; padding-bottom:12px">${line}</div>
+    <div class="screen"><div class="pad pb-xxxl"><div class="grid3" style="gap:4px">`;
+  LIBRARY.forEach((ph,i)=>{
+    const order=pk.ids.indexOf(i), full=order<0&&pk.ids.length>=pk.left;
+    h+=`<button class="slot" data-a="pickTile" data-i="${i}" ${full?"disabled":""}
+      style="${tone(ph[0])}; border-radius:8px; opacity:${full?".3":"1"}">
+      ${order>=0?`<div class="picknum">${order+1}</div>`:""}</button>`;
+  });
+  return h+`</div></div></div>
+    <div class="bottombar"><button class="btn primary" data-a="pickNext"
+      ${pk.ids.length?"":"disabled"}>${label}</button></div>`;
+}
+
+/* One frame and one zoom. No rotate, no flip, no thirds grid — the only thing that
+   matters is which part of the photograph ends up in the shape the rest of the app
+   draws photos in. What falls outside is dimmed rather than cut away, so you can
+   see what you are leaving out. */
+function cropRoot(){
+  const pk=S.picker, last=pk.step+1>=pk.ids.length;
+  const cta=!last?"Next":(pk.ids.length>1?"Add "+numWord(pk.ids.length)+" photos":"Add photo");
+  return `<div class="navbar" style="padding-left:8px">
+      <button class="iconbtn" data-a="cropBack">&lsaquo;</button>
+      <div class="titleM">Position</div><div style="flex:1"></div>
+      ${pk.ids.length>1?`<div class="footnote mortar">${pk.step+1} of ${pk.ids.length}</div>`:""}
+      </div><div class="hairline"></div>
+    <div class="screen"><div class="pad" style="height:100%; display:flex;
+      flex-direction:column; justify-content:center">
+      <div class="cropstage" id="cropStage">
+        <div id="cropImg" style="position:absolute; left:50%; top:50%;
+          box-shadow:inset 0 0 0 1px var(--hairline);
+          ${tone(LIBRARY[pk.ids[pk.step]][0])}"></div>
+        <div class="cropframe" id="cropFrame"></div>
+      </div>
+      <div class="footnote mortar mt-m">Drag to move it. The slider zooms.</div>
+      <input class="slider mt-s" id="cropZoom" type="range" min="100" max="250"
+        value="${pk.zoom}" aria-label="Zoom">
+    </div></div>
+    <div class="bottombar"><button class="btn primary" data-a="cropNext">${cta}</button></div>`;
+}
+
+function mountCrop(){
+  const stage=document.getElementById("cropStage"); if(!stage) return;
+  const frame=document.getElementById("cropFrame"), img=document.getElementById("cropImg");
+  const pk=S.picker, aspect=LIBRARY[pk.ids[pk.step]][1];
+  const paint=()=>{
+    const fw=frame.clientWidth, fh=frame.clientHeight;
+    const factor=Math.max(fw/aspect,fh), sc=pk.zoom/100;
+    const iw=aspect*factor*sc, ih=factor*sc;
+    const lx=Math.max(0,(iw-fw)/2), ly=Math.max(0,(ih-fh)/2);
+    pk.ox=Math.min(Math.max(pk.ox,-lx),lx);
+    pk.oy=Math.min(Math.max(pk.oy,-ly),ly);
+    img.style.width=iw+"px"; img.style.height=ih+"px";
+    img.style.transform=`translate(-50%,-50%) translate(${pk.ox}px,${pk.oy}px)`;
+  };
+  stage.addEventListener("pointerdown",ev=>{
+    ev.preventDefault();
+    const sx=ev.clientX, sy=ev.clientY, ox=pk.ox, oy=pk.oy;
+    const move=e=>{ pk.ox=ox+(e.clientX-sx); pk.oy=oy+(e.clientY-sy); paint(); };
+    const up=()=>{document.removeEventListener("pointermove",move);
+                  document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);
+    document.addEventListener("pointerup",up);
+  });
+  const z=document.getElementById("cropZoom");
+  if(z) z.addEventListener("input",()=>{ pk.zoom=+z.value; paint(); });
+  paint();
+}
+
+/* They appear in the grid straight away and upload behind you. Holding the grid
+   hostage behind a progress bar is how people end up wondering whether the app has
+   frozen, and there is nothing here they need to wait for. */
+function commitPicked(){
+  const pk=S.picker, t=pickerTarget();
+  pk.ids.forEach((i,n)=>{
+    t.photos.push(LIBRARY[i][0]);
+    const id="u"+(++UID);
+    t.up.push({id,state:"uploading"});
+    const fails=S.failOnce&&pk.ids.length>=3&&n===pk.ids.length-1;
+    if(fails) S.failOnce=false;
+    setTimeout(()=>settleUpload(t,id,fails?"failed":null),1400);
+  });
+  S.picker=null; render();
+}
+function settleUpload(t,id,state){
+  const i=t.up.findIndex(u=>u&&u.id===id);
+  if(i<0) return;                      // removed while it was going up
+  t.up[i]=state?{id,state}:null;
+  render();
+}
+function retryUpload(t,i){
+  const u=t.up[i]; if(!u) return;
+  t.up[i]={id:u.id,state:"uploading"};
+  setTimeout(()=>settleUpload(t,u.id,null),1400);
+  render();
+}
+
 function arrange(){
-  const p=S.you, canRemove=p.photos.length>4;
-  let slots=p.photos.map((t,i)=>`<div class="slot" style="${tone(t)}">
-    ${canRemove?`<button class="x" data-a="rmPhoto" data-i="${i}">✕</button>`:""}</div>`).join("");
-  if(p.photos.length<6) slots+=`<button class="slot add" data-a="addPhoto">+</button>`;
-  const caption=p.photos.length<=4
-    ? "The first photo is what people see in their five. You need at least 4 photos, so add one before removing another."
-    : "The first photo is what people see in their five. Drag to reorder.";
+  const p=S.you;
+  const slots=photoSlots(p,{rm:"rmPhoto",add:"addPhoto",retry:"retryPhoto"});
+  const failed=(p.up||[]).filter(u=>u&&u.state==="failed").length;
+  const caption=failed
+    ? (failed===1
+        ? "One photo did not upload. It is not on your profile until it does."
+        : capWord(failed)+" photos did not upload. They are not on your profile until they do.")
+    : p.photos.length<=4
+      ? "The first photo is what people see in their five. You need at least 4 photos, so add one before removing another."
+      : "The first photo is what people see in their five. Drag to reorder.";
   let h=navbar("Arrange",`<button class="subhead mortar" data-a="back" style="padding:8px">Done</button>`);
   h+=`<div class="screen"><div class="pad pb-xxxl mt-l">
     <div class="prompt mortar">Photos</div>
@@ -1082,16 +1269,24 @@ function onboarding(){
         <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
     enabled=o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim();
   } else if(step==="photos"){
-    let slots=o.photos.map((t,i)=>`<div class="slot" style="${tone(t)}">
-      <button class="x" data-a="obRmPhoto" data-i="${i}">✕</button></div>`).join("");
-    if(o.photos.length<6) slots+=`<button class="slot add" data-a="obAddPhoto">+</button>`;
-    const short=Math.max(0,4-o.photos.length);
+    const slots=photoSlots(o,{rm:"obRmPhoto",add:"obAddPhoto",retry:"obRetryPhoto"});
+    /* A photo that did not upload is not a photo yet. Letting it count would walk
+       somebody out of onboarding with three photographs and a fourth that never
+       arrived. */
+    const bad=o.up.filter(u=>u&&u.state==="failed").length;
+    const short=Math.max(0,4-(o.photos.length-bad));
     body=`<div class="titleL">Photos</div>
       <div class="body mortar mt-s">At least 4, up to 6. The first one is what people see in their five.</div>
       <div class="grid3 mt-xl">${slots}</div>
-      <div class="footnote mortar mt-s">${short===0?`You can add ${6-o.photos.length} more.`
-        :short===1?"One more photo.":`${short} more photos.`}</div>`;
-    enabled=o.photos.length>=4;
+      <div class="footnote mortar mt-s">${bad>0
+        ?(bad===1?"One photo did not upload. Tap it to try again."
+                 :capWord(bad)+" photos did not upload. Tap them to try again.")
+        :short>0
+          ?(short===1?"One more photo.":capWord(short)+" more photos.")
+          :o.photos.length===4
+            ?"You can add two more. Four is the minimum, so add one before removing another."
+            :`You can add ${numWord(6-o.photos.length)} more.`}</div>`;
+    enabled=short===0;
   } else if(step==="answers"){
     body=`<div class="titleL">Three answers</div>
       <div class="body mortar mt-s">This is the part people actually read.</div><div class="v gap-m mt-xl">`;
@@ -1150,6 +1345,8 @@ function onboarding(){
 /* ============================ render ============================ */
 function render(){
   const r=document.getElementById("root");
+  /* Above onboarding, because the picker is opened from inside it too. */
+  if(S.picker){ r.innerHTML=S.picker.step<0?pickerRoot():cropRoot(); return; }
   if(S.onboarding){ r.innerHTML=onboarding(); return; }
   const t=current();
   let screen;
@@ -1399,8 +1596,24 @@ document.addEventListener("click",e=>{
     goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
     subscribe:()=>setSubscribed(true),
     review:()=>{ if(S.set.sub) push({name:"review"}); else acts.goPremium(); },
-    addPhoto:()=>{S.you.photos.push(S.you.photos.length%6); render();},
-    rmPhoto:()=>{S.you.photos.splice(+el.dataset.i,1); render();},
+    addPhoto:()=>openPicker("you"),
+    rmPhoto:()=>{const i=+el.dataset.i;
+      S.you.photos.splice(i,1); S.you.up.splice(i,1); render();},
+    retryPhoto:()=>retryUpload(S.you,+el.dataset.i),
+    pickClose:()=>{S.picker=null; render();},
+    pickTile:()=>{
+      const i=+el.dataset.i, pk=S.picker, at=pk.ids.indexOf(i);
+      if(at>=0) pk.ids.splice(at,1);
+      else if(pk.ids.length<pk.left) pk.ids.push(i);
+      render();
+    },
+    pickNext:()=>{const pk=S.picker; pk.step=0; pk.zoom=100; pk.ox=0; pk.oy=0; render();},
+    cropBack:()=>{const pk=S.picker; pk.step--; pk.zoom=100; pk.ox=0; pk.oy=0; render();},
+    cropNext:()=>{
+      const pk=S.picker;
+      if(pk.step+1<pk.ids.length){ pk.step++; pk.zoom=100; pk.ox=0; pk.oy=0; render(); }
+      else commitPicked();
+    },
     editInterests:()=>openSheet(`<div class="titleM" style="padding-top:8px">Interests</div>
       <div class="footnote mortar mt-s">Three things you are actually into.</div>
       <div class="v gap-xs mt-m">${S.you.interests.map(t=>
@@ -1495,8 +1708,10 @@ document.addEventListener("click",e=>{
       if(o.step>0){ o.step--; render(); }
     },
     obResend:()=>{el.textContent="Code sent again";},
-    obAddPhoto:()=>{o.photos.push(o.photos.length%6); render();},
-    obRmPhoto:()=>{o.photos.splice(+el.dataset.i,1); render();},
+    obAddPhoto:()=>openPicker("ob"),
+    obRmPhoto:()=>{const i=+el.dataset.i;
+      o.photos.splice(i,1); o.up.splice(i,1); render();},
+    obRetryPhoto:()=>retryUpload(o,+el.dataset.i),
     obAnswer:()=>{
       o.qa[o.q]=el.dataset.o; render();
       setTimeout(()=>{
@@ -1552,7 +1767,7 @@ function refreshCTA(){
 
 function startOnboarding(){
   S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
-    age:"",hood:"",city:"",height:"",work:"",photos:[],answers:["","",""],
+    age:"",hood:"",city:"",height:"",work:"",photos:[],up:[],answers:["","",""],
     interests:["","",""],q:null,qa:{}};
   render();
 }
@@ -1561,7 +1776,7 @@ function finishOnboarding(){
   if(o.name.trim()){
     S.you.name=o.name.trim(); S.you.age=o.age||S.you.age; S.you.hood=o.hood||S.you.hood;
     S.you.city=o.city||S.you.city; S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
-    if(o.photos.length>=4) S.you.photos=o.photos.slice();
+    if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
     o.answers.forEach((a,i)=>{ if(a.trim()) S.you.prompts[i][1]=a.trim(); });
     const ints=o.interests.filter(t=>t.trim());
     if(ints.length) S.you.interests=ints;
@@ -1605,7 +1820,7 @@ function mountRange(){
   paint();
 }
 const _render=render;
-render=function(){ _render(); mountRange(); };
+render=function(){ _render(); mountRange(); mountCrop(); };
 
 render();
 </script>

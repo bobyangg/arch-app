@@ -28,7 +28,7 @@ struct ArchSlotIndicator: View {
     @State private var droppingIndex: Int?
     @State private var dropProgress: CGFloat = 0
 
-    /// Follows `capacity`, so a subscriber's sixth slot gets a sixth stone
+    /// Follows `capacity`, so a subscriber's extra slots get extra stones
     /// rather than a five-stone arch with something missing.
     private var band: ArchBand { ArchBand(count: capacity, thickness: 18) }
 
