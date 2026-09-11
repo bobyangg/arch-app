@@ -389,6 +389,7 @@ const S={
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        visibility:"Anyone Arch picks me for",blocked:[]},
   edit:null,
+  report:{reason:null,block:true,sent:false},
   onboarding:null
 };
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -575,7 +576,11 @@ function thread(id){
   const q=c.person.prompts[c.open[1]];
   let h=`<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
     <div class="avatar" style="width:32px;height:32px;border-radius:16px;${tone(c.person.photos[0])}"></div>
-    <div class="subhead">${esc(c.person.name)}</div></div><div class="hairline"></div>
+    <div class="subhead">${esc(c.person.name)}</div>
+    <div style="flex:1"></div>
+    <button class="iconbtn" data-a="convoMenu" data-id="${c.id}"
+      style="color:var(--mortar)" aria-label="Report, block, or leave">&#8943;</button>
+    </div><div class="hairline"></div>
     <div class="screen"><div class="pad" style="padding-top:20px; padding-bottom:20px">
       <div class="quoted" style="margin-bottom:16px">
         <div class="footnote mortar">${esc(q[0])}</div>
@@ -1024,6 +1029,85 @@ function answerSheet(){
     +'<button class="btntext" data-a="closeSheet">Cancel</button>');
 }
 
+
+/* Report, block, leave.
+   A sheet rather than a native menu: all three are consequential enough to need a
+   line saying what they do, and a menu row cannot carry one. */
+const REPORT_REASONS=["They were abusive or harassing","Their photos are not them",
+  "They are underage","They are trying to sell something","Something else"];
+
+function inRoster(personId){ return S.slots.some(s=>s.person&&s.person.id===personId); }
+
+function convoMenuSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  const row=(act,title,detail)=>
+    '<button data-a="'+act+'" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="opt" style="background:var(--stoneRaised)">'
+    +'<div class="body">'+title+'</div>'
+    +'<div class="footnote mortar" style="margin-top:4px">'+detail+'</div></div></button>';
+  openSheet('<div class="v gap-xs" style="padding-top:4px">'
+    +row("reportOpen","Report "+n,"Reports go to a person, not a filter.")
+    +row("blockOpen","Block "+n,"They stop seeing you and stop appearing again. They are not told.")
+    +row("leaveOpen","Leave this conversation",
+         held?("Removes the conversation, and takes "+n+" out of your five.")
+             :"Removes the conversation.")
+    +'</div>');
+}
+
+function blockSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  openSheet('<div class="titleM" style="padding-top:8px">Block '+n+'?</div>'
+    +'<div class="body mortar mt-s">'
+    +(held?(n+" leaves your five, and "):"")
+    +"the conversation is removed. "+n+" will not appear again and will not see you. "
+    +n+" is not told. You can undo this in Settings.</div>"
+    +'<button class="btn quiet mt-xxl" data-a="blockDo" data-id="'+id+'">Block '+n+'</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+function leaveSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  openSheet('<div class="titleM" style="padding-top:8px">Leave this conversation?</div>'
+    +'<div class="body mortar mt-s">'
+    +(held?("The conversation is removed and "+n+" leaves your five. That slot fills with someone new tomorrow. You cannot undo this.")
+          :"The conversation is removed. You cannot undo this.")
+    +'</div>'
+    +'<button class="btn quiet mt-xxl" data-a="leaveDo" data-id="'+id+'">Leave</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+function reportSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), r=S.report;
+  if(r.sent){
+    openSheet('<div class="titleM" style="padding-top:8px">Report sent</div>'
+      +'<div class="body mortar mt-s">A person will read it within a day, with the conversation '
+      +'attached. '+(r.block?(n+" has been blocked and is not told about either.")
+                            :(n+" is not told."))+'</div>'
+      +'<button class="btn primary mt-xxl" data-a="reportDone" data-id="'+id+'">Done</button>');
+    return;
+  }
+  const opts=REPORT_REASONS.map(o=>
+    '<button data-a="reportReason" data-o="'+esc(o)+'" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="opt '+(r.reason===o?"sel":"")+'">'+esc(o)+'</div></button>').join("");
+  openSheet('<div class="titleM" style="padding-top:8px">Report '+n+'</div>'
+    +'<div class="footnote mortar mt-s">A person reads every report, with this conversation '
+    +'attached. You do not need to explain twice.</div>'
+    +'<div class="v gap-xs mt-m">'+opts+'</div>'
+    +'<button data-a="reportToggle" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="srow" style="padding:16px 0"><div class="t">Block '+n+' as well</div>'
+    +'<div class="switch '+(r.block?"on":"")+'"><div class="knob"></div></div></div></button>'
+    +'<button class="btn primary'+(r.reason?"":" btn-off")+'" data-a="reportSend" data-id="'+id+'">Send report</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+/* Leaving takes the person out of your five as well. Anything else makes it
+   weightless — they would still hold a slot and could write straight back. */
+function removePerson(personId,alsoConversation){
+  if(alsoConversation) S.convos=S.convos.filter(c=>c.person.id!==personId);
+  const i=S.slots.findIndex(s=>s.person&&s.person.id===personId);
+  if(i>=0) S.slots[i]={person:null,when:"A new person arrives tomorrow.",left:"About 14 hours"};
+}
+
 /* ============================ the dismissal ============================ */
 function performDismiss(id){
   closeSheet();
@@ -1096,6 +1180,31 @@ document.addEventListener("click",e=>{
         ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
       <button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    convoMenu:()=>convoMenuSheet(id),
+    blockOpen:()=>{ closeSheet(); setTimeout(()=>blockSheet(id),220); },
+    leaveOpen:()=>{ closeSheet(); setTimeout(()=>leaveSheet(id),220); },
+    reportOpen:()=>{ S.report={reason:null,block:true,sent:false};
+      closeSheet(); setTimeout(()=>reportSheet(id),220); },
+    reportReason:()=>{ S.report.reason=el.dataset.o; reportSheet(id); },
+    reportToggle:()=>{ S.report.block=!S.report.block; reportSheet(id); },
+    reportSend:()=>{ if(!S.report.reason) return; S.report.sent=true; reportSheet(id); },
+    reportDone:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      // Reporting on its own removes nothing — you reported them, you did not ask
+      // to lose the conversation.
+      if(S.report.block) removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
+    blockDo:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
+    leaveDo:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
     editAnswer:()=>{
       const i=+el.dataset.i;
       S.edit={i:i, question:S.you.prompts[i][0], answer:S.you.prompts[i][1], choosing:false,

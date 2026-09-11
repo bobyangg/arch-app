@@ -61,6 +61,26 @@ final class DailyFiveStore {
         return conversation
     }
 
+    /// Leaving a conversation takes the person out of your five as well.
+    ///
+    /// Anything else would make it weightless: they would still hold a slot, could
+    /// still write, and the conversation would come straight back. One action, both
+    /// consequences, and the sheet says so before you tap it.
+    func leave(_ conversation: Conversation) {
+        conversations.removeAll { $0.id == conversation.id }
+        dismiss(conversation.person)
+    }
+
+    /// Blocking does everything leaving does, and stops them reaching you again.
+    func block(_ person: Person) {
+        conversations.removeAll { $0.person.id == person.id }
+        dismiss(person)
+    }
+
+    func holdsSlot(_ person: Person) -> Bool {
+        roster.people.contains { $0.id == person.id }
+    }
+
     /// New people arrive in the morning, not on a rolling 24-hour timer — so the
     /// wait is a fact about tomorrow rather than a clock the user watches.
     private static func nextRefill(from now: Date = Date()) -> Date {

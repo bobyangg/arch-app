@@ -14,6 +14,9 @@ struct MessagesListView: View {
     let conversations: [Conversation]
     /// Sends the reader to their five, from the empty state.
     var onOpenDaily: () -> Void = {}
+    var actions = ConversationActions()
+    /// Whether a person still holds one of your slots.
+    var holdsSlot: (Person) -> Bool = { _ in false }
 
     @State private var path: [Conversation] = []
 
@@ -29,7 +32,11 @@ struct MessagesListView: View {
             .background(ArchColor.night)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Conversation.self) { conversation in
-                MessageThreadView(conversation: conversation)
+                MessageThreadView(
+                    conversation: conversation,
+                    isInRoster: holdsSlot(conversation.person),
+                    actions: actions
+                )
             }
         }
     }
