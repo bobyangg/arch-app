@@ -20,6 +20,7 @@ struct ArrangeProfileView: View {
     let store: ProfileStore
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isPicking = false
 
     private var person: Person { store.person }
 
@@ -39,6 +40,9 @@ struct ArrangeProfileView: View {
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isPicking) {
+            PhotoPickerView(slotsLeft: store.slotsLeft) { store.addPhotos($0) }
+        }
     }
 
     // MARK: Header
@@ -88,12 +92,15 @@ struct ArrangeProfileView: View {
                 photos: person.photos,
                 canAdd: store.canAddPhoto,
                 canRemove: store.canRemovePhoto,
+                uploads: store.uploads,
                 onMove: { store.movePhoto(id: $0, to: $1) },
-                onAdd: { store.addPhoto() },
-                onRemove: { store.removePhoto(id: $0) }
+                onAdd: { isPicking = true },
+                onRemove: { store.removePhoto(id: $0) },
+                onFinishUpload: { store.finishUpload(id: $0) },
+                onRetryUpload: { store.retryUpload(id: $0) }
             )
 
-            PhotoGridCaption(count: person.photos.count)
+            PhotoGridCaption(count: person.photos.count, failed: store.failedUploads)
                 .padding(.top, ArchSpacing.xxs)
         }
     }

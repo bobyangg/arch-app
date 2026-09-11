@@ -33,20 +33,40 @@ final class ProfileStore {
         person.photos.insert(photo, at: target)
     }
 
-    /// A design build has no photo picker, so a new photo is the next quarry tone.
-    func addPhoto() {
-        guard canAddPhoto else { return }
-        person.photos.append(
-            Photo(
-                id: "you-p\(UUID().uuidString.prefix(6))",
-                toneIndex: person.photos.count % ArchColor.materials.count
-            )
-        )
+    /// How many photos you could still add.
+    var slotsLeft: Int { max(0, Person.photoLimit - person.photos.count) }
+
+    /// Photos that are still on their way up, and ones that did not make it.
+    ///
+    /// Keyed by photo id rather than held on `Photo`, because uploading is
+    /// something happening *to* a photo for a few seconds and not a property of
+    /// the photograph itself.
+    private(set) var uploads: [String: PhotoUpload] = [:]
+
+    var failedUploads: Int { uploads.values.filter { $0 == .failed }.count }
+
+    /// Adds picked photos in the order they were chosen.
+    ///
+    /// They appear in the grid immediately and upload behind you. Holding the grid
+    /// hostage behind a spinner is how people end up staring at a progress bar
+    /// wondering whether the app has frozen, and there is nothing here they need to
+    /// wait for — the ordering and the cropping are already done.
+    func addPhotos(_ picked: [LibraryPhoto]) {
+        for photo in picked.prefix(slotsLeft) {
+            let id = "you-p\(UUID().uuidString.prefix(6))"
+            person.photos.append(Photo(id: id, toneIndex: photo.toneIndex))
+            uploads[id] = .uploading
+        }
     }
+
+    func finishUpload(id: String) { uploads[id] = nil }
+    func failUpload(id: String) { uploads[id] = .failed }
+    func retryUpload(id: String) { uploads[id] = .uploading }
 
     func removePhoto(id: String) {
         guard canRemovePhoto else { return }
         person.photos.removeAll { $0.id == id }
+        uploads[id] = nil
     }
 
     // MARK: Answers
