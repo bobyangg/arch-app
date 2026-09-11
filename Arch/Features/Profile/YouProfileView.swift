@@ -8,6 +8,10 @@ import SwiftUI
 /// two ways to do each.
 struct YouProfileView: View {
     let store: ProfileStore
+    let settings: SettingsStore
+    /// Switches to the Premium tab, rather than rebuilding the paywall inside a
+    /// settings push.
+    var onOpenPremium: () -> Void = {}
 
     // NavigationPath rather than [Route]: Settings pushes SettingsRow values into
     // this same stack, and a typed array path only accepts one type.
@@ -42,7 +46,7 @@ struct YouProfileView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .arrange:  ArrangeProfileView(store: store)
-                case .settings: SettingsView()
+                case .settings: SettingsView(store: settings, onOpenPremium: onOpenPremium)
                 }
             }
         }
@@ -230,11 +234,11 @@ struct YouProfileView: View {
 // MARK: - Previews
 
 #Preview("You, finished") {
-    YouProfileView(store: ProfileStore(person: MockData.you))
+    YouProfileView(store: ProfileStore(person: MockData.you), settings: SettingsStore())
         .preferredColorScheme(.dark)
 }
 
 #Preview("You, unfinished") {
-    YouProfileView(store: ProfileStore(person: MockData.youIncomplete))
+    YouProfileView(store: ProfileStore(person: MockData.youIncomplete), settings: SettingsStore())
         .preferredColorScheme(.dark)
 }

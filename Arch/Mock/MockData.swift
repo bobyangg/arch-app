@@ -298,10 +298,21 @@ struct QuestionnaireQuestion: Identifiable, Hashable {
     let options: [String]
 }
 
+/// What a settings row does when you touch it.
+///
+/// A row either goes somewhere or flips — never both. A switch hidden behind a
+/// push is the classic settings mistake: you tap expecting a screen and something
+/// silently changes instead.
+enum SettingsControl: Hashable {
+    case push
+    case toggle(Bool)
+}
+
 struct SettingsRow: Identifiable, Hashable {
     let id: String
     let title: String
-    let detail: String?
+    var detail: String?
+    var control: SettingsControl = .push
 }
 
 struct SettingsSection: Identifiable, Hashable {
@@ -728,37 +739,6 @@ enum MockData {
     ]
 
     static let premiumFootnote = "Payment is charged to your Apple account. Renews until you cancel, which you can do in Settings."
-
-    // MARK: Settings
-
-    static let settingsSections: [SettingsSection] = [
-        SettingsSection(id: "s1", title: "Account", rows: [
-            SettingsRow(id: "s1r1", title: "Phone number", detail: "+1 (917) 555 0142"),
-            SettingsRow(id: "s1r2", title: "Email", detail: "sam@example.com"),
-            SettingsRow(id: "s1r3", title: "Arch Premium", detail: "Not subscribed")
-        ]),
-        SettingsSection(id: "s2", title: "Notifications", rows: [
-            SettingsRow(id: "s2r1", title: "Your daily five", detail: "9:00"),
-            SettingsRow(id: "s2r2", title: "New people", detail: "On"),
-            SettingsRow(id: "s2r3", title: "Messages", detail: "On")
-        ]),
-        SettingsSection(id: "s3", title: "Discovery", rows: [
-            SettingsRow(id: "s3r1", title: "Distance", detail: "Within 10 miles"),
-            SettingsRow(id: "s3r2", title: "Age range", detail: "26 to 36"),
-            SettingsRow(id: "s3r3", title: "Looking for", detail: "Something serious"),
-            SettingsRow(id: "s3r4", title: "Pause my profile", detail: nil)
-        ]),
-        SettingsSection(id: "s4", title: "Privacy", rows: [
-            SettingsRow(id: "s4r1", title: "Who can see me", detail: nil),
-            SettingsRow(id: "s4r2", title: "Blocked people", detail: "None"),
-            SettingsRow(id: "s4r3", title: "Download your data", detail: nil)
-        ]),
-        SettingsSection(id: "s5", title: "Help", rows: [
-            SettingsRow(id: "s5r1", title: "How Arch works", detail: nil),
-            SettingsRow(id: "s5r2", title: "Safety", detail: nil),
-            SettingsRow(id: "s5r3", title: "Contact us", detail: nil)
-        ])
-    ]
 
     // MARK: Onboarding
 

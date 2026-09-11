@@ -153,7 +153,27 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .srow .t{font-size:17px; line-height:24px; flex:1;}
 .srule{height:.5px; background:var(--hairline); margin-left:var(--s-m);}
 
-/* ---- onboarding ---- */
+/* ---- settings controls ---- */
+.switch{width:51px; height:31px; border-radius:16px; background:var(--stoneRaised);
+        position:relative; flex:none; transition:background .2s ease;}
+.switch.on{background:var(--lamp);}
+.switch .knob{position:absolute; top:2px; left:2px; width:27px; height:27px;
+              border-radius:14px; background:var(--limestone); transition:transform .2s ease;}
+.switch.on .knob{transform:translateX(20px);}
+.slider{width:100%; -webkit-appearance:none; appearance:none; height:4px; border-radius:2px;
+        background:var(--stone); outline:none;}
+.slider::-webkit-slider-thumb{-webkit-appearance:none; width:26px; height:26px;
+        border-radius:13px; background:var(--lamp); cursor:pointer;}
+.slider::-moz-range-thumb{width:26px; height:26px; border:0; border-radius:13px;
+        background:var(--lamp); cursor:pointer;}
+.rangetrack{position:relative; height:44px; touch-action:none;}
+.rangetrack::before{content:""; position:absolute; left:13px; right:13px; top:20px;
+        height:4px; border-radius:2px; background:var(--stone);}
+.rangefill{position:absolute; top:20px; height:4px; border-radius:2px; background:var(--lamp);}
+.knobR{position:absolute; top:9px; width:26px; height:26px; border-radius:13px;
+       background:var(--lamp); touch-action:none;}
+
+/* ---- onboarding ---- 
 .rule{display:flex; gap:4px;}
 .seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);
      transition:background .25s ease;}
@@ -283,6 +303,10 @@ const S={
       ["out","Thursday is good. I will find somewhere with chairs outside.","Last week"]]}],
   you:JSON.parse(JSON.stringify(YOU)),
   plan:1,
+  set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
+       daily:true,time:"9:00",newPeople:true,msgAlert:true,
+       distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
+       visibility:"Anyone Arch picks me for",blocked:[]},
   onboarding:null
 };
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -563,32 +587,140 @@ function arrange(){
   return h+`</div></div></div>`;
 }
 
+function settingsSections(){
+  const x=S.set;
+  const notif=[["n-daily","Your daily five",null,"toggle"]];
+  if(x.daily) notif.push(["n-time","Time",x.time,"push"]);
+  notif.push(["n-new","New people",null,"toggle"],["n-msg","Messages",null,"toggle"]);
+  return [
+    ["Account",[["a-phone","Phone number",x.phone,"push"],["a-email","Email",x.email,"push"],
+      ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"]]],
+    ["Notifications",notif],
+    ["Discovery",[["d-distance","Distance","Within "+x.distance+" miles","push"],
+      ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
+      ["d-intent","Looking for",x.intent,"push"],
+      ["d-pause","Pause my profile",null,"toggle"]]],
+    ["Privacy",[["p-visible","Who can see me",x.visibility,"push"],
+      ["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
+      ["p-data","Download your data",null,"push"]]],
+    ["Help",[["h-how","How Arch works",null,"push"],["h-safety","Safety",null,"push"],
+      ["h-contact","Contact us",null,"push"]]]];
+}
+const TOGGLES={"n-daily":"daily","n-new":"newPeople","n-msg":"msgAlert","d-pause":"paused"};
+
 function settings(){
   let h=navbar("Settings");
-  h+=`<div class="screen"><div class="pad pb-xxxl mt-l"><div class="v gap-xl">`;
-  SETTINGS.forEach(([title,rowsIn])=>{
-    h+=`<div class="v gap-xs"><div class="footnote mortar" style="padding-left:4px">${title}</div>
-      <div class="group">`;
-    rowsIn.forEach(([t,d],i)=>{
-      h+=`<button data-a="setting" data-t="${esc(t)}" data-d="${esc(d||"")}" style="display:block;width:100%">
-        <div class="srow"><div class="t">${esc(t)}</div>
-        ${d?`<div class="footnote mortar">${esc(d)}</div>`:""}
-        <div class="caption mortar">›</div></div></button>`;
-      if(i<rowsIn.length-1) h+=`<div class="srule"></div>`;
+  h+='<div class="screen"><div class="pad pb-xxxl mt-l"><div class="v gap-xl">';
+  settingsSections().forEach(function(sec){
+    var title=sec[0], rws=sec[1];
+    h+='<div class="v gap-xs"><div class="footnote mortar" style="padding-left:4px">'+title+'</div><div class="group">';
+    rws.forEach(function(r,i){
+      var id=r[0],t=r[1],d=r[2],kind=r[3];
+      if(kind==="toggle"){
+        var on=S.set[TOGGLES[id]];
+        h+='<button data-a="toggleSetting" data-id="'+id+'" style="display:block;width:100%">'
+          +'<div class="srow"><div class="t">'+esc(t)+'</div>'
+          +'<div class="switch '+(on?"on":"")+'"><div class="knob"></div></div></div></button>';
+      } else {
+        h+='<button data-a="setting" data-id="'+id+'" style="display:block;width:100%">'
+          +'<div class="srow"><div class="t">'+esc(t)+'</div>'
+          +(d?'<div class="footnote mortar">'+esc(d)+'</div>':"")
+          +'<div class="caption mortar">&rsaquo;</div></div></button>';
+      }
+      if(i<rws.length-1) h+='<div class="srule"></div>';
     });
-    h+=`</div></div>`;
+    h+='</div></div>';
   });
-  h+=`<button class="group" data-a="replayOnboarding" style="display:block;width:100%">
-      <div class="srow"><div class="t">Replay onboarding</div><div class="caption mortar">›</div></div></button>
-    <div class="group"><div class="srow"><div class="t mortar">Sign out</div></div></div>
-    <div class="footnote mortar center">Arch 1.0</div></div></div></div>`;
+  h+='<button class="group" data-a="replayOnboarding" style="display:block;width:100%">'
+    +'<div class="srow"><div class="t">Replay onboarding</div>'
+    +'<div class="caption mortar">&rsaquo;</div></div></button>'
+    +'<div class="group"><div class="srow"><div class="t mortar">Sign out</div></div></div>'
+    +'<div class="footnote mortar center">Arch 1.0</div></div></div></div>';
   return h;
 }
 
-function settingDetail(t,d){
-  return navbar(t)+`<div class="screen"><div class="pad v gap-s mt-xl">
-    ${d?`<div class="titleM">${esc(d)}</div>`:""}
-    <div class="body mortar">The controls for this setting are not built yet.</div></div></div>`;
+function NOTE(t){return '<div class="footnote mortar">'+t+'</div>';}
+function HEADING(t){return '<div class="titleL">'+esc(t)+'</div>';}
+function opts(list,chosen,act){
+  return '<div class="v gap-xs">'+list.map(function(o){
+    return '<button data-a="'+act+'" data-o="'+esc(o)+'" style="display:block;width:100%">'
+      +'<div class="opt '+(chosen===o?"sel":"")+'">'+esc(o)+'</div></button>';}).join("")+'</div>';
+}
+function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div>'
+  +'<div class="body mortar">'+b+'</div></div>';}
+
+const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
+  "n-time":"Time","d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
+  "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
+  "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
+
+function settingDetail(id){
+  const x=S.set; let b="";
+  if(id==="d-distance"){
+    b='<div class="v gap-s">'+HEADING("Within "+x.distance+" miles")
+     +'<input class="slider" type="range" min="1" max="50" value="'+x.distance+'" data-s="distance">'
+     +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
+     +'<span>1 mile</span><span>50 miles</span></div></div>'
+     +NOTE("Everyone in your five is inside this. Widening it gives Arch more people to choose five from &mdash; it does not give you more than five.");
+  } else if(id==="d-age"){
+    b='<div class="v gap-s">'+HEADING(x.minAge+" to "+x.maxAge)
+     +'<div id="rangeTrack" class="rangetrack"><div class="rangefill"></div>'
+     +'<div class="knobR" data-k="min"></div><div class="knobR" data-k="max"></div></div>'
+     +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
+     +'<span>18</span><span>70</span></div></div>'
+     +NOTE("Arch will not put anyone outside this in your five, and will not put you in theirs.");
+  } else if(id==="d-intent"){
+    b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
+     +NOTE("This is used to choose your five. It is not shown on your profile, and nobody is told what you picked.");
+  } else if(id==="n-time"){
+    b=opts(["7:00","8:00","9:00","10:00","12:00","18:00"],x.time,"setTime")
+     +NOTE("Your five are ready at the same time every day. This only changes when Arch tells you about them.");
+  } else if(id==="p-visible"){
+    b=opts(["Anyone Arch picks me for","Nobody new while I have unread messages"],x.visibility,"setVisibility")
+     +NOTE("Either way you keep the people already in your five, and they keep you. To come off Arch entirely, pause your profile.");
+  } else if(id==="p-blocked"){
+    b='<div class="titleM">Nobody blocked</div>'
+     +NOTE("Blocking someone takes them out of your five, stops them appearing again, and stops you appearing in theirs. They are not told.");
+  } else if(id==="p-data"){
+    b='<div class="titleM">Everything Arch holds about you</div><div class="v gap-s">'
+     +'<div class="body">Your profile, including photos and answers.</div>'
+     +'<div class="body">Your questionnaire answers.</div>'
+     +'<div class="body">Every message you have sent and received.</div>'
+     +'<div class="body">Who has been in your five, and when.</div></div>'
+     +NOTE("Sent as a file to "+esc(x.email)+". It usually takes a few minutes and never more than 30 days.")
+     +'<button class="btn quiet">Request my data</button>';
+  } else if(id==="a-phone"){
+    b=HEADING(x.phone)
+     +NOTE("This is how Arch knows you are a person. It is never shown to anyone and never appears on your profile.")
+     +'<button class="btn quiet">Change number</button>'
+     +NOTE("You will have to verify the new number before it takes effect.");
+  } else if(id==="a-email"){
+    b='<div class="field onNight"><input value="'+esc(x.email)+'" data-s="email"></div>'
+     +NOTE("Used for signing in and account notices. Never shown to anyone, and Arch does not send anything else here.");
+  } else if(id==="a-premium"){
+    b=HEADING(x.sub?"Subscribed":"Not subscribed")
+     +NOTE("Premium changes what you can do with your slots and how much you can say about yourself. It does not change who sees you.")
+     +'<button class="btn primary" data-a="goPremium">See what premium changes</button>'
+     +'<div class="btntext">Restore purchases</div>';
+  } else if(id==="h-how"){
+    b=sect("Five people, held","You have five slots. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear &mdash; if you do nothing, they stay.")
+     +sect("Dismissing costs you a slot","If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe.")
+     +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to someone in your five, you write to them.")
+     +sect("You are never told who dismissed whom","People leave your five. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
+     +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
+  } else if(id==="h-safety"){
+    b=sect("Every account has a verified number","It is not a guarantee that someone is who they say, but it makes throwaway accounts expensive, which is most of the problem.")
+     +sect("Blocking is silent and complete","A blocked person leaves your five, stops appearing again, and stops seeing you. They are not told.")
+     +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
+     +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
+  } else if(id==="h-contact"){
+    b=sect("Write to a person","help@arch.app reaches a small team, usually within a day. There is no chatbot in front of it.")
+     +sect("Something is broken","Tell us what you were doing and what happened instead. Screenshots help more than descriptions.")
+     +sect("Something is wrong with someone","Report them from the conversation rather than emailing &mdash; it comes through with the context attached.")
+     +'<button class="btn quiet">Email help@arch.app</button>';
+  }
+  return navbar(SET_TITLES[id]||"Setting")
+    +'<div class="screen"><div class="pad v gap-xl mt-xl pb-xxxl">'+b+'</div></div>';
 }
 
 /* ============================ onboarding ============================ */
@@ -730,7 +862,7 @@ function render(){
   else if(t.name==="thread") screen=thread(t.id);
   else if(t.name==="arrange") screen=arrange();
   else if(t.name==="settings") screen=settings();
-  else if(t.name==="settingDetail") screen=settingDetail(t.t,t.d);
+  else if(t.name==="settingDetail") screen=settingDetail(t.id);
 
   const hideTabs=t&&(t.name==="thread");
   const unread=S.convos.reduce((a,c)=>a+c.unread,0);
@@ -835,7 +967,12 @@ document.addEventListener("click",e=>{
     plan:()=>{S.plan=+el.dataset.i; render();},
     arrange:()=>push({name:"arrange"}),
     settings:()=>push({name:"settings"}),
-    setting:()=>push({name:"settingDetail",t:el.dataset.t,d:el.dataset.d}),
+    setting:()=>push({name:"settingDetail",id:el.dataset.id}),
+    toggleSetting:()=>{const k=TOGGLES[el.dataset.id]; S.set[k]=!S.set[k]; render();},
+    setIntent:()=>{S.set.intent=el.dataset.o; render();},
+    setTime:()=>{S.set.time=el.dataset.o; render();},
+    setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
+    goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
     addPhoto:()=>{S.you.photos.push(S.you.photos.length%6); render();},
     rmPhoto:()=>{S.you.photos.splice(+el.dataset.i,1); render();},
     editInterests:()=>openSheet(`<div class="titleM" style="padding-top:8px">Interests</div>
@@ -912,6 +1049,9 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
+  if(t.dataset.s==="distance"){ S.set.distance=+t.value;
+    const h=document.querySelector(".titleL"); if(h) h.textContent="Within "+t.value+" miles"; return; }
+  if(t.dataset.s==="email"){ S.set.email=t.value; return; }
   if(o){
     const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
                obHood:"hood",obCity:"city",obHeight:"height",obWork:"work"};
@@ -958,6 +1098,43 @@ function finishOnboarding(){
   S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],you:[]};
   render();
 }
+
+
+/* The age range: two handles on one track. Pointer events so it works on a phone. */
+function mountRange(){
+  const track=document.getElementById("rangeTrack"); if(!track) return;
+  const fill=track.querySelector(".rangefill");
+  const knobs={min:track.querySelector('[data-k="min"]'),max:track.querySelector('[data-k="max"]')};
+  const LO=18, HI=70, KNOB=26;
+  const paint=()=>{
+    const w=track.clientWidth-KNOB, span=HI-LO;
+    const xl=(S.set.minAge-LO)/span*w, xh=(S.set.maxAge-LO)/span*w;
+    knobs.min.style.left=xl+"px"; knobs.max.style.left=xh+"px";
+    fill.style.left=(xl+KNOB/2)+"px"; fill.style.width=Math.max(0,xh-xl)+"px";
+    const h=document.querySelector(".titleL");
+    if(h) h.textContent=S.set.minAge+" to "+S.set.maxAge;
+  };
+  const drag=(which)=>(ev)=>{
+    ev.preventDefault();
+    const move=(e)=>{
+      const p=(e.touches?e.touches[0].clientX:e.clientX);
+      const r=track.getBoundingClientRect(), w=r.width-KNOB;
+      const v=Math.round(Math.min(Math.max(0,p-r.left-KNOB/2),w)/w*(HI-LO))+LO;
+      if(which==="min") S.set.minAge=Math.min(v,S.set.maxAge-2);
+      else S.set.maxAge=Math.max(v,S.set.minAge+2);
+      paint();
+    };
+    const up=()=>{document.removeEventListener("pointermove",move);
+      document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);
+    document.addEventListener("pointerup",up);
+  };
+  knobs.min.addEventListener("pointerdown",drag("min"));
+  knobs.max.addEventListener("pointerdown",drag("max"));
+  paint();
+}
+const _render=render;
+render=function(){ _render(); mountRange(); };
 
 render();
 </script>
