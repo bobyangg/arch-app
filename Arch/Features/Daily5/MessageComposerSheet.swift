@@ -10,6 +10,9 @@ import SwiftUI
 struct MessageComposerSheet: View {
     let person: Person
     var quoted: ProfileItem?
+    /// How many conversations are already open, so the sheet can say what sending
+    /// will cost before it costs it.
+    var conversationCount: Int = 0
     let onSend: (String) -> Void
 
     @State private var text = ""
@@ -48,6 +51,11 @@ struct MessageComposerSheet: View {
             }
             .frame(height: 18)
 
+            Text(cost)
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+
             ArchButton(title: "Send", isEnabled: !trimmed.isEmpty) {
                 onSend(trimmed)
             }
@@ -57,7 +65,7 @@ struct MessageComposerSheet: View {
         .padding(.bottom, ArchSpacing.m)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(ArchColor.stone)
-        .presentationDetents([.height(quotedItem == nil ? 420 : 520)])
+        .presentationDetents([.height(quotedItem == nil ? 480 : 580)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .presentationBackground(ArchColor.stone)
@@ -70,6 +78,17 @@ struct MessageComposerSheet: View {
                 text = String(new.prefix(characterLimit))
             }
         }
+    }
+
+    /// Sending has a price now, and hiding it until afterwards would be a trick.
+    /// Spending a slot on somebody you want to talk to is what a slot is for — the
+    /// line says so plainly rather than warning you off.
+    private var cost: String {
+        let base = "Sending takes \(person.name) out of your five. That slot fills with someone new tomorrow."
+        if conversationCount + 1 >= DailyFiveStore.conversationLimit {
+            return base + " It also takes you to \(DailyFiveStore.conversationLimit) conversations, so your five will wait until you leave one."
+        }
+        return base
     }
 
     private var recipient: some View {

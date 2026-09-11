@@ -18,9 +18,19 @@ final class DailyFiveStore {
         self.conversations = conversations
     }
 
+    /// Above this, the roster waits. The point is that people reply to the
+    /// conversations they start rather than collecting more of them.
+    static let conversationLimit = 10
+    /// How close to the limit before the roster warns you it is coming.
+    static let warnFrom = 8
+
     var unreadCount: Int {
         conversations.reduce(0) { $0 + $1.unreadCount }
     }
+
+    /// Your five are still there and still yours — they are just not shown until
+    /// you are back under the limit. Nothing is lost by waiting.
+    var isRosterHeld: Bool { conversations.count >= Self.conversationLimit }
 
     /// Dismissing costs a slot until tomorrow. The person is replaced by an open
     /// slot in place; the screen groups open slots underneath the people.
@@ -31,8 +41,13 @@ final class DailyFiveStore {
         roster.slots[index] = .empty(id: "slot-\(person.id)", refillsAt: Self.nextRefill())
     }
 
-    /// The first message. There is no match gate to clear first — if you want to
-    /// talk to someone in your five, you write to them.
+    /// The first message.
+    ///
+    /// There is no match gate to clear first. Writing to someone **spends the
+    /// slot they were in** — they leave your five and it fills with someone new
+    /// tomorrow, the same as a dismissal. Messaging is what a slot is *for*, so
+    /// spending one on a person you want to talk to is the system working, not a
+    /// penalty.
     @discardableResult
     func startConversation(
         with person: Person,
@@ -58,6 +73,8 @@ final class DailyFiveStore {
             lastActivity: "Just now"
         )
         conversations.insert(conversation, at: 0)
+        // Writing to them spends the slot.
+        dismiss(person)
         return conversation
     }
 

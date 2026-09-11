@@ -13,6 +13,7 @@ import SwiftUI
 /// is not tappable — a two-word tag is not something you can write a reply to.
 struct ProfileDetailView: View {
     let person: Person
+    var conversationCount: Int = 0
     let onDismiss: () -> Void
     let onSend: (String, ProfileItem?) -> Void
 
@@ -23,10 +24,12 @@ struct ProfileDetailView: View {
     init(
         person: Person,
         selecting initialSelection: ProfileItem? = nil,
+        conversationCount: Int = 0,
         onDismiss: @escaping () -> Void,
         onSend: @escaping (String, ProfileItem?) -> Void
     ) {
         self.person = person
+        self.conversationCount = conversationCount
         self.onDismiss = onDismiss
         self.onSend = onSend
         _selected = State(initialValue: initialSelection)
@@ -52,6 +55,7 @@ struct ProfileDetailView: View {
             MessageComposerSheet(
                 person: person,
                 quoted: selected,
+                conversationCount: conversationCount,
                 onSend: { text in
                     isComposing = false
                     onSend(text, selected)

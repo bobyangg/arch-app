@@ -307,7 +307,7 @@ enum MockData {
 
     // MARK: People
 
-    static let people: [Person] = [nadia, teo, priya, marcus, lena]
+    static let people: [Person] = [nadia, teo, priya, marcus, lena, ines, dev]
 
     static let nadia = Person(
         id: "nadia",
@@ -522,6 +522,83 @@ enum MockData {
         ]
     )
 
+
+    static let ines = Person(
+        id: "ines",
+        name: "Ines",
+        age: 32,
+        neighbourhood: "Sunset Park",
+        city: "Brooklyn",
+        height: "5 ft 5",
+        work: "Bookbinder",
+        photos: [
+            Photo(id: "ines-p1", toneIndex: 1),
+            Photo(id: "ines-p2", toneIndex: 4),
+            Photo(id: "ines-p3", toneIndex: 0),
+            Photo(id: "ines-p4", toneIndex: 2)
+        ],
+        prompts: [
+            Prompt(
+                id: "ines-q1",
+                question: "The last thing I made with my hands",
+                answer: "A slipcase for a book that did not deserve one. Nine hours, and I would do it again."
+            ),
+            Prompt(
+                id: "ines-q2",
+                question: "Something I do that takes far too long",
+                answer: "Choosing paper. I have stood in the same aisle for forty minutes and left with nothing."
+            ),
+            Prompt(
+                id: "ines-q3",
+                question: "A thing I am probably wrong about",
+                answer: "That anything worth keeping should be physical. I say it constantly and my phone is always in my hand."
+            )
+        ],
+        interests: [
+            Interest(id: "ines-i1", text: "Japanese paper"),
+            Interest(id: "ines-i2", text: "Cloth spines"),
+            Interest(id: "ines-i3", text: "Repairs that take months")
+        ]
+    )
+
+    static let dev = Person(
+        id: "dev",
+        name: "Dev",
+        age: 29,
+        neighbourhood: "Astoria",
+        city: "Queens",
+        height: "6 ft 1",
+        work: "Bus mechanic",
+        photos: [
+            Photo(id: "dev-p1", toneIndex: 3),
+            Photo(id: "dev-p2", toneIndex: 5),
+            Photo(id: "dev-p3", toneIndex: 2),
+            Photo(id: "dev-p4", toneIndex: 1)
+        ],
+        prompts: [
+            Prompt(
+                id: "dev-q1",
+                question: "What I would happily explain for an hour",
+                answer: "Why the articulated buses bend where they do, and why almost everyone guesses it wrong."
+            ),
+            Prompt(
+                id: "dev-q2",
+                question: "Where I go when I need to think",
+                answer: "The depot at four in the morning, before anyone is in. Sixty buses and no noise at all."
+            ),
+            Prompt(
+                id: "dev-q3",
+                question: "A risk that worked out",
+                answer: "Turning down the desk job my parents wanted for me. It took about six years to stop being an argument."
+            )
+        ],
+        interests: [
+            Interest(id: "dev-i1", text: "Articulated buses"),
+            Interest(id: "dev-i2", text: "Four in the morning"),
+            Interest(id: "dev-i3", text: "Engine noise")
+        ]
+    )
+
     // MARK: Your own profile
 
     /// A finished profile: six photos, three answers, three interests.
@@ -589,23 +666,27 @@ enum MockData {
     }
 
     /// Five people, no gaps. The arch holds.
+    ///
+    /// Nobody here is somebody you have written to — writing to someone is what
+    /// takes them out of your five. Hana is the exception that shows the rule:
+    /// she wrote first, so your slot is untouched and she is still in it.
     static let rosterFull = Roster(slots: [
-        .filled(nadia), .filled(teo), .filled(priya), .filled(marcus), .filled(lena)
+        .filled(priya), .filled(marcus), .filled(hana), .filled(ines), .filled(dev)
     ])
 
     /// A subscriber's roster: six slots rather than five. The arch draws six
     /// voussoirs, so the indicator generalises without a second design.
     static let rosterPremium = Roster(slots: [
-        .filled(nadia), .filled(teo), .filled(priya),
-        .filled(marcus), .filled(lena),
+        .filled(priya), .filled(marcus), .filled(hana),
+        .filled(ines), .filled(dev),
         .empty(id: "slot-6", refillsAt: hours(14))
     ])
 
     /// Three people and two open slots, refilling at different times.
     static let rosterPartial = Roster(slots: [
-        .filled(nadia),
         .filled(priya),
-        .filled(lena),
+        .filled(ines),
+        .filled(dev),
         .empty(id: "slot-4", refillsAt: hours(14)),
         .empty(id: "slot-5", refillsAt: hours(38))
     ])
@@ -614,7 +695,7 @@ enum MockData {
     /// than broken — the outlined stones keep the arch legible, and the open slots
     /// are quieter than the person, not louder.
     static let rosterNearlyEmpty = Roster(slots: [
-        .filled(teo),
+        .filled(dev),
         .empty(id: "slot-2", refillsAt: hours(14)),
         .empty(id: "slot-3", refillsAt: hours(14)),
         .empty(id: "slot-4", refillsAt: hours(38)),
