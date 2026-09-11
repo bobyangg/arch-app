@@ -54,7 +54,7 @@ struct RootTabView: View {
             tab(.daily) {
                 DailyFiveView(
                     roster: store.roster,
-                    conversationCount: store.conversations.count,
+                    conversationCount: store.openConversations.count,
                     onOpenMessages: { selection = .messages },
                     onDismiss: { store.dismiss($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
@@ -63,7 +63,10 @@ struct RootTabView: View {
             }
             tab(.messages) {
                 MessagesListView(
-                    conversations: store.conversations,
+                    conversations: store.openConversations,
+                    requests: store.requests,
+                    onAccept: { store.accept($0) },
+                    onDecline: { store.decline($0) },
                     onOpenDaily: { selection = .daily },
                     actions: conversationActions,
                     holdsSlot: { store.holdsSlot($0) }

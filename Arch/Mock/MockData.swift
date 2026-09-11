@@ -220,14 +220,26 @@ struct Person: Identifiable, Hashable {
 /// A slot says nothing about *why* it is empty. You dismissing someone and someone
 /// dismissing you produce the identical state, because the app never tells you
 /// which happened.
+/// Why a slot is open.
+///
+/// The app says *that* someone left, never *who* and never *why*. Dismissing you
+/// and writing to you both land here, so the line on the card cannot be read
+/// backwards into a rejection.
+enum SlotOpening: Hashable {
+    /// You dismissed them, or you wrote to them.
+    case yours
+    /// They went. You are not told which of the two things they did.
+    case theirs
+}
+
 enum RosterSlot: Identifiable, Hashable {
     case filled(Person)
-    case empty(id: String, refillsAt: Date)
+    case empty(id: String, refillsAt: Date, opening: SlotOpening)
 
     var id: String {
         switch self {
         case .filled(let person): return person.id
-        case .empty(let id, _):   return id
+        case .empty(let id, _, _): return id
         }
     }
 
@@ -237,8 +249,13 @@ enum RosterSlot: Identifiable, Hashable {
     }
 
     var refillsAt: Date? {
-        if case .empty(_, let date) = self { return date }
+        if case .empty(_, let date, _) = self { return date }
         return nil
+    }
+
+    var opening: SlotOpening {
+        if case .empty(_, _, let opening) = self { return opening }
+        return .yours
     }
 }
 
@@ -260,14 +277,23 @@ struct Message: Identifiable, Hashable {
     let timestamp: String
 }
 
+/// Where a conversation sits.
+enum ConversationState: String, Hashable {
+    /// They wrote to you and you have not answered. It waits in Requests.
+    case request
+    /// You started it, or you accepted theirs.
+    case open
+}
+
 struct Conversation: Identifiable, Hashable {
     let id: String
     let person: Person
+    var state: ConversationState = .open
     /// The photo or prompt the first message quoted, if it quoted one. Pinned to
     /// the top of the thread so neither person has to remember why they started.
     let opening: ProfileItem?
     let messages: [Message]
-    let unreadCount: Int
+    var unreadCount: Int
     /// Pre-formatted for the list; a real build would format a Date here.
     let lastActivity: String
 
@@ -307,7 +333,7 @@ enum MockData {
 
     // MARK: People
 
-    static let people: [Person] = [nadia, teo, priya, marcus, lena, ines, dev]
+    static let people: [Person] = [nadia, teo, priya, marcus, lena, ines, dev, yusuf]
 
     static let nadia = Person(
         id: "nadia",
@@ -599,6 +625,45 @@ enum MockData {
         ]
     )
 
+
+    static let yusuf = Person(
+        id: "yusuf",
+        name: "Yusuf",
+        age: 34,
+        neighbourhood: "Harlem",
+        city: "Manhattan",
+        height: "5 ft 8",
+        work: "Piano tuner",
+        photos: [
+            Photo(id: "yusuf-p1", toneIndex: 5),
+            Photo(id: "yusuf-p2", toneIndex: 1),
+            Photo(id: "yusuf-p3", toneIndex: 3),
+            Photo(id: "yusuf-p4", toneIndex: 0)
+        ],
+        prompts: [
+            Prompt(
+                id: "yusuf-q1",
+                question: "Something I notice that other people do not",
+                answer: "Which rooms are in tune with themselves. Some rooms make everything sound slightly sour and nobody can say why."
+            ),
+            Prompt(
+                id: "yusuf-q2",
+                question: "A detail I get unreasonably interested in",
+                answer: "The felt on a hammer. You can read someone's whole playing history off eighty-eight pieces of felt."
+            ),
+            Prompt(
+                id: "yusuf-q3",
+                question: "What I miss about where I grew up",
+                answer: "Being able to hear the sea from a room with no window facing it."
+            )
+        ],
+        interests: [
+            Interest(id: "yusuf-i1", text: "Hammer felt"),
+            Interest(id: "yusuf-i2", text: "Rooms with good sound"),
+            Interest(id: "yusuf-i3", text: "Walking at night")
+        ]
+    )
+
     // MARK: Your own profile
 
     /// A finished profile: six photos, three answers, three interests.
@@ -679,7 +744,7 @@ enum MockData {
     static let rosterPremium = Roster(slots: [
         .filled(priya), .filled(marcus), .filled(hana),
         .filled(ines), .filled(dev),
-        .empty(id: "slot-6", refillsAt: hours(14))
+        .empty(id: "slot-6", refillsAt: hours(14), opening: .yours)
     ])
 
     /// Three people and two open slots, refilling at different times.
@@ -687,8 +752,8 @@ enum MockData {
         .filled(priya),
         .filled(ines),
         .filled(dev),
-        .empty(id: "slot-4", refillsAt: hours(14)),
-        .empty(id: "slot-5", refillsAt: hours(38))
+        .empty(id: "slot-4", refillsAt: hours(14), opening: .theirs),
+        .empty(id: "slot-5", refillsAt: hours(38), opening: .yours)
     ])
 
     /// One person, four open slots. The state that has to look intentional rather
@@ -696,15 +761,31 @@ enum MockData {
     /// are quieter than the person, not louder.
     static let rosterNearlyEmpty = Roster(slots: [
         .filled(dev),
-        .empty(id: "slot-2", refillsAt: hours(14)),
-        .empty(id: "slot-3", refillsAt: hours(14)),
-        .empty(id: "slot-4", refillsAt: hours(38)),
-        .empty(id: "slot-5", refillsAt: hours(62))
+        .empty(id: "slot-2", refillsAt: hours(14), opening: .yours),
+        .empty(id: "slot-3", refillsAt: hours(14), opening: .theirs),
+        .empty(id: "slot-4", refillsAt: hours(38), opening: .yours),
+        .empty(id: "slot-5", refillsAt: hours(62), opening: .yours)
     ])
 
     // MARK: Messages
 
     static let conversations: [Conversation] = [
+        Conversation(
+            id: "c-yusuf",
+            person: yusuf,
+            state: .request,
+            opening: .prompt(yusuf.prompts[0]),
+            messages: [
+                Message(
+                    id: "r1",
+                    text: "Rooms that are out of tune with themselves — I have never had a word for that and I have been complaining about it for years. Which room is the worst one you have been in?",
+                    isOutgoing: false,
+                    timestamp: "Yesterday"
+                )
+            ],
+            unreadCount: 1,
+            lastActivity: "Yesterday"
+        ),
         Conversation(
             id: "c-nadia",
             person: nadia,

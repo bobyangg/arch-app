@@ -182,7 +182,7 @@ struct DailyFiveView: View {
 
                 ForEach(slots) { slot in
                     if let refillsAt = slot.refillsAt {
-                        EmptySlotCard(refillsAt: refillsAt)
+                        EmptySlotCard(refillsAt: refillsAt, opening: slot.opening)
                             .transition(.opacity)
                     }
                 }
