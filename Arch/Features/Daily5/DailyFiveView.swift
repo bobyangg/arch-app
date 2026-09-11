@@ -9,6 +9,9 @@ struct DailyFiveView: View {
     let roster: Roster
     /// How many conversations are open, which decides whether the roster is shown.
     var conversationCount: Int = 0
+    /// Ten, or fifteen with premium. Passed in rather than read from a static,
+    /// because it is no longer the same number for everybody.
+    var conversationLimit: Int = DailyFiveStore.freeConversations
     /// Sends the reader to Messages from the held state.
     var onOpenMessages: () -> Void = {}
     let onDismiss: (Person) -> Void
@@ -51,6 +54,7 @@ struct DailyFiveView: View {
                     ProfileDetailView(
                         person: person,
                         conversationCount: conversationCount,
+                        conversationLimit: conversationLimit,
                         onDismiss: { pendingDismissal = person },
                         onSend: { text, item in
                             let conversation = onSend(person, text, item)
@@ -68,6 +72,7 @@ struct DailyFiveView: View {
         }
         .sheet(item: $pendingDismissal) { person in
             DismissConfirmSheet(
+                rosterName: roster.name,
                 person: person,
                 onConfirm: {
                     pendingDismissal = nil
@@ -85,7 +90,7 @@ struct DailyFiveView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.m) {
-            Text(headerTitle)
+            Text(roster.title)
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
 
@@ -101,27 +106,18 @@ struct DailyFiveView: View {
         .padding(.bottom, ArchSpacing.xl)
     }
 
-    /// Premium buys a sixth slot, so the header counts what you actually hold.
-    /// The tab keeps its fixed name; this line describes your roster.
-    private var headerTitle: String {
-        switch roster.capacity {
-        case 5:  return "Your five"
-        case 6:  return "Your six"
-        default: return "Your roster"
-        }
-    }
-
-    private var isHeld: Bool { conversationCount >= DailyFiveStore.conversationLimit }
+    private var isHeld: Bool { conversationCount >= conversationLimit }
+    private var warnFrom: Int { conversationLimit - 2 }
 
     /// Not an error and not a telling-off. The people are still yours, the rule is
     /// stated once, and the way out is a button rather than a lecture.
     private var heldNotice: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text("Your five are waiting")
+            Text("\(roster.title) are waiting")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("You have \(conversationCount) conversations open. Arch holds the people in your five until you are back under \(DailyFiveStore.conversationLimit) — leave a conversation you are not going to answer and they come straight back.")
+            Text("You have \(conversationCount) conversations open. Arch holds the people in your roster until you are back under \(conversationLimit) — leave a conversation you are not going to answer and they come straight back.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -136,11 +132,11 @@ struct DailyFiveView: View {
     /// enough not to nag.
     @ViewBuilder
     private var approachingNotice: some View {
-        if conversationCount >= DailyFiveStore.warnFrom {
-            let left = DailyFiveStore.conversationLimit - conversationCount
+        if conversationCount >= warnFrom {
+            let left = conversationLimit - conversationCount
             Text(left == 1
-                 ? "One more conversation and your five will wait until you leave one."
-                 : "\(left) more conversations and your five will wait until you leave one.")
+                 ? "One more conversation and your roster will wait until you leave one."
+                 : "\(left) more conversations and your roster will wait until you leave one.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -182,7 +178,11 @@ struct DailyFiveView: View {
 
                 ForEach(slots) { slot in
                     if let refillsAt = slot.refillsAt {
-                        EmptySlotCard(refillsAt: refillsAt, opening: slot.opening)
+                        EmptySlotCard(
+                            refillsAt: refillsAt,
+                            opening: slot.opening,
+                            rosterName: roster.name
+                        )
                             .transition(.opacity)
                     }
                 }

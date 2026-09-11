@@ -13,6 +13,8 @@ import SwiftUI
 /// Copy is written around the name rather than pronouns. Arch has no business
 /// guessing anyone's.
 struct DismissConfirmSheet: View {
+    /// "your five", or "your seven" with premium.
+    var rosterName: String = "your five"
     let person: Person
     let onConfirm: () -> Void
     let onCancel: () -> Void
@@ -24,7 +26,7 @@ struct DismissConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("\(person.name) leaves your five. The slot fills with someone new tomorrow. You cannot undo this.")
+            Text("\(person.name) leaves \(rosterName). The slot fills with someone new tomorrow. You cannot undo this.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

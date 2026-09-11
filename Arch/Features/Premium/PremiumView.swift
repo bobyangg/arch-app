@@ -17,6 +17,8 @@ struct PremiumView: View {
     var benefits: [PremiumBenefit] = MockData.premiumBenefits
     var plans: [PremiumPlan] = MockData.premiumPlans
     var isSubscribed: Bool = false
+    /// Design-only: flips the subscription so the difference is visible.
+    var onSubscribe: () -> Void = {}
 
     @State private var selectedPlanID: String?
 
@@ -52,7 +54,7 @@ struct PremiumView: View {
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("More room in your roster, and more room to say who you are.")
+            Text("More room in your roster, and a clearer view of your own profile.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -102,7 +104,7 @@ struct PremiumView: View {
 
     private var footer: some View {
         VStack(spacing: ArchSpacing.s) {
-            ArchButton(title: subscribeTitle, isEnabled: !isSubscribed) {}
+            ArchButton(title: subscribeTitle, isEnabled: !isSubscribed, action: onSubscribe)
                 .padding(.top, ArchSpacing.l)
 
             Text(MockData.premiumFootnote)

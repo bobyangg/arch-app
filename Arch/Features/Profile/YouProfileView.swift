@@ -9,6 +9,9 @@ import SwiftUI
 struct YouProfileView: View {
     let store: ProfileStore
     let settings: SettingsStore
+    /// How many people wrote about each photo and answer. Empty is a real state —
+    /// a new profile nobody has written to yet.
+    var writtenAbout: [String: Int] = [:]
     /// Switches to the Premium tab, rather than rebuilding the paywall inside a
     /// settings push.
     var onOpenPremium: () -> Void = {}
@@ -21,6 +24,7 @@ struct YouProfileView: View {
     enum Route: Hashable {
         case arrange
         case settings
+        case review
     }
 
     enum Sheet: String, Identifiable {
@@ -47,6 +51,7 @@ struct YouProfileView: View {
                 switch route {
                 case .arrange:  ArrangeProfileView(store: store)
                 case .settings: SettingsView(store: settings, onOpenPremium: onOpenPremium)
+                case .review:   ProfileReviewView(person: person, writtenAbout: writtenAbout)
                 }
             }
         }
@@ -123,6 +128,7 @@ struct YouProfileView: View {
                 identity
                 completeness
                 rows
+                reviewRow
             }
             .padding(.bottom, ArchSpacing.sectionGap)
         }
@@ -211,6 +217,64 @@ struct YouProfileView: View {
         }
     }
 
+    // MARK: Review
+
+    /// The way into the profile review, at the *bottom* of the scroll.
+    ///
+    /// Putting it at the top would make "how am I doing" the first thing you meet
+    /// on your own profile, which is the beginning of a scoreboard. At the bottom
+    /// you have already read your profile the way other people read it, and the
+    /// row is an afterthought you can take or leave.
+    ///
+    /// No badge, no lock, no lamp. Premium is a sentence in the detail line, the
+    /// same way the paywall itself refuses to sell with colour.
+    private var reviewRow: some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(ArchColor.hairline)
+                .frame(height: ArchSpacing.hairline)
+
+            Button {
+                if settings.isSubscribed {
+                    path.append(Route.review)
+                } else {
+                    onOpenPremium()
+                }
+            } label: {
+                HStack(alignment: .top, spacing: ArchSpacing.s) {
+                    VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+                        Text("Review your profile")
+                            .archText(.body)
+                            .foregroundStyle(ArchColor.limestone)
+                        Text(reviewDetail)
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: ArchSpacing.s)
+
+                    Image(systemName: "chevron.right")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .padding(.top, ArchSpacing.xxs)
+                }
+                .padding(.vertical, ArchSpacing.m)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleStyle(scale: 1))
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.top, ArchSpacing.sectionGap)
+    }
+
+    private var reviewDetail: String {
+        settings.isSubscribed
+        ? "Which of your photos and answers people write about."
+        : "Part of Arch Premium. Which of your photos and answers people write about, and notes on what to change."
+    }
+
     // MARK: Helpers
 
     private func photoPosition(_ photo: Photo) -> Int {
@@ -244,4 +308,17 @@ struct YouProfileView: View {
 #Preview("You, unfinished") {
     YouProfileView(store: ProfileStore(person: MockData.youIncomplete), settings: SettingsStore())
         .preferredColorScheme(.dark)
+}
+
+#Preview("You, subscribed") {
+    YouProfileView(
+        store: ProfileStore(person: MockData.you),
+        settings: {
+            let settings = SettingsStore()
+            settings.isSubscribed = true
+            return settings
+        }(),
+        writtenAbout: MockData.writtenAbout
+    )
+    .preferredColorScheme(.dark)
 }

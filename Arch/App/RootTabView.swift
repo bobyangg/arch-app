@@ -49,12 +49,16 @@ struct RootTabView: View {
     private var content: some View {
         ZStack {
             tab(.premium) {
-                PremiumView(isSubscribed: settings.isSubscribed)
+                PremiumView(isSubscribed: settings.isSubscribed) {
+                    settings.isSubscribed.toggle()
+                    store.setSubscribed(settings.isSubscribed)
+                }
             }
             tab(.daily) {
                 DailyFiveView(
                     roster: store.roster,
                     conversationCount: store.openConversations.count,
+                    conversationLimit: store.conversationLimit,
                     onOpenMessages: { selection = .messages },
                     onDismiss: { store.dismiss($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
@@ -76,6 +80,7 @@ struct RootTabView: View {
                 YouProfileView(
                     store: profile,
                     settings: settings,
+                    writtenAbout: MockData.writtenAbout,
                     onOpenPremium: { selection = .premium }
                 )
             }

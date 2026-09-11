@@ -24,18 +24,36 @@ final class DailyFiveStore {
     /// the hour it was computed.
     static let refillHour = 9
 
-    /// Above this, the roster waits. The point is that people reply to the
+    static let freeSlots = 5
+    static let premiumSlots = 7
+    /// Above this, the roster waits. The point is that people answer the
     /// conversations they start rather than collecting more of them.
-    static let conversationLimit = 10
-    /// How close to the limit before the roster warns you it is coming.
-    static let warnFrom = 8
+    static let freeConversations = 10
+    static let premiumConversations = 15
+
+    /// Premium widens both limits. It does not change who Arch picks, how fast
+    /// slots refill, or anything about who has looked at you.
+    ///
+    /// Set through `setSubscribed(_:)`, because the roster has to be resized in the
+    /// same breath — a seven-slot subscriber with five slots on screen would be a
+    /// feature the user paid for and cannot see.
+    private(set) var isSubscribed = false
+
+    func setSubscribed(_ value: Bool) {
+        guard value != isSubscribed else { return }
+        isSubscribed = value
+        resizeRoster()
+    }
+
+    var capacity: Int { isSubscribed ? Self.premiumSlots : Self.freeSlots }
+    var conversationLimit: Int { isSubscribed ? Self.premiumConversations : Self.freeConversations }
+    /// Warn two conversations out, whichever limit applies.
+    var warnFrom: Int { conversationLimit - 2 }
 
     var unreadCount: Int {
         conversations.reduce(0) { $0 + $1.unreadCount }
     }
 
-    /// Your five are still there and still yours — they are just not shown until
-    /// you are back under the limit. Nothing is lost by waiting.
     /// Conversations you are actually in. A request you have not answered is not
     /// something you are keeping someone waiting on, so it does not count.
     var openConversations: [Conversation] { conversations.filter { $0.state == .open } }
@@ -43,7 +61,33 @@ final class DailyFiveStore {
     /// People who have written to you and are waiting.
     var requests: [Conversation] { conversations.filter { $0.state == .request } }
 
-    var isRosterHeld: Bool { openConversations.count >= Self.conversationLimit }
+    /// Your people are still there and still yours — they are just not shown
+    /// until you are back under the limit. Nothing is lost by waiting.
+    var isRosterHeld: Bool { openConversations.count >= conversationLimit }
+
+    /// Subscribing adds slots; cancelling takes them away.
+    ///
+    /// Empty slots go first, so cancelling never drops somebody who is still in
+    /// your roster while a gap sits next to them.
+    private func resizeRoster() {
+        let target = capacity
+        while roster.slots.count < target {
+            roster.slots.append(
+                .empty(
+                    id: "slot-\(roster.slots.count + 1)-\(UUID().uuidString.prefix(4))",
+                    refillsAt: Self.nextRefill(),
+                    opening: .yours
+                )
+            )
+        }
+        while roster.slots.count > target {
+            if let empty = roster.slots.lastIndex(where: { $0.person == nil }) {
+                roster.slots.remove(at: empty)
+            } else {
+                roster.slots.removeLast()
+            }
+        }
+    }
 
     /// Answering somebody is how a request becomes a conversation.
     func accept(_ conversation: Conversation) {

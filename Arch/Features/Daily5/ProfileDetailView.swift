@@ -14,6 +14,7 @@ import SwiftUI
 struct ProfileDetailView: View {
     let person: Person
     var conversationCount: Int = 0
+    var conversationLimit: Int = DailyFiveStore.freeConversations
     let onDismiss: () -> Void
     let onSend: (String, ProfileItem?) -> Void
 
@@ -25,11 +26,13 @@ struct ProfileDetailView: View {
         person: Person,
         selecting initialSelection: ProfileItem? = nil,
         conversationCount: Int = 0,
+        conversationLimit: Int = DailyFiveStore.freeConversations,
         onDismiss: @escaping () -> Void,
         onSend: @escaping (String, ProfileItem?) -> Void
     ) {
         self.person = person
         self.conversationCount = conversationCount
+        self.conversationLimit = conversationLimit
         self.onDismiss = onDismiss
         self.onSend = onSend
         _selected = State(initialValue: initialSelection)
@@ -56,6 +59,7 @@ struct ProfileDetailView: View {
                 person: person,
                 quoted: selected,
                 conversationCount: conversationCount,
+                conversationLimit: conversationLimit,
                 onSend: { text in
                     isComposing = false
                     onSend(text, selected)
@@ -151,7 +155,7 @@ struct ProfileDetailView: View {
         .buttonStyle(PressScaleStyle())
         .padding(.leading, ArchSpacing.s)
         .padding(.top, ArchSpacing.xs)
-        .accessibilityLabel("Back to your five")
+        .accessibilityLabel("Back to your roster")
     }
 
     /// Both available actions, weighted honestly: writing to someone is what the

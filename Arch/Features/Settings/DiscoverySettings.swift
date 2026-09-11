@@ -31,7 +31,7 @@ struct DistanceSetting: View {
                 .foregroundStyle(ArchColor.mortar)
             }
 
-            SettingNote("Everyone in your five is inside this. Widening it gives Arch more people to choose five from — it does not give you more than five.")
+            SettingNote("Everyone in \(store.rosterName) is inside this. Widening it gives Arch more people to choose from — it does not give you more slots.")
         }
     }
 }
@@ -63,7 +63,7 @@ struct AgeSetting: View {
                 .foregroundStyle(ArchColor.mortar)
             }
 
-            SettingNote("Arch will not put anyone outside this in your five, and will not put you in theirs.")
+            SettingNote("Arch will not put anyone outside this in \(store.rosterName), and will not put you in theirs.")
         }
     }
 }
@@ -82,7 +82,7 @@ struct IntentionSetting: View {
                 }
             }
 
-            SettingNote("This is used to choose your five. It is not shown on your profile, and nobody is told what you picked.")
+            SettingNote("This is used to choose \(store.rosterName). It is not shown on your profile, and nobody is told what you picked.")
         }
     }
 }

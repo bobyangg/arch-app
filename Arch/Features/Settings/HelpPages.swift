@@ -36,7 +36,7 @@ struct HelpPage: View {
     private var how: some View {
         section(
             "Five people, held",
-            "You have five slots. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear — if you do nothing, they stay."
+            "You have five slots, or seven with Premium. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear — if you do nothing, they stay."
         )
         section(
             "Dismissing costs you a slot",
@@ -44,19 +44,19 @@ struct HelpPage: View {
         )
         section(
             "There is no match step",
-            "Nobody has to like you back before you can write. If you want to talk to someone in your five, you write to them. That is the whole mechanism."
+            "Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them. That is the whole mechanism."
         )
         section(
             "You are never told who dismissed whom",
             "When somebody goes, Arch tells you a slot opened — never who left, and never why. Dismissing you and writing to you look identical from your side, on purpose."
         )
         section(
-            "Your five arrive in the morning",
-            "Everyone's five are chosen overnight and are there at nine, wherever you are. You can only be in someone's five if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
+            "New people arrive in the morning",
+            "Rosters are chosen overnight and are filled at nine, wherever you are. You can only be in someone's roster if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
         )
         section(
             "Somebody writing to you is a request",
-            "Their message waits in Requests until you answer it. They leave your five when they write — they have stopped being someone to consider and started being someone to answer — and that slot fills in the morning."
+            "Their message waits in Requests until you answer it. They leave your roster when they write — they have stopped being someone to consider and started being someone to answer — and that slot fills in the morning."
         )
         section(
             "The questions do the choosing",
@@ -74,7 +74,7 @@ struct HelpPage: View {
         )
         section(
             "Blocking is silent and complete",
-            "A blocked person leaves your five, stops appearing again, and stops seeing you. They are not told."
+            "A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told."
         )
         section(
             "Reporting",
