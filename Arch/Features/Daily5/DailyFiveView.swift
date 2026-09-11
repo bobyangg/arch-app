@@ -9,6 +9,7 @@ struct DailyFiveView: View {
     let roster: Roster
     let onDismiss: (Person) -> Void
     let onSend: (Person, String, ProfileItem?) -> Conversation
+    var actions = ConversationActions()
 
     @State private var path: [Route] = []
     @State private var pendingDismissal: Person?
@@ -47,7 +48,11 @@ struct DailyFiveView: View {
                         }
                     )
                 case .thread(let conversation):
-                    MessageThreadView(conversation: conversation)
+                    MessageThreadView(
+                        conversation: conversation,
+                        isInRoster: roster.people.contains { $0.id == conversation.person.id },
+                        actions: actions
+                    )
                 }
             }
         }

@@ -23,6 +23,29 @@ struct RootTabView: View {
         .background(ArchColor.night)
     }
 
+    /// Blocking writes to two places: the roster and conversations live in the
+    /// Daily 5 store, the blocked list lives in Settings.
+    private var conversationActions: ConversationActions {
+        ConversationActions(
+            leave: { store.leave($0) },
+            block: { person in
+                store.block(person)
+                if !settings.blocked.contains(person.name) {
+                    settings.blocked.append(person.name)
+                }
+            },
+            report: { person, _, alsoBlock in
+                // Reporting on its own removes nothing. You reported them; you did
+                // not ask to lose the conversation.
+                guard alsoBlock else { return }
+                store.block(person)
+                if !settings.blocked.contains(person.name) {
+                    settings.blocked.append(person.name)
+                }
+            }
+        )
+    }
+
     private var content: some View {
         ZStack {
             tab(.premium) {
@@ -32,13 +55,16 @@ struct RootTabView: View {
                 DailyFiveView(
                     roster: store.roster,
                     onDismiss: { store.dismiss($0) },
-                    onSend: { store.startConversation(with: $0, text: $1, quoting: $2) }
+                    onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
+                    actions: conversationActions
                 )
             }
             tab(.messages) {
                 MessagesListView(
                     conversations: store.conversations,
-                    onOpenDaily: { selection = .daily }
+                    onOpenDaily: { selection = .daily },
+                    actions: conversationActions,
+                    holdsSlot: { store.holdsSlot($0) }
                 )
             }
             tab(.you) {

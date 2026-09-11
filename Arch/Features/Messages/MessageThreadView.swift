@@ -10,8 +10,13 @@ import SwiftUI
 /// enough. There are no read receipts and no delivery state.
 struct MessageThreadView: View {
     let conversation: Conversation
+    /// Whether this person is still holding one of your slots, which changes what
+    /// leaving and blocking cost.
+    var isInRoster: Bool = false
+    var actions = ConversationActions()
 
     @State private var draft = ""
+    @State private var action: ConversationAction?
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -22,6 +27,44 @@ struct MessageThreadView: View {
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(item: $action) { which in
+            sheet(for: which)
+        }
+    }
+
+    // MARK: The menu
+
+    @ViewBuilder
+    private func sheet(for which: ConversationAction) -> some View {
+        switch which {
+        case .menu:
+            ConversationMenuSheet(person: conversation.person, isInRoster: isInRoster) { chosen in
+                // Swap sheets on the next tick so the first one finishes leaving.
+                action = nil
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(220))
+                    action = chosen
+                }
+            }
+        case .block:
+            BlockConfirmSheet(person: conversation.person, isInRoster: isInRoster) {
+                action = nil
+                actions.block(conversation.person)
+                dismiss()
+            } onCancel: { action = nil }
+        case .report:
+            ReportSheet(person: conversation.person) { reason, alsoBlock in
+                action = nil
+                actions.report(conversation.person, reason, alsoBlock)
+                dismiss()
+            } onCancel: { action = nil }
+        case .leave:
+            LeaveConfirmSheet(person: conversation.person, isInRoster: isInRoster) {
+                action = nil
+                actions.leave(conversation)
+                dismiss()
+            } onCancel: { action = nil }
+        }
     }
 
     // MARK: Pieces
@@ -47,9 +90,22 @@ struct MessageThreadView: View {
                 .foregroundStyle(ArchColor.limestone)
 
             Spacer(minLength: 0)
+
+            Button { action = .menu } label: {
+                Image(systemName: "ellipsis")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.mortar)
+                    .frame(
+                        width: ArchSpacing.minimumTapTarget,
+                        height: ArchSpacing.minimumTapTarget
+                    )
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleStyle())
+            .accessibilityLabel("Report, block, or leave")
         }
         .padding(.leading, ArchSpacing.xs)
-        .padding(.trailing, ArchSpacing.screenMargin)
+        .padding(.trailing, ArchSpacing.xs)
         .padding(.bottom, ArchSpacing.xs)
         .background(ArchColor.night)
         .overlay(alignment: .bottom) {
