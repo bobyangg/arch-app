@@ -7,6 +7,10 @@ import SwiftUI
 /// you acts — so the screen never asks you to clear anything.
 struct DailyFiveView: View {
     let roster: Roster
+    /// How many conversations are open, which decides whether the roster is shown.
+    var conversationCount: Int = 0
+    /// Sends the reader to Messages from the held state.
+    var onOpenMessages: () -> Void = {}
     let onDismiss: (Person) -> Void
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
@@ -26,8 +30,13 @@ struct DailyFiveView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     header
-                    people
-                    openSlots
+                    if isHeld {
+                        heldNotice
+                    } else {
+                        approachingNotice
+                        people
+                        openSlots
+                    }
                 }
                 .padding(.horizontal, ArchSpacing.screenMargin)
                 .padding(.bottom, ArchSpacing.sectionGap)
@@ -41,6 +50,7 @@ struct DailyFiveView: View {
                 case .profile(let person):
                     ProfileDetailView(
                         person: person,
+                        conversationCount: conversationCount,
                         onDismiss: { pendingDismissal = person },
                         onSend: { text, item in
                             let conversation = onSend(person, text, item)
@@ -98,6 +108,43 @@ struct DailyFiveView: View {
         case 5:  return "Your five"
         case 6:  return "Your six"
         default: return "Your roster"
+        }
+    }
+
+    private var isHeld: Bool { conversationCount >= DailyFiveStore.conversationLimit }
+
+    /// Not an error and not a telling-off. The people are still yours, the rule is
+    /// stated once, and the way out is a button rather than a lecture.
+    private var heldNotice: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text("Your five are waiting")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+
+            Text("You have \(conversationCount) conversations open. Arch holds the people in your five until you are back under \(DailyFiveStore.conversationLimit) — leave a conversation you are not going to answer and they come straight back.")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ArchButton(title: "Open your messages", kind: .quiet, action: onOpenMessages)
+                .padding(.top, ArchSpacing.m)
+        }
+        .padding(.bottom, ArchSpacing.sectionGap)
+    }
+
+    /// One line, only in the last two. Said early enough to be useful and late
+    /// enough not to nag.
+    @ViewBuilder
+    private var approachingNotice: some View {
+        if conversationCount >= DailyFiveStore.warnFrom {
+            let left = DailyFiveStore.conversationLimit - conversationCount
+            Text(left == 1
+                 ? "One more conversation and your five will wait until you leave one."
+                 : "\(left) more conversations and your five will wait until you leave one.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, ArchSpacing.xl)
         }
     }
 
@@ -160,6 +207,26 @@ struct DailyFiveView: View {
 
 #Preview("Nearly empty") {
     DailyFivePreview(roster: MockData.rosterNearlyEmpty)
+}
+
+#Preview("Held at ten conversations") {
+    DailyFiveView(
+        roster: MockData.rosterFull,
+        conversationCount: 10,
+        onDismiss: { _ in },
+        onSend: { _, _, _ in MockData.conversations[0] }
+    )
+    .preferredColorScheme(.dark)
+}
+
+#Preview("One away from the limit") {
+    DailyFiveView(
+        roster: MockData.rosterFull,
+        conversationCount: 9,
+        onDismiss: { _ in },
+        onSend: { _, _, _ in MockData.conversations[0] }
+    )
+    .preferredColorScheme(.dark)
 }
 
 /// Wires a live store in, so dismissing in the preview actually drops a stone.
