@@ -278,6 +278,59 @@ const QUESTIONS=[
  ["Someone cancels plans an hour before. What is your honest first reaction?",["Relief","Irritation","Neither, genuinely"]],
  ["Do you want to be living in this city in ten years?",["Yes","No","I have no idea"]]];
 
+const PROMPT_LIBRARY=[
+ ["How you spend your time",[
+   "Where I go when I need to think",
+   "Something I am slower at than everyone else",
+   "The last thing I made with my hands",
+   "What my week actually looks like",
+   "A place in this city I keep going back to",
+   "Something I do that takes far too long"]],
+ ["What you think",[
+   "A thing I have changed my mind about",
+   "The best argument I have lost",
+   "Something everyone likes that I do not",
+   "A thing I am probably wrong about",
+   "Something I will defend that I should not",
+   "The last strong opinion I formed"]],
+ ["What you notice",[
+   "The last thing I read twice",
+   "A detail I get unreasonably interested in",
+   "The last thing that genuinely surprised me",
+   "What I would happily explain for an hour",
+   "Something I looked up recently and fell into",
+   "Something I notice that other people do not"]],
+ ["Where you are headed",[
+   "Something I inherited that is not money",
+   "What I miss about where I grew up",
+   "A risk that worked out",
+   "What I am slowly getting better at",
+   "The best decision I made on impulse",
+   "Something I want to be doing in five years"]]];
+
+/* Questions already used by your other answers stay visible and inert rather than
+   hidden — hiding them makes the library look shorter and leaves you hunting for
+   one you already have. */
+function promptPicker(currentText,taken){
+  let h='<div class="v gap-xl">';
+  PROMPT_LIBRARY.forEach(function(g){
+    h+='<div class="v gap-xs"><div class="prompt mortar">'+g[0]+'</div><div class="v gap-xs">';
+    g[1].forEach(function(q){
+      const isCur=q===currentText, isTaken=taken.indexOf(q)>=0 && !isCur;
+      h+='<button '+(isTaken?'':'data-a="pickQuestion" data-q="'+esc(q)+'"')
+        +' style="display:block;width:100%">'
+        +'<div class="opt '+(isCur?"sel":"")+'" style="display:flex; gap:12px; align-items:center'
+        +(isTaken?'; color:var(--mortar)':'')+'">'
+        +'<span style="flex:1">'+esc(q)+'</span>'
+        +(isTaken?'<span class="footnote mortar">In use</span>'
+                 :(isCur?'<span class="footnote">&#10003;</span>':''))
+        +'</div></button>';
+    });
+    h+='</div></div>';
+  });
+  return h+'</div>';
+}
+
 /* ============================ state ============================ */
 const S={
   tab:"daily",
@@ -307,6 +360,7 @@ const S={
        daily:true,time:"9:00",newPeople:true,msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        visibility:"Anyone Arch picks me for",blocked:[]},
+  edit:null,
   onboarding:null
 };
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -918,6 +972,30 @@ function composerSheet(id){
   setTimeout(()=>document.getElementById("composeText")?.focus(),320);
 }
 
+
+/* Question and answer are one decision, so they live in one sheet. Changing the
+   question clears the answer — an answer written for a different question is a non
+   sequitur — but nothing commits until Save. */
+function answerSheet(){
+  const e=S.edit;
+  if(e.choosing){
+    openSheet('<div class="v gap-s" style="padding-top:4px">'
+      +'<div style="display:flex; align-items:center; gap:8px">'
+      +'<button class="iconbtn" data-a="pickCancel" style="margin-left:-12px">&lsaquo;</button>'
+      +'<div class="titleM">Choose a question</div></div></div>'
+      +'<div class="mt-m">'+promptPicker(e.question,e.taken)+'</div>');
+    return;
+  }
+  openSheet('<button data-a="pickOpen" style="display:block;width:100%">'
+    +'<div style="display:flex; gap:12px; align-items:baseline; padding-top:4px">'
+    +'<div class="prompt mortar" style="flex:1">'+esc(e.question)+'</div>'
+    +'<div class="footnote mortar">Change</div></div></button>'
+    +'<div class="field mt-m" style="align-items:flex-start">'
+    +'<textarea id="answerText" rows="6" placeholder="Answer it properly.">'+esc(e.answer)+'</textarea></div>'
+    +'<button class="btn primary mt-m" data-a="saveAnswer">Save</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
 /* ============================ the dismissal ============================ */
 function performDismiss(id){
   closeSheet();
@@ -990,12 +1068,30 @@ document.addEventListener("click",e=>{
         ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
       <button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    editAnswer:()=>{const i=+el.dataset.i;
-      openSheet(`<div class="prompt mortar" style="padding-top:8px">${esc(S.you.prompts[i][0])}</div>
-        <div class="field mt-m" style="align-items:flex-start">
-          <textarea rows="6">${esc(S.you.prompts[i][1])}</textarea></div>
-        <button class="btn primary mt-m" data-a="closeSheet">Save</button>
-        <button class="btntext" data-a="closeSheet">Cancel</button>`);},
+    editAnswer:()=>{
+      const i=+el.dataset.i;
+      S.edit={i:i, question:S.you.prompts[i][0], answer:S.you.prompts[i][1], choosing:false,
+              taken:S.you.prompts.filter((_,j)=>j!==i).map(p=>p[0])};
+      answerSheet();
+    },
+    pickOpen:()=>{
+      const t=document.getElementById("answerText");
+      if(t) S.edit.answer=t.value;
+      S.edit.choosing=true; answerSheet();
+    },
+    pickCancel:()=>{ S.edit.choosing=false; answerSheet(); },
+    pickQuestion:()=>{
+      const q=el.dataset.q;
+      if(q!==S.edit.question){ S.edit.question=q; S.edit.answer=""; }
+      S.edit.choosing=false; answerSheet();
+    },
+    saveAnswer:()=>{
+      const t=document.getElementById("answerText");
+      const text=(t&&t.value.trim())||"";
+      if(!text) return;
+      S.you.prompts[S.edit.i]=[S.edit.question,text];
+      S.edit=null; closeSheet(); render();
+    },
     replayOnboarding:()=>{startOnboarding(); },
     threadSend:()=>{
       const i=document.getElementById("threadInput"); if(!i||!i.value.trim()) return;

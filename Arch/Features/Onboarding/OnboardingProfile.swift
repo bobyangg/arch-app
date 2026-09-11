@@ -36,10 +36,12 @@ struct OnboardingPhotos: View {
 
 /// Three answers.
 ///
-/// The questions are assigned. Choosing your own is a later job, and pretending
-/// otherwise here would mean two half-built ways to pick a prompt.
+/// The three questions you start on are a starting point, not an assignment —
+/// tapping one opens the same picker the You tab uses.
 struct OnboardingAnswers: View {
     let store: OnboardingStore
+
+    @State private var choosingFor: Prompt?
 
     private var profile: ProfileStore { store.profile }
 
@@ -56,14 +58,44 @@ struct OnboardingAnswers: View {
                 }
             }
         }
+        .sheet(item: $choosingFor) { prompt in
+            PromptPickerView(
+                current: prompt.question,
+                taken: profile.questionsTaken(excluding: prompt.id),
+                onChoose: { chosen in
+                    profile.updatePrompt(id: prompt.id, question: chosen.text, answer: "")
+                    choosingFor = nil
+                },
+                onCancel: { choosingFor = nil }
+            )
+            .padding(.horizontal, ArchSpacing.screenMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(ArchColor.stone)
+            .presentationDetents([.large])
+            .presentationCornerRadius(ArchRadius.sheet)
+            .presentationBackground(ArchColor.stone)
+        }
     }
 
     private func answer(_ prompt: Prompt) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-            Text(prompt.question)
-                .archText(.prompt)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
+            Button { choosingFor = prompt } label: {
+                HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
+                    Text(prompt.question)
+                        .archText(.prompt)
+                        .foregroundStyle(ArchColor.mortar)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    Text("Change")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleStyle(scale: 1))
+            .accessibilityLabel("Question: \(prompt.question)")
+            .accessibilityHint("Choose a different question")
 
             TextField(
                 "",
