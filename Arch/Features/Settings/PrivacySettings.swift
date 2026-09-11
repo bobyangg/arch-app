@@ -18,7 +18,7 @@ struct VisibilitySetting: View {
                 }
             }
 
-            SettingNote("Either way you keep the people already in your five, and they keep you. To come off Arch entirely, pause your profile.")
+            SettingNote("Either way you keep the people already in \(store.rosterName), and they keep you. To come off Arch entirely, pause your profile.")
         }
     }
 }
@@ -33,7 +33,7 @@ struct BlockedSetting: View {
                 Text("Nobody blocked")
                     .archText(.titleM)
                     .foregroundStyle(ArchColor.limestone)
-                SettingNote("Blocking someone takes them out of your five, stops them appearing again, and stops you appearing in theirs. They are not told.")
+                SettingNote("Blocking someone takes them out of \(store.rosterName), stops them appearing again, and stops you appearing in theirs. They are not told.")
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(store.blocked.enumerated()), id: \.offset) { index, name in
@@ -83,7 +83,7 @@ struct DataSetting: View {
                 line("Your profile, including photos and answers.")
                 line("Your questionnaire answers.")
                 line("Every message you have sent and received.")
-                line("Who has been in your five, and when.")
+                line("Who has been in \(store.rosterName), and when.")
             }
 
             SettingNote("Sent as a file to \(store.email). It usually takes a few minutes and never more than 30 days.")

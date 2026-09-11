@@ -13,6 +13,8 @@ struct EmptySlotCard: View {
     let refillsAt: Date
     /// Whether you opened this slot or they did.
     var opening: SlotOpening = .yours
+    /// "your five", or "your seven" with premium.
+    var rosterName: String = "your five"
 
     var body: some View {
         VStack(spacing: ArchSpacing.xxs) {
@@ -20,7 +22,7 @@ struct EmptySlotCard: View {
             // dismissing you both land here, so this line cannot be read backwards
             // into "you were rejected".
             if opening == .theirs {
-                Text("Someone left your five.")
+                Text("Someone left \(rosterName).")
                     .archText(.body)
                     .foregroundStyle(ArchColor.limestone)
             }

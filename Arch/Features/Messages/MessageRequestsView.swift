@@ -76,7 +76,7 @@ struct MessageRequestsView: View {
             Text("Nothing waiting")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
-            Text("When somebody in your five writes to you first, their message waits here until you answer it.")
+            Text("When somebody in your roster writes to you first, their message waits here until you answer it.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

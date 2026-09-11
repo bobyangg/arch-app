@@ -70,7 +70,7 @@ struct PremiumSetting: View {
                 SettingNote("Renews on the 14th. You can cancel any time in your Apple account settings, and premium runs until the end of the period you have paid for.")
                 ArchButton(title: "Manage in Apple settings", kind: .quiet) {}
             } else {
-                SettingNote("Premium changes what you can do with your slots and how much you can say about yourself. It does not change who sees you.")
+                SettingNote("Premium changes how many people you can hold and how many conversations you can keep open. It does not change who sees you.")
                 ArchButton(title: "See what premium changes", action: onOpen)
                 ArchTextButton(title: "Restore purchases") {}
             }
@@ -92,7 +92,7 @@ struct TimeSetting: View {
                 }
             }
 
-            SettingNote("Your five are ready at the same time every day. This only changes when Arch tells you about them.")
+            SettingNote("\(store.rosterTitle) are ready at the same time every day. This only changes when Arch tells you about them.")
         }
     }
 }

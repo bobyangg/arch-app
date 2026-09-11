@@ -268,6 +268,25 @@ struct Roster: Hashable {
     var openSlots: [RosterSlot] { slots.filter { $0.person == nil } }
     var filledCount: Int { people.count }
     var capacity: Int { slots.count }
+
+    /// What to call the roster in copy.
+    ///
+    /// "Your five" stops being true the moment somebody subscribes, so every
+    /// sentence that names the count reads the word from here. The tab keeps its
+    /// fixed name — it is the feature — but a sentence about *your* slots has to
+    /// say how many you actually have.
+    var title: String { "Your \(word)" }
+    /// The same word mid-sentence: "takes Priya out of your seven".
+    var name: String { "your \(word)" }
+
+    private var word: String {
+        switch capacity {
+        case 5:  return "five"
+        case 6:  return "six"
+        case 7:  return "seven"
+        default: return "roster"
+        }
+    }
 }
 
 struct Message: Identifiable, Hashable {
@@ -774,11 +793,12 @@ enum MockData {
             id: "c-yusuf",
             person: yusuf,
             state: .request,
-            opening: .prompt(yusuf.prompts[0]),
+            // He is writing to you, so the quote is one of *your* answers.
+            opening: .prompt(you.prompts[2]),
             messages: [
                 Message(
                     id: "r1",
-                    text: "Rooms that are out of tune with themselves — I have never had a word for that and I have been complaining about it for years. Which room is the worst one you have been in?",
+                    text: "I have had that argument from the other side — a pianist who was certain the metronome was broken. It was not the metronome. What did the drummer finally say that landed?",
                     isOutgoing: false,
                     timestamp: "Yesterday"
                 )
@@ -843,35 +863,38 @@ enum MockData {
 
     // MARK: Premium
 
-    // Premium changes what you can do with your slots and what you can say about
-    // yourself. It does not buy you scores, rankings, or anything about who has
-    // looked at you — none of which exist in Arch.
+    // Three benefits, and all three exist. An earlier list sold a sixth slot, a
+    // same-day refill, six prompts and finer preferences — none of which the app
+    // did anything about. A paywall for invisible features is the easiest kind of
+    // dishonesty to ship, so the list was cut to what is real.
     static let premiumBenefits: [PremiumBenefit] = [
         PremiumBenefit(
             id: "b1",
-            title: "Refill a slot today",
-            detail: "Fill an open slot straight away instead of waiting for tomorrow."
+            title: "Seven people instead of five",
+            detail: "Two more slots. The same care choosing them — a longer queue is not the point."
         ),
         PremiumBenefit(
             id: "b2",
-            title: "A sixth slot",
-            detail: "Hold six people at once instead of five."
+            title: "Fifteen conversations instead of ten",
+            detail: "More room before Arch holds your roster and asks you to answer someone."
         ),
         PremiumBenefit(
             id: "b3",
-            title: "Tips for your profile",
-            detail: "Specific notes on your photos and answers, and what to change."
-        ),
-        PremiumBenefit(
-            id: "b4",
-            title: "Six prompts instead of three",
-            detail: "More room to be specific about yourself."
-        ),
-        PremiumBenefit(
-            id: "b5",
-            title: "Finer preferences",
-            detail: "Choose who reaches you on the things you actually care about, not only distance and age."
+            title: "A review of your profile",
+            detail: "Which of your photos and answers people write about, and specific notes on what to change."
         )
+    ]
+
+    /// What people have picked out of your profile when they wrote to you.
+    ///
+    /// Not likes — Arch has none. This is the photo or answer somebody quoted in
+    /// the composer when they chose to write, which is a signal the app genuinely
+    /// has rather than one the review has to invent.
+    static let writtenAbout: [String: Int] = [
+        "you-q3": 4,
+        "you-p2": 3,
+        "you-q1": 2,
+        "you-p1": 1
     ]
 
     static let premiumPlans: [PremiumPlan] = [

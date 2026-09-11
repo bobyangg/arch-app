@@ -42,6 +42,10 @@ final class SettingsStore {
     var distanceText: String { "Within \(distance) miles" }
     var ageText: String { "\(minAge) to \(maxAge)" }
     var premiumText: String { isSubscribed ? "Subscribed" : "Not subscribed" }
+    /// What to call the roster in settings copy, which has no roster to read.
+    /// The same word `Roster.name` derives from the slots themselves.
+    var rosterName: String { isSubscribed ? "your seven" : "your five" }
+    var rosterTitle: String { isSubscribed ? "Your seven" : "Your five" }
     var blockedText: String { blocked.isEmpty ? "None" : "\(blocked.count)" }
 
     /// The whole list, rebuilt from current values.
