@@ -18,6 +18,12 @@ final class DailyFiveStore {
         self.conversations = conversations
     }
 
+    /// Everyone's five arrive at the same hour, in their own morning. The matching
+    /// runs overnight in one batch — which is what makes mutual pairing possible at
+    /// all — and the result is simply there when people wake up. Nobody experiences
+    /// the hour it was computed.
+    static let refillHour = 9
+
     /// Above this, the roster waits. The point is that people reply to the
     /// conversations they start rather than collecting more of them.
     static let conversationLimit = 10
@@ -30,15 +36,48 @@ final class DailyFiveStore {
 
     /// Your five are still there and still yours — they are just not shown until
     /// you are back under the limit. Nothing is lost by waiting.
-    var isRosterHeld: Bool { conversations.count >= Self.conversationLimit }
+    /// Conversations you are actually in. A request you have not answered is not
+    /// something you are keeping someone waiting on, so it does not count.
+    var openConversations: [Conversation] { conversations.filter { $0.state == .open } }
+
+    /// People who have written to you and are waiting.
+    var requests: [Conversation] { conversations.filter { $0.state == .request } }
+
+    var isRosterHeld: Bool { openConversations.count >= Self.conversationLimit }
+
+    /// Answering somebody is how a request becomes a conversation.
+    func accept(_ conversation: Conversation) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
+        conversations[index].state = .open
+        conversations[index].unreadCount = 0
+    }
+
+    /// Declining removes it. They are not told, the same as everything else here.
+    func decline(_ conversation: Conversation) {
+        conversations.removeAll { $0.id == conversation.id }
+    }
+
+    /// Somebody wrote to you.
+    ///
+    /// Their message becomes a request and they leave your five — not as a cost,
+    /// but because they have stopped being someone to consider and started being
+    /// someone to answer. Holding them in both places would show them twice.
+    func receive(_ conversation: Conversation) {
+        conversations.insert(conversation, at: 0)
+        dismiss(conversation.person, opening: .theirs)
+    }
 
     /// Dismissing costs a slot until tomorrow. The person is replaced by an open
     /// slot in place; the screen groups open slots underneath the people.
     ///
     /// There is no undo, and nothing anywhere records who dismissed whom.
-    func dismiss(_ person: Person) {
+    func dismiss(_ person: Person, opening: SlotOpening = .yours) {
         guard let index = roster.slots.firstIndex(where: { $0.id == person.id }) else { return }
-        roster.slots[index] = .empty(id: "slot-\(person.id)", refillsAt: Self.nextRefill())
+        roster.slots[index] = .empty(
+            id: "slot-\(person.id)",
+            refillsAt: Self.nextRefill(),
+            opening: opening
+        )
     }
 
     /// The first message.
@@ -98,13 +137,14 @@ final class DailyFiveStore {
         roster.people.contains { $0.id == person.id }
     }
 
-    /// New people arrive in the morning, not on a rolling 24-hour timer — so the
-    /// wait is a fact about tomorrow rather than a clock the user watches.
+    /// Tomorrow at `refillHour`, in the reader's own timezone — not a rolling
+    /// 24-hour timer from whenever the slot happened to open. The wait is a fact
+    /// about tomorrow morning rather than a clock to watch.
     private static func nextRefill(from now: Date = Date()) -> Date {
         let calendar = Calendar.current
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
         return calendar.date(
-            bySettingHour: 9, minute: 0, second: 0, of: tomorrow
+            bySettingHour: refillHour, minute: 0, second: 0, of: tomorrow
         ) ?? tomorrow
     }
 }

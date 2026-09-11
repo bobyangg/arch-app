@@ -14,6 +14,8 @@ struct MessageThreadView: View {
     /// leaving and blocking cost.
     var isInRoster: Bool = false
     var actions = ConversationActions()
+    var onAccept: (Conversation) -> Void = { _ in }
+    var onDecline: (Conversation) -> Void = { _ in }
 
     @State private var draft = ""
     @State private var action: ConversationAction?
@@ -23,7 +25,7 @@ struct MessageThreadView: View {
         VStack(spacing: 0) {
             header
             transcript
-            composer
+            if conversation.state == .request { requestBar } else { composer }
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
@@ -133,6 +135,31 @@ struct MessageThreadView: View {
         .defaultScrollAnchor(.bottom)
     }
 
+    /// A request is read before it is answered, so the input bar is replaced by the
+    /// decision. Accepting is the encouraged action and takes `lamp`; declining is
+    /// quiet, and they are not told either way.
+    private var requestBar: some View {
+        VStack(spacing: ArchSpacing.xs) {
+            Text("\(conversation.person.name) wrote to you. Answering moves this into your messages.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: ArchSpacing.xs) {
+                ArchButton(title: "Decline", kind: .quiet) { onDecline(conversation) }
+                ArchButton(title: "Answer") { onAccept(conversation) }
+            }
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.top, ArchSpacing.s)
+        .padding(.bottom, ArchSpacing.xs)
+        .background(ArchColor.stoneRaised)
+        .overlay(alignment: .top) {
+            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
+        }
+    }
+
     private var composer: some View {
         HStack(alignment: .bottom, spacing: ArchSpacing.xs) {
             TextField("Message", text: $draft, axis: .vertical)
@@ -201,6 +228,13 @@ struct MessageBubble: View {
 // MARK: - Previews
 
 #Preview("Thread") {
+    NavigationStack {
+        MessageThreadView(conversation: MockData.conversations[0])
+    }
+    .preferredColorScheme(.dark)
+}
+
+#Preview("A request") {
     NavigationStack {
         MessageThreadView(conversation: MockData.conversations[0])
     }

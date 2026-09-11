@@ -48,7 +48,15 @@ struct HelpPage: View {
         )
         section(
             "You are never told who dismissed whom",
-            "People leave your five. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose."
+            "When somebody goes, Arch tells you a slot opened — never who left, and never why. Dismissing you and writing to you look identical from your side, on purpose."
+        )
+        section(
+            "Your five arrive in the morning",
+            "Everyone's five are chosen overnight and are there at nine, wherever you are. You can only be in someone's five if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
+        )
+        section(
+            "Somebody writing to you is a request",
+            "Their message waits in Requests until you answer it. They leave your five when they write — they have stopped being someone to consider and started being someone to answer — and that slot fills in the morning."
         )
         section(
             "The questions do the choosing",

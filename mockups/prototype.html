@@ -254,6 +254,11 @@ const PEOPLE=[
     ["Where I go when I need to think","The depot at four in the morning, before anyone is in. Sixty buses and no noise at all."],
     ["A risk that worked out","Turning down the desk job my parents wanted for me. It took about six years to stop being an argument."]],
    ["Articulated buses","Four in the morning","Engine noise"]),
+ P("yusuf","Yusuf",34,"Harlem","Manhattan","5 ft 8","Piano tuner",[5,1,3,0],
+   [["Something I notice that other people do not","Which rooms are in tune with themselves. Some rooms make everything sound slightly sour and nobody can say why."],
+    ["A detail I get unreasonably interested in","The felt on a hammer. You can read someone\u2019s whole playing history off eighty-eight pieces of felt."],
+    ["What I miss about where I grew up","Being able to hear the sea from a room with no window facing it."]],
+   ["Hammer felt","Rooms with good sound","Walking at night"]),
  P("lena","Lena",30,"Bushwick","Brooklyn","5 ft 9","Translator",[5,0,2,1],
    [["Something I am slower at than everyone else","Jokes in English. I get there, about four seconds after the table has moved on to something else."],
     ["The last thing I read twice","A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."],
@@ -267,6 +272,9 @@ const YOU=P("you","Sam",30,"Fort Greene","Brooklyn","5 ft 10","Sound engineer",[
   ["Room tone","Click tracks","Fort Greene Park"]);
 
 const byId=id=>PEOPLE.find(p=>p.id===id);
+const isRequest=c=>c.state==="request";
+const openConvos=()=>S.convos.filter(c=>!isRequest(c));
+const requests=()=>S.convos.filter(isRequest);
 const HANA=P("hana","Hana",28,"Greenpoint","Brooklyn","5 ft 6","Landscape architect",[2],
   [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
   ["Street trees","Drainage","Chairs outdoors"]);
@@ -382,6 +390,8 @@ const S={
   LIMIT:10, WARN:8,
   selected:null,
   convos:[
+    {id:"yusuf",person:byId("yusuf"),state:"request",open:["prompt",0],unread:1,when:"Yesterday",
+      msgs:[["in","Rooms that are out of tune with themselves \u2014 I have never had a word for that and I have been complaining about it for years. Which room is the worst one you have been in?","Yesterday"]]},
     {id:"nadia",person:byId("nadia"),open:["prompt",0],unread:1,when:"9:14",msgs:[
       ["out","The load limit tables. That is the part that got you back to the start?","Tuesday"],
       ["in","It is the only honest writing in the whole book. Everything else is a photograph of a bridge with a paragraph telling you it is beautiful.","Tuesday"],
@@ -506,7 +516,7 @@ function dailyRoot(){
   const people=S.slots.filter(s=>s.person).map(s=>s.person);
   const open=S.slots.filter(s=>!s.person);
   const title=S.slots.length===6?"Your six":"Your five";
-  const open10=S.convos.length;
+  const open10=openConvos().length;
   let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
     <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
       <div class="titleL">${title}</div>
@@ -545,8 +555,15 @@ function dailyRoot(){
     h+=`<div class="hairline mt-xxxl"></div>
       <div class="footnote mortar mt-m">New people arrive in these slots.</div>
       <div class="v gap-m mt-m">`;
-    open.forEach(s=>{h+=`<div class="slotcard"><div class="body">${s.when}</div>
-      <div class="footnote mortar">${s.left}</div></div>`;});
+    open.forEach(sl=>{
+      /* Said when they went, never who and never why. Writing to you and dismissing
+         you both land here, so it cannot be read backwards into a rejection. */
+      h+=`<div class="slotcard">${sl.theirs
+        ? `<div class="body">Someone left your five.</div>
+           <div class="footnote mortar">${sl.when}</div>`
+        : `<div class="body">${sl.when}</div>
+           <div class="footnote mortar">${sl.left}</div>`}</div>`;
+    });
     h+=`</div>`;
   }
   return h+`</div></div>`;
@@ -591,7 +608,17 @@ function messagesRoot(){
   }
   let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
     <div class="titleL" style="padding:16px 0 20px">Messages</div>`;
-  S.convos.forEach((c,i)=>{
+  const reqs=requests();
+  if(reqs.length){
+    /* Somebody you have not answered is a different kind of thing from somebody you
+       are talking to. Blending them makes both harder to read. */
+    h+=`<button data-a="openRequests" style="display:block;width:100%; margin-bottom:20px">
+      <div class="srow" style="background:var(--stone); border-radius:20px">
+        <div class="t">Requests</div>
+        <div class="badge" style="position:static">${reqs.length}</div>
+        <div class="caption mortar" style="margin-left:12px">&rsaquo;</div></div></button>`;
+  }
+  openConvos().forEach((c,i)=>{
     const last=c.msgs[c.msgs.length-1];
     h+=`<button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
       <div class="row"><div class="avatar" style="${tone(c.person.photos[0])}"></div>
@@ -600,7 +627,42 @@ function messagesRoot(){
       <div style="display:flex; gap:8px; margin-top:4px">
         <div class="footnote ${c.unread?"limestone":"mortar"}" style="flex:1">${esc(last[1])}</div>
         ${c.unread?'<div class="dot"></div>':""}</div></div></div></button>`;
-    if(i<S.convos.length-1) h+=`<div class="rowrule"></div>`;
+    if(i<openConvos().length-1) h+=`<div class="rowrule"></div>`;
+  });
+  return h+`</div></div>`;
+}
+
+function requestsRoot(){
+  const reqs=requests();
+  let h=navbar("Requests");
+  if(!reqs.length){
+    return h+`<div class="screen"><div class="pad v gap-s" style="height:100%;
+      justify-content:center; padding-bottom:80px">
+      <div class="titleM">Nothing waiting</div>
+      <div class="body mortar">When somebody in your five writes to you first, their
+        message waits here until you answer it.</div></div></div>`;
+  }
+  h+=`<div class="screen"><div class="pad v gap-m mt-l pb-xxxl">`;
+  reqs.forEach(c=>{
+    const q=c.person.prompts[c.open[1]];
+    /* The whole message, not a preview — you are deciding about this person, and
+       deciding from forty truncated characters is how you decline someone who
+       wrote something worth reading. */
+    h+=`<div style="background:var(--stone); border-radius:20px; padding:16px">
+      <button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
+        <div style="display:flex; gap:12px; align-items:center">
+          <div class="avatar" style="width:44px;height:44px;border-radius:22px;${tone(c.person.photos[0])}"></div>
+          <div><div class="subhead">${esc(c.person.name)}</div>
+            <div class="footnote mortar">${esc(c.person.hood)}, ${esc(c.person.city)}</div></div>
+          <div style="flex:1"></div>
+          <div class="footnote mortar">${esc(c.when)}</div></div>
+        <div class="quoted mt-s"><div class="footnote mortar">${esc(q[0])}</div>
+          <div class="callout" style="margin-top:4px">${esc(q[1])}</div></div>
+        <div class="callout mt-s">${esc(c.msgs[0][1])}</div></button>
+      <div style="display:flex; gap:8px; margin-top:12px">
+        <div class="btn btn-quiet" style="flex:1" data-a="declineReq" data-id="${c.id}">Decline</div>
+        <div class="btn btn-primary" style="flex:1" data-a="acceptReq" data-id="${c.id}">Answer</div>
+      </div></div>`;
   });
   return h+`</div></div>`;
 }
@@ -624,6 +686,16 @@ function thread(id){
       <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
       <div class="footnote mortar">${esc(m[2])}</div></div>`;
   });
+  if(isRequest(c)){
+    return h+`</div></div>
+      <div class="bottombar">
+        <div class="footnote mortar" style="margin-bottom:8px">${esc(c.person.name)} wrote to
+          you. Answering moves this into your messages.</div>
+        <div style="display:flex; gap:8px">
+          <div class="btn btn-quiet" style="flex:1" data-a="declineReq" data-id="${c.id}">Decline</div>
+          <div class="btn btn-primary" style="flex:1" data-a="acceptReq" data-id="${c.id}">Answer</div>
+        </div></div>`;
+  }
   return h+`</div></div>
     <div class="bottombar" style="display:flex; gap:8px; align-items:center">
       <div class="field onNight" style="flex:1"><input placeholder="Message" id="threadInput"></div>
@@ -981,6 +1053,7 @@ function render(){
     screen={premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
   } else if(t.name==="profile") screen=profile(t.id);
   else if(t.name==="thread") screen=thread(t.id);
+  else if(t.name==="requests") screen=requestsRoot();
   else if(t.name==="arrange") screen=arrange();
   else if(t.name==="settings") screen=settings();
   else if(t.name==="settingDetail") screen=settingDetail(t.id);
@@ -1019,7 +1092,7 @@ function dismissSheet(id){
    slot on somebody you want to talk to is what a slot is for. */
 function COST(p){
   let t="Sending takes "+esc(p.name)+" out of your five. That slot fills with someone new tomorrow.";
-  if(S.convos.length+1>=S.LIMIT)
+  if(openConvos().length+1>=S.LIMIT)
     t+=" It also takes you to "+S.LIMIT+" conversations, so your five will wait until you leave one.";
   return '<div class="footnote mortar mt-m">'+t+'</div>';
 }
@@ -1145,10 +1218,11 @@ function reportSheet(id){
 
 /* Leaving takes the person out of your five as well. Anything else makes it
    weightless — they would still hold a slot and could write straight back. */
-function removePerson(personId,alsoConversation){
+function removePerson(personId,alsoConversation,theirs){
   if(alsoConversation) S.convos=S.convos.filter(c=>c.person.id!==personId);
   const i=S.slots.findIndex(s=>s.person&&s.person.id===personId);
-  if(i>=0) S.slots[i]={person:null,when:"A new person arrives tomorrow.",left:"About 14 hours"};
+  if(i>=0) S.slots[i]={person:null,when:"A new person arrives tomorrow.",
+                       left:"Nine in the morning",theirs:!!theirs};
 }
 
 /* ============================ the dismissal ============================ */
@@ -1196,6 +1270,16 @@ document.addEventListener("click",e=>{
     confirmDismiss:()=>performDismiss(id),
     compose:()=>composerSheet(id),
     thread:()=>push({name:"thread",id}),
+    openRequests:()=>push({name:"requests"}),
+    acceptReq:()=>{
+      const c=S.convos.find(x=>x.id===id); c.state="open"; c.unread=0;
+      S.stacks.messages=[{name:"thread",id:c.id}]; S.tab="messages"; render();
+    },
+    declineReq:()=>{
+      // They are not told, the same as everything else here.
+      S.convos=S.convos.filter(x=>x.id!==id);
+      S.stacks.messages=[]; render();
+    },
     goDaily:()=>{S.tab="daily"; render();},
     goMessages:()=>{S.tab="messages"; render();},
     plan:()=>{S.plan=+el.dataset.i; render();},

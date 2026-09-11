@@ -11,12 +11,22 @@ import SwiftUI
 /// the slot looks identical, because the app never tells you which happened.
 struct EmptySlotCard: View {
     let refillsAt: Date
+    /// Whether you opened this slot or they did.
+    var opening: SlotOpening = .yours
 
     var body: some View {
         VStack(spacing: ArchSpacing.xxs) {
+            // Said when they went, never who and never why. Writing to you and
+            // dismissing you both land here, so this line cannot be read backwards
+            // into "you were rejected".
+            if opening == .theirs {
+                Text("Someone left your five.")
+                    .archText(.body)
+                    .foregroundStyle(ArchColor.limestone)
+            }
             Text(RefillCopy.headline(for: refillsAt))
-                .archText(.body)
-                .foregroundStyle(ArchColor.limestone)
+                .archText(opening == .theirs ? .footnote : .body)
+                .foregroundStyle(opening == .theirs ? ArchColor.mortar : ArchColor.limestone)
             Text(RefillCopy.detail(for: refillsAt))
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
@@ -73,6 +83,7 @@ enum RefillCopy {
         EmptySlotCard(refillsAt: Date().addingTimeInterval(14 * 3600))
         EmptySlotCard(refillsAt: Date().addingTimeInterval(38 * 3600))
         EmptySlotCard(refillsAt: Date().addingTimeInterval(62 * 3600))
+        EmptySlotCard(refillsAt: Date().addingTimeInterval(14 * 3600), opening: .theirs)
     }
     .padding(.horizontal, ArchSpacing.screenMargin)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
