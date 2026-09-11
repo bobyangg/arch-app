@@ -742,12 +742,11 @@ enum MockData {
 
     // MARK: Onboarding
 
-    /// The three questions onboarding assigns. Choosing your own is a later job.
-    static let startingPrompts: [Prompt] = [
-        Prompt(id: "you-q1", question: "Where I go when I need to think", answer: ""),
-        Prompt(id: "you-q2", question: "Something I am slower at than everyone else", answer: ""),
-        Prompt(id: "you-q3", question: "The best argument I have lost", answer: "")
-    ]
+    /// The three a new profile starts on. They are a starting point, not an
+    /// assignment — every one can be swapped during onboarding or afterwards.
+    static let startingPrompts: [Prompt] = PromptLibrary.starting.enumerated().map { index, question in
+        Prompt(id: "you-q\(index + 1)", question: question.text, answer: "")
+    }
 
     /// Four stand-ins for the real set. Adding the rest is a data change — the
     /// question screen does not care how many there are.

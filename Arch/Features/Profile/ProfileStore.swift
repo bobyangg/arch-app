@@ -59,11 +59,22 @@ final class ProfileStore {
         person.prompts.insert(prompt, at: target)
     }
 
-    /// Only the answer changes. Choosing a different question is a later job.
     func updateAnswer(id: String, to text: String) {
         guard let index = person.prompts.firstIndex(where: { $0.id == id }) else { return }
         let existing = person.prompts[index]
         person.prompts[index] = Prompt(id: existing.id, question: existing.question, answer: text)
+    }
+
+    /// Question and answer move together, because changing one without the other
+    /// leaves a non sequitur on the profile.
+    func updatePrompt(id: String, question: String, answer: String) {
+        guard let index = person.prompts.firstIndex(where: { $0.id == id }) else { return }
+        person.prompts[index] = Prompt(id: id, question: question, answer: answer)
+    }
+
+    /// The questions the other slots are using, so a picker can mark them.
+    func questionsTaken(excluding id: String) -> [String] {
+        person.prompts.filter { $0.id != id }.map(\.question)
     }
 
     // MARK: Interests

@@ -68,8 +68,11 @@ struct YouProfileView: View {
             }
         }
         .sheet(item: $editingAnswer) { prompt in
-            EditAnswerSheet(prompt: prompt) { text in
-                store.updateAnswer(id: prompt.id, to: text)
+            EditAnswerSheet(
+                prompt: prompt,
+                taken: store.questionsTaken(excluding: prompt.id)
+            ) { question, answer in
+                store.updatePrompt(id: prompt.id, question: question, answer: answer)
                 editingAnswer = nil
             }
         }

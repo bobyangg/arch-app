@@ -1,15 +1,21 @@
 import SwiftUI
 
-/// Rewriting one answer.
+/// Rewriting one answer, and choosing which question it answers.
 ///
-/// The question is shown but not editable — choosing a different question is a
-/// separate job with its own screen, and pretending otherwise here would mean two
-/// half-built ways to change your prompts.
+/// Both live in one sheet because they are one decision. Changing the question
+/// **clears the answer** — an answer written for a different question is not an
+/// answer, it is a non sequitur on your profile — but nothing is committed until
+/// you save, so backing out leaves the old question and the old answer intact.
 struct EditAnswerSheet: View {
     let prompt: Prompt
-    let onSave: (String) -> Void
+    /// The questions your other answers are using, so the picker can mark them.
+    var taken: [String] = []
+    /// The chosen question and the answer written for it.
+    let onSave: (String, String) -> Void
 
+    @State private var question = ""
     @State private var draft = ""
+    @State private var choosing = false
     @FocusState private var isWriting: Bool
     @Environment(\.dismiss) private var dismiss
 
@@ -21,14 +27,52 @@ struct EditAnswerSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.m) {
-            Text(prompt.question)
-                .archText(.prompt)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, ArchSpacing.l)
+        Group {
+            if choosing {
+                PromptPickerView(
+                    current: question,
+                    taken: taken,
+                    onChoose: { chosen in
+                        if chosen.text != question {
+                            question = chosen.text
+                            // A different question means the old answer no longer
+                            // answers anything.
+                            draft = ""
+                        }
+                        choosing = false
+                        isWriting = true
+                    },
+                    onCancel: { choosing = false }
+                )
+                .padding(.horizontal, ArchSpacing.screenMargin)
+            } else {
+                editor
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(ArchColor.stone)
+        .presentationDetents([.height(560)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(ArchRadius.sheet)
+        .presentationBackground(ArchColor.stone)
+        .onAppear {
+            question = prompt.question
+            draft = prompt.answer
+            isWriting = true
+        }
+        .onChange(of: draft) { _, new in
+            if new.count > characterLimit {
+                draft = String(new.prefix(characterLimit))
+            }
+        }
+    }
 
-            editor
+    // MARK: Editor
+
+    private var editor: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.m) {
+            questionRow
+            field
 
             HStack {
                 Spacer(minLength: 0)
@@ -44,30 +88,40 @@ struct EditAnswerSheet: View {
             Spacer(minLength: 0)
 
             ArchButton(title: "Save", isEnabled: !trimmed.isEmpty) {
-                onSave(trimmed)
+                onSave(question, trimmed)
             }
             ArchTextButton(title: "Cancel") { dismiss() }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.top, ArchSpacing.l)
         .padding(.bottom, ArchSpacing.m)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(ArchColor.stone)
-        .presentationDetents([.height(480)])
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
-        .onAppear {
-            draft = prompt.answer
-            isWriting = true
-        }
-        .onChange(of: draft) { _, new in
-            if new.count > characterLimit {
-                draft = String(new.prefix(characterLimit))
-            }
-        }
     }
 
-    private var editor: some View {
+    /// The question is the control. Tapping it is how you change it — there is no
+    /// separate button competing with the thing it would act on.
+    private var questionRow: some View {
+        Button { choosing = true } label: {
+            HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
+                Text(question)
+                    .archText(.prompt)
+                    .foregroundStyle(ArchColor.mortar)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Spacer(minLength: 0)
+
+                Text("Change")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleStyle(scale: 1))
+        .accessibilityLabel("Question: \(question)")
+        .accessibilityHint("Choose a different question")
+    }
+
+    private var field: some View {
         ZStack(alignment: .topLeading) {
             if draft.isEmpty {
                 Text("Answer it properly. The specific version is always better.")
@@ -82,7 +136,7 @@ struct EditAnswerSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .scrollContentBackground(.hidden)
                 .focused($isWriting)
-                .frame(minHeight: 160)
+                .frame(minHeight: 170)
         }
         .padding(.horizontal, ArchSpacing.s)
         .padding(.vertical, ArchSpacing.xs)
@@ -94,19 +148,20 @@ struct EditAnswerSheet: View {
 }
 
 #Preview("Edit an answer") {
-    EditAnswerSheet(prompt: MockData.you.prompts[0]) { _ in }
-        .frame(height: 480)
-        .preferredColorScheme(.dark)
+    EditAnswerSheet(
+        prompt: MockData.you.prompts[0],
+        taken: ["Something I am slower at than everyone else", "The best argument I have lost"],
+        onSave: { _, _ in }
+    )
+    .frame(height: 560)
+    .preferredColorScheme(.dark)
 }
 
-#Preview("Edit an empty answer") {
+#Preview("An unanswered question") {
     EditAnswerSheet(
-        prompt: Prompt(
-            id: "blank",
-            question: "The best argument I have lost",
-            answer: ""
-        )
-    ) { _ in }
-    .frame(height: 480)
+        prompt: Prompt(id: "blank", question: "A risk that worked out", answer: ""),
+        onSave: { _, _ in }
+    )
+    .frame(height: 560)
     .preferredColorScheme(.dark)
 }
