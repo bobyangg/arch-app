@@ -54,7 +54,7 @@ final class OnboardingStore {
     /// Inside the questionnaire the rule switches to the questions, so there is
     /// only ever one rule on screen rather than two competing ones.
     var ruleTotal: Int {
-        questionIndex == nil ? Step.allCases.count : MockData.questionnaire.count
+        questionIndex == nil ? Step.allCases.count : Questionnaire.count
     }
 
     var ruleCurrent: Int {
@@ -148,7 +148,7 @@ final class OnboardingStore {
     /// Advances, or leaves the questionnaire entirely when the last one is done.
     func advanceQuestion() {
         guard let index = questionIndex else { return }
-        if index + 1 < MockData.questionnaire.count {
+        if index + 1 < Questionnaire.count {
             questionIndex = index + 1
         } else {
             questionIndex = nil

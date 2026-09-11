@@ -10,8 +10,8 @@ struct OnboardingQuestionnaire: View {
     let store: OnboardingStore
 
     var body: some View {
-        if let index = store.questionIndex, index < MockData.questionnaire.count {
-            question(MockData.questionnaire[index])
+        if let index = store.questionIndex, index < Questionnaire.count {
+            question(Questionnaire.questions[index])
         } else {
             intro
         }
@@ -30,7 +30,7 @@ struct OnboardingQuestionnaire: View {
                 point("They do not add up to a score, and Arch will never show you a percentage.")
             }
 
-            Text("\(MockData.questionnaire.count) questions. There is no wrong answer, and you can change them later in Settings.")
+            Text("\(Questionnaire.count) questions, about two minutes. There is no wrong answer to any of them, and you can change what you said later in Settings.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
