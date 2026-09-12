@@ -13,15 +13,14 @@ struct OnboardingNotifications: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Notifications",
-                detail: "Two kinds, and nothing else."
+                detail: "One kind, and nothing else."
             )
 
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                line("One in the morning, when your five are ready.")
-                line("One when somebody writes to you.")
+                line("When somebody writes to you. That is the whole list.")
             }
 
-            Text("No reminders to come back, no notifications about people who have not written to you, and nothing at all in the evening.")
+            Text("Your five are waiting whenever you open Arch, and it will not tell you they are there — that is a reason to open an app, not a reason to interrupt your day. No reminders to come back, and nothing at all in the evening.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

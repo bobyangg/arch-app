@@ -83,25 +83,6 @@ struct PremiumSetting: View {
     }
 }
 
-/// When the morning notification arrives.
-struct TimeSetting: View {
-    let store: SettingsStore
-
-    var body: some View {
-        SettingsPage(title: "Time") {
-            VStack(spacing: ArchSpacing.xs) {
-                ForEach(SettingsStore.times, id: \.self) { time in
-                    OptionRow(text: time, isSelected: store.dailyFiveTime == time) {
-                        store.dailyFiveTime = time
-                    }
-                }
-            }
-
-            SettingNote("\(store.rosterTitle) are ready at the same time every day. This only changes when Arch tells you about them.")
-        }
-    }
-}
-
 /// Deleting your account.
 ///
 /// **Three consequences, named.** "This cannot be undone" on its own says nothing
@@ -208,7 +189,7 @@ struct NotificationsBlockedSetting: View {
 
             ArchButton(title: "Open iPhone settings", kind: .quiet) {}
 
-            SettingNote("Arch only ever sends two: one in the morning when your roster is ready, and one when somebody writes to you.")
+            SettingNote("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.")
         }
     }
 }
@@ -464,7 +445,3 @@ struct SignOutConfirmSheet: View {
         .preferredColorScheme(.dark)
 }
 
-#Preview("Notification time") {
-    NavigationStack { TimeSetting(store: SettingsStore()) }
-        .preferredColorScheme(.dark)
-}

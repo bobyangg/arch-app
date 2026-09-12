@@ -19,9 +19,16 @@ final class SettingsStore {
     /// When this is false the three switches below cannot do anything, so they are
     /// not shown pretending to.
     var systemNotificationsAllowed = true
-    var dailyFiveAlert = true
-    var dailyFiveTime = "9:00"
-    var newPeopleAlert = true
+    /// The only notification Arch sends.
+    ///
+    /// There were three switches — the morning roster, new people, and messages —
+    /// against an onboarding screen promising "two kinds, and nothing else". Two of
+    /// the three fired at the same moment for the same reason, because slots only
+    /// ever refill at nine.
+    ///
+    /// It is one now, and the two that went were both the app telling you to come
+    /// back. Your roster is there when you open it; a person writing to you is the
+    /// only thing that has any business interrupting your day.
     var messageAlert = true
 
     // Discovery
@@ -55,7 +62,6 @@ final class SettingsStore {
     static let ageRange = 18...70
     static let intentions = ["Something serious", "Still working it out", "Something casual"]
     static let visibilities = ["Anyone Arch picks me for", "Nobody new while I have unread messages"]
-    static let times = ["7:00", "8:00", "9:00", "10:00", "12:00", "18:00"]
 
     // MARK: Display
 
@@ -81,12 +87,6 @@ final class SettingsStore {
     var sections: [SettingsSection] {
         var notifications: [SettingsRow] = []
         if systemNotificationsAllowed {
-            notifications.append(.init(id: "n-daily", title: "Your daily five", control: .toggle(dailyFiveAlert)))
-            // The time only exists if the notification does.
-            if dailyFiveAlert {
-                notifications.append(.init(id: "n-time", title: "Time", detail: dailyFiveTime, control: .push))
-            }
-            notifications.append(.init(id: "n-new", title: "New people", control: .toggle(newPeopleAlert)))
             notifications.append(.init(id: "n-msg", title: "Messages", control: .toggle(messageAlert)))
         } else {
             // Three switches that cannot do anything are worse than one row that
@@ -128,8 +128,6 @@ final class SettingsStore {
 
     func toggle(_ id: String) {
         switch id {
-        case "n-daily": dailyFiveAlert.toggle()
-        case "n-new":   newPeopleAlert.toggle()
         case "n-msg":   messageAlert.toggle()
         case "d-pause": isPaused.toggle()
         default: break
@@ -149,8 +147,6 @@ final class SettingsStore {
 
     func isOn(_ id: String) -> Bool {
         switch id {
-        case "n-daily": return dailyFiveAlert
-        case "n-new":   return newPeopleAlert
         case "n-msg":   return messageAlert
         case "d-pause": return isPaused
         default: return false

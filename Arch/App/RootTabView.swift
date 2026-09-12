@@ -22,13 +22,18 @@ struct RootTabView: View {
 
     @State private var store = DailyFiveStore()
     @State private var settings = SettingsStore()
+    /// A design build has no network to lose. A real one watches `NWPathMonitor`
+    /// and writes here; everything below reads it and nothing else changes.
+    @State private var isOffline = false
 
     var body: some View {
         VStack(spacing: 0) {
+            if isOffline { OfflineBanner() }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             TabBar(selection: $selection, unreadCount: store.unreadCount)
         }
+        .animation(ArchMotion.standard, value: isOffline)
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
     }
@@ -72,6 +77,7 @@ struct RootTabView: View {
                     onOpenMessages: { selection = .messages },
                     isPaused: settings.isPaused,
                     onUnpause: { settings.isPaused = false },
+                    isOffline: isOffline,
                     onDismiss: { store.dismiss($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
                     actions: conversationActions
