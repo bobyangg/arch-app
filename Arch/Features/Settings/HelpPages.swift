@@ -59,6 +59,10 @@ struct HelpPage: View {
             "Their message waits in Requests until you answer it. They leave your roster when they write — they have stopped being someone to consider and started being someone to answer — and that slot fills in the morning."
         )
         section(
+            "Conversations end without a reason",
+            "Somebody can leave a conversation, block you, or delete their account. All three look identical from your side — you can read what was said and you cannot reply — because if they looked different, the difference would tell you which one happened."
+        )
+        section(
             "The questions do the choosing",
             "Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score."
         )

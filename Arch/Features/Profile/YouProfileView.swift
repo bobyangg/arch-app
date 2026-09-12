@@ -16,6 +16,7 @@ struct YouProfileView: View {
     /// settings push.
     var onOpenPremium: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
+    var onSignOut: () -> Void = {}
 
     // NavigationPath rather than [Route]: Settings pushes SettingsRow values into
     // this same stack, and a typed array path only accepts one type.
@@ -55,7 +56,8 @@ struct YouProfileView: View {
                     SettingsView(
                         store: settings,
                         onOpenPremium: onOpenPremium,
-                        onDeleteAccount: onDeleteAccount
+                        onDeleteAccount: onDeleteAccount,
+                        onSignOut: onSignOut
                     )
                 case .review:   ProfileReviewView(person: person, writtenAbout: writtenAbout)
                 }

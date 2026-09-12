@@ -177,6 +177,17 @@ final class DailyFiveStore {
         dismiss(person)
     }
 
+    /// What the other side sees when somebody leaves, blocks, or deletes.
+    ///
+    /// Nothing calls this in a design build — there is no second phone to do the
+    /// leaving — but it is the one mutation the real one needs, and writing it here
+    /// keeps the state from being a fixture nobody can reach.
+    func end(_ conversation: Conversation) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
+        conversations[index].state = .ended
+        conversations[index].unreadCount = 0
+    }
+
     func holdsSlot(_ person: Person) -> Bool {
         roster.people.contains { $0.id == person.id }
     }

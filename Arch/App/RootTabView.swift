@@ -15,6 +15,10 @@ struct RootTabView: View {
     var allowsNotifications: Bool = true
     /// Deleting an account puts you back where you came from.
     var onDeleteAccount: () -> Void = {}
+    /// Not the same thing as deleting, even though both land in the same place:
+    /// with no password, signing in *is* entering your number, so the way back in
+    /// is the screen a new account starts on.
+    var onSignOut: () -> Void = {}
 
     @State private var store = DailyFiveStore()
     @State private var settings = SettingsStore()
@@ -90,7 +94,8 @@ struct RootTabView: View {
                     settings: settings,
                     writtenAbout: MockData.writtenAbout,
                     onOpenPremium: { selection = .premium },
-                    onDeleteAccount: onDeleteAccount
+                    onDeleteAccount: onDeleteAccount,
+                    onSignOut: onSignOut
                 )
             }
         }

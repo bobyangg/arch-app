@@ -21,6 +21,13 @@ struct ArchApp: App {
                         // again, so it lands exactly where a new one does.
                         onDeleteAccount: {
                             withAnimation(ArchMotion.standard) { self.profile = nil }
+                        },
+                        // The same screen, and not the same thing: deleting throws
+                        // the account away, signing out leaves it where it is. A
+                        // design build has nowhere to keep the difference, so it
+                        // lives on the server in a real one.
+                        onSignOut: {
+                            withAnimation(ArchMotion.standard) { self.profile = nil }
                         }
                     )
                 } else {
