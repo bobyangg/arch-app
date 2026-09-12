@@ -14,6 +14,7 @@ final class OnboardingStore {
         case verify
         case identity
         case about
+        case seeking
         case photos
         case answers
         case interests
@@ -38,6 +39,12 @@ final class OnboardingStore {
     var city = ""
     var height = ""
     var work = ""
+    var genderDraft: Gender?
+    var pronounsDraft = ""
+
+    /// Who you want to meet. A set, because "men and non-binary people" is a
+    /// perfectly ordinary answer and a single choice cannot hold it.
+    var seekingDrafts: Set<Gender> = []
 
     var interestDrafts = ["", "", ""]
 
@@ -73,6 +80,10 @@ final class OnboardingStore {
         case .about:
             return Int(ageText) != nil && !neighbourhood.isBlank
                 && !city.isBlank && !height.isBlank && !work.isBlank
+                && genderDraft != nil
+        case .seeking:
+            // Nobody is a valid preference for exactly nobody.
+            return !seekingDrafts.isEmpty
         case .photos:
             return photoShortfall == 0
         case .answers:
@@ -121,7 +132,7 @@ final class OnboardingStore {
             hasSentCode = true
         case .about:
             commitDetails()
-            step = .photos
+            step = .seeking
         case .interests:
             profile.setInterests(interestDrafts)
             step = .questions
@@ -168,12 +179,16 @@ final class OnboardingStore {
 
     private func commitDetails() {
         profile.updateDetails(
-            name: name.trimmed,
-            age: Int(ageText) ?? 0,
-            neighbourhood: neighbourhood.trimmed,
-            city: city.trimmed,
-            height: height.trimmed,
-            work: work.trimmed
+            PersonDetails(
+                name: name.trimmed,
+                age: Int(ageText) ?? 0,
+                gender: genderDraft,
+                pronouns: pronounsDraft.trimmed,
+                neighbourhood: neighbourhood.trimmed,
+                city: city.trimmed,
+                height: height.trimmed,
+                work: work.trimmed
+            )
         )
     }
 }

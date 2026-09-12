@@ -6,14 +6,26 @@ struct ArchApp: App {
     /// Nil until onboarding hands one over. There is no way into the app without
     /// finishing it, which is what keeps a live profile from being half-empty.
     @State private var profile: ProfileStore?
+    /// Carried out of onboarding so Settings knows on the first launch, not the
+    /// second, whether it is allowed to send anything.
+    @State private var allowsNotifications = true
 
     var body: some Scene {
         WindowGroup {
             ZStack {
                 if let profile {
-                    RootTabView(profile: profile)
+                    RootTabView(
+                        profile: profile,
+                        allowsNotifications: allowsNotifications,
+                        // A deleted account is an account that has to be made
+                        // again, so it lands exactly where a new one does.
+                        onDeleteAccount: {
+                            withAnimation(ArchMotion.standard) { self.profile = nil }
+                        }
+                    )
                 } else {
-                    OnboardingFlowView { finished in
+                    OnboardingFlowView { finished, allowed in
+                        allowsNotifications = allowed
                         withAnimation(ArchMotion.standard) { profile = finished }
                     }
                 }

@@ -238,56 +238,75 @@ const TONES=[["#29313C","#232A34"],["#3B322A","#332B24"],["#2B3733","#25302C"],
              ["#333941","#2C3138"],["#443329","#3B2C23"],["#4A4640","#413E38"]];
 const tone=i=>`background:linear-gradient(${TONES[i%6][0]},${TONES[i%6][1]})`;
 
-const P=(id,name,age,hood,city,h,work,photos,prompts,interests)=>
-  ({id,name,age,hood,city,h,work,photos,prompts,interests});
+const P=(id,name,age,hood,city,h,work,photos,prompts,interests,gender,pronouns)=>
+  ({id,name,age,hood,city,h,work,photos,prompts,interests,gender,pronouns:pronouns||""});
+
+/* Three options, and they are required: an opt-out would read as generous and
+   would quietly exclude you, because the candidate set cannot be built without an
+   answer. Anything more specific goes in the optional pronouns field. */
+const GENDERS=[["man","Man","Men"],["woman","Woman","Women"],
+               ["nonBinary","Non-binary","Non-binary people"]];
+const gLabel=k=>(GENDERS.find(g=>g[0]===k)||["","",""])[1];
+const gPlural=k=>(GENDERS.find(g=>g[0]===k)||["","",""])[2];
+/* Never "Everyone" — a word that stands in for a list hides what is in the list. */
+const gSentence=set=>{
+  const names=GENDERS.filter(g=>set.includes(g[0])).map(g=>g[2]);
+  if(!names.length) return "Nobody";
+  if(names.length===1) return names[0];
+  if(names.length===2) return names[0]+" and "+names[1];
+  return names.slice(0,-1).join(", ")+", and "+names[names.length-1];
+};
+/* Every height the picker offers, so nobody types "tall". */
+const HEIGHTS=(()=>{const out=[];for(let i=54;i<=80;i++){
+  const f=Math.floor(i/12), r=i%12; out.push(r===0?f+" ft":f+" ft "+r);} return out;})();
 
 const PEOPLE=[
  P("nadia","Nadia",29,"Gowanus","Brooklyn","5 ft 7","Structural engineer",[0,3,1,5],
    [["The last thing I read twice","A field guide to bridges I found in my grandad's garage. Half of it is tables of load limits and I still went back to the beginning."],
     ["Where I go when I need to think","The walkway on the Manhattan Bridge, heading the unpopular direction so nobody is walking at me."],
     ["Something I am slower at than everyone else","Ordering. I will read the entire menu twice and then get whatever you got."]],
-   ["Bridge inspections","Long-distance walking","Brutalist car parks"]),
+   ["Bridge inspections","Long-distance walking","Brutalist car parks"],"woman","she/her"),
  P("teo","Teo",33,"Ridgewood","Queens","6 ft","Pastry cook",[4,2,0,3],
    [["A thing I have changed my mind about","That working nights was temporary. It has been four years and I have stopped apologising for being awake at three."],
     ["The best argument I have lost","My sister spent an entire drive to Hudson convincing me that sourdough is mostly theatre. She is right. I have kept doing it anyway."],
     ["Where I go when I need to think","The all-night laundromat on Fresh Pond. Warm, and loud in a way that is not people talking to you."]],
-   ["Night baking","Laundromats","Dulce de leche"]),
+   ["Night baking","Laundromats","Dulce de leche"],"man",""),
  P("priya","Priya",27,"Crown Heights","Brooklyn","5 ft 4","Restores film cameras",[2,5,1,4],
    [["Something I am slower at than everyone else","Replying. It is not avoidance. I write the message, put the phone down, and find it three days later still sitting there."],
     ["The last thing I read twice","The service manual for a Rolleiflex, in German, which I do not read. The exploded diagrams are enough."],
     ["A thing I have changed my mind about","Digital. I was insufferable about it for about six years. Now I mostly want the picture."]],
-   ["Rolleiflex repair","Darkroom printing","German manuals"]),
+   ["Rolleiflex repair","Darkroom printing","German manuals"],"woman","she/her"),
  P("marcus","Marcus",31,"Bed-Stuy","Brooklyn","5 ft 11","Nurse, emergency",[1,4,3,0],
    [["Where I go when I need to think","Prospect Park at eight in the morning after a shift, when it is only dog people and me, all of us quiet."],
     ["A thing I have changed my mind about","That I would get used to it. You do not. You get better at leaving it at the door, which is a different skill."],
     ["The best argument I have lost","A patient's grandmother explained that I was holding a mop wrong. She had cleaned offices for forty years. I hold it her way now."]],
-   ["Dawn in Prospect Park","Mop technique","Sleeping through noise"]),
+   ["Dawn in Prospect Park","Mop technique","Sleeping through noise"],"man","he/him"),
  P("ines","Ines",32,"Sunset Park","Brooklyn","5 ft 5","Bookbinder",[1,4,0,2],
    [["The last thing I made with my hands","A slipcase for a book that did not deserve one. Nine hours, and I would do it again."],
     ["Something I do that takes far too long","Choosing paper. I have stood in the same aisle for forty minutes and left with nothing."],
     ["A thing I am probably wrong about","That anything worth keeping should be physical. I say it constantly and my phone is always in my hand."]],
-   ["Japanese paper","Cloth spines","Repairs that take months"]),
+   ["Japanese paper","Cloth spines","Repairs that take months"],"woman","she/they"),
  P("dev","Dev",29,"Astoria","Queens","6 ft 1","Bus mechanic",[3,5,2,1],
    [["What I would happily explain for an hour","Why the articulated buses bend where they do, and why almost everyone guesses it wrong."],
     ["Where I go when I need to think","The depot at four in the morning, before anyone is in. Sixty buses and no noise at all."],
     ["A risk that worked out","Turning down the desk job my parents wanted for me. It took about six years to stop being an argument."]],
-   ["Articulated buses","Four in the morning","Engine noise"]),
+   ["Articulated buses","Four in the morning","Engine noise"],"nonBinary","they/them"),
  P("yusuf","Yusuf",34,"Harlem","Manhattan","5 ft 8","Piano tuner",[5,1,3,0],
    [["Something I notice that other people do not","Which rooms are in tune with themselves. Some rooms make everything sound slightly sour and nobody can say why."],
     ["A detail I get unreasonably interested in","The felt on a hammer. You can read someone\u2019s whole playing history off eighty-eight pieces of felt."],
     ["What I miss about where I grew up","Being able to hear the sea from a room with no window facing it."]],
-   ["Hammer felt","Rooms with good sound","Walking at night"]),
+   ["Hammer felt","Rooms with good sound","Walking at night"],"man",""),
  P("lena","Lena",30,"Bushwick","Brooklyn","5 ft 9","Translator",[5,0,2,1],
    [["Something I am slower at than everyone else","Jokes in English. I get there, about four seconds after the table has moved on to something else."],
     ["The last thing I read twice","A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."],
     ["Where I go when I need to think","The Q platform at Kings Highway. It is above ground, so you can watch weather arrive from a long way off."]],
-   ["Untranslatable tenses","Above-ground platforms","Portuguese poetry"])];
+   ["Untranslatable tenses","Above-ground platforms","Portuguese poetry"],"woman","she/her")];
 
 const YOU=P("you","Sam",30,"Fort Greene","Brooklyn","5 ft 10","Sound engineer",[3,1,4,0,2,5],
   [["Where I go when I need to think","The bench at the top of the hill in Fort Greene Park, early, before the tennis courts start up."],
    ["Something I am slower at than everyone else","Leaving. I will say goodbye at the door and still be there twenty minutes later, coat on."],
    ["The best argument I have lost","A drummer once explained why the click track was not the problem. It was me. It was me for about a year."]],
-  ["Room tone","Click tracks","Fort Greene Park"]);
+  ["Room tone","Click tracks","Fort Greene Park"],"woman","she/her");
 
 const byId=id=>PEOPLE.find(p=>p.id===id);
 const isRequest=c=>c.state==="request";
@@ -322,7 +341,7 @@ function setSubscribed(v){
 }
 const HANA=P("hana","Hana",28,"Greenpoint","Brooklyn","5 ft 6","Landscape architect",[2],
   [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
-  ["Street trees","Drainage","Chairs outdoors"]);
+  ["Street trees","Drainage","Chairs outdoors"],"woman","she/her");
 
 /* Three benefits, and all three exist. The earlier list sold a sixth slot, a
    same-day refill, six prompts and finer preferences, none of which the app did
@@ -461,7 +480,8 @@ const S={
     {id:"teo",person:byId("teo"),open:["prompt",2],unread:0,when:"Monday",msgs:[
       ["out","A laundromat is a genuinely good answer and I am annoyed I did not think of it","Monday"],
       ["in","It is the last indoor place you can sit for an hour without buying anything.","Monday"],
-      ["out","Well now I want to know your second-best one","Monday"]]},
+      ["out","Well now I want to know your second-best one","Monday"],
+      ["out","Second best is the bit of the Botanic Garden nobody walks to","Just now","failed"]]},
     {id:"lena",person:byId("lena"),open:["prompt",1],unread:0,when:"Sunday",msgs:[
       ["out","What did the translator give up","Sunday"],
       ["in","The tense. Portuguese has one that means something happened and is still happening to you. English makes you pick.","Sunday"],
@@ -474,6 +494,7 @@ const S={
   set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
        daily:true,time:"9:00",newPeople:true,msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
+       seeking:["man","woman","nonBinary"],notifsAllowed:true,
        visibility:"Anyone Arch picks me for",blocked:[]},
   edit:null,
   report:{reason:null,block:true,sent:false},
@@ -482,7 +503,10 @@ const S={
   picker:null,
   /* One batch of three shows the failed upload once, so the state is discoverable
      without becoming a nuisance. A real build has no such arrangement. */
-  failOnce:true
+  failOnce:true,
+  /* Nobody has ever been in the roster, which is a different thing from everybody
+     having left — and the two want different words. */
+  firstMorning:false
 };
 /* Parallel to photos: null, or {id, state}. Its own array so that adding and
    removing splice both together and an upload can never end up attached to the
@@ -549,8 +573,12 @@ function glyph(kind,active){
 }
 
 /* ============================ shared bits ============================ */
+/* Gender and pronouns drop out when unset rather than leaving a blank chip. */
 const vitals=p=>`<div class="chips">
-  <div class="chip">${p.age}</div><div class="chip">${esc(p.hood)}, ${esc(p.city)}</div>
+  <div class="chip">${p.age}</div>
+  ${p.gender?`<div class="chip">${esc(gLabel(p.gender))}</div>`:""}
+  ${p.pronouns?`<div class="chip">${esc(p.pronouns)}</div>`:""}
+  <div class="chip">${esc(p.hood)}, ${esc(p.city)}</div>
   <div class="chip">${esc(p.h)}</div><div class="chip">${esc(p.work)}</div></div>`;
 
 const photoBox=(t,ar,extra="")=>`<div class="photo ${extra}" style="${tone(t)}; aspect-ratio:${ar}"></div>`;
@@ -622,7 +650,28 @@ function dailyRoot(){
       ${vitals(p)}</div>`;
   });
   h+=`</div>`;
-  if(open.length){
+  if(S.set.paused){
+    /* The roster above is untouched — the people already in it are still yours,
+       and a pause that threw them away would punish you for taking a break. Only
+       the part that refills is replaced, and nothing is greyed out: greying is
+       what an error looks like, and this is a thing you chose. */
+    h+=`${people.length?`<div class="hairline mt-xxxl"></div>`:""}
+      <div class="v gap-s ${people.length?"mt-m":""}">
+        <div class="titleM">Your profile is paused</div>
+        <div class="body mortar">Nobody new will arrive, and you are not in anyone
+          else&rsquo;s roster. Your conversations are not affected.</div>
+        <div class="btn quiet mt-m" data-a="unpause">Unpause</div></div>`;
+  } else if(!people.length){
+    /* Five identical open-slot cards stacked up reads as five separate pieces of
+       bad news. One sentence is the whole state. */
+    h+=`<div class="v gap-s">
+      <div class="titleM">${S.firstMorning
+        ? "Your first five arrive in the morning"
+        : "All "+numWord(S.slots.length)+" slots are open"}</div>
+      <div class="body mortar">${S.firstMorning
+        ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
+        : "People arrive at nine, wherever you are. Nothing here needs fixing."}</div></div>`;
+  } else if(open.length){
     h+=`<div class="hairline mt-xxxl"></div>
       <div class="footnote mortar mt-m">New people arrive in these slots.</div>
       <div class="v gap-m mt-m">`;
@@ -752,10 +801,18 @@ function thread(id){
       <div class="quoted" style="margin-bottom:16px">
         <div class="footnote mortar">${esc(q[0])}</div>
         <div class="callout mt-xxs" style="margin-top:4px">${esc(q[1])}</div></div>`;
-  c.msgs.forEach(m=>{
-    h+=`<div class="msg ${m[0]==="out"?"out":""}">
+  c.msgs.forEach((m,i)=>{
+    /* No read receipts and no "delivered" — what the other person has done with
+       your message is between them and their phone. A message that did not leave
+       *yours* is not information about them, and leaving it looking sent would be
+       the app lying about its own end of the wire. */
+    const state=m[3]||"sent";
+    const foot=state==="failed"
+      ? `<button class="footnote mortar" data-a="retrySend" data-i="${i}">Not sent. Tap to try again.</button>`
+      : `<div class="footnote mortar">${state==="sending"?"Sending":esc(m[2])}</div>`;
+    h+=`<div class="msg ${m[0]==="out"?"out":""}" ${state==="sent"?"":'style="opacity:.55"'}>
       <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
-      <div class="footnote mortar">${esc(m[2])}</div></div>`;
+      ${foot}</div>`;
   });
   if(isRequest(c)){
     return h+`</div></div>
@@ -1073,17 +1130,27 @@ function arrange(){
 
 function settingsSections(){
   const x=S.set;
-  const notif=[["n-daily","Your daily five",null,"toggle"]];
-  if(x.daily) notif.push(["n-time","Time",x.time,"push"]);
-  notif.push(["n-new","New people",null,"toggle"],["n-msg","Messages",null,"toggle"]);
+  /* Three switches that cannot do anything are worse than one row that says why.
+     This is the only place a row stands in for a group, and it is because iOS has
+     taken the group away. */
+  let notif;
+  if(x.notifsAllowed){
+    notif=[["n-daily","Your daily five",null,"toggle"]];
+    if(x.daily) notif.push(["n-time","Time",x.time,"push"]);
+    notif.push(["n-new","New people",null,"toggle"],["n-msg","Messages",null,"toggle"]);
+  } else {
+    notif=[["n-blocked","Notifications are off","In your iPhone settings","push"]];
+  }
   return [
     ["Account",[["a-phone","Phone number",x.phone,"push"],["a-email","Email",x.email,"push"],
-      ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"]]],
+      ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"],
+      ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
-    ["Discovery",[["d-distance","Distance","Within "+x.distance+" miles","push"],
+    ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
+      ["d-distance","Distance","Within "+x.distance+" miles","push"],
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
       ["d-intent","Looking for",x.intent,"push"],
-      ["d-pause","Pause my profile",null,"toggle"]]],
+      ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
     ["Privacy",[["p-visible","Who can see me",x.visibility,"push"],
       ["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
       ["p-data","Download your data",null,"push"]]],
@@ -1125,6 +1192,14 @@ function settings(){
 
 function NOTE(t){return '<div class="footnote mortar">'+t+'</div>';}
 function HEADING(t){return '<div class="titleL">'+esc(t)+'</div>';}
+/* The multi-select sibling of `opts`: same rows, but membership of a list rather
+   than one value, and it refuses to empty itself. */
+function multiOpts(pairs,chosen,act){
+  return '<div class="v gap-xs">'+pairs.map(function(p){
+    return '<button data-a="'+act+'" data-o="'+esc(p[0])+'" style="display:block;width:100%">'
+      +'<div class="opt '+(chosen.indexOf(p[0])>=0?"sel":"")+'">'+esc(p[1])+'</div></button>';
+  }).join("")+'</div>';
+}
 function opts(list,chosen,act){
   return '<div class="v gap-xs">'+list.map(function(o){
     return '<button data-a="'+act+'" data-o="'+esc(o)+'" style="display:block;width:100%">'
@@ -1134,6 +1209,8 @@ function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div
   +'<div class="body mortar">'+b+'</div></div>';}
 
 const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
+  "a-delete":"Delete your account","n-blocked":"Notifications are off",
+  "d-seeking":"Who you want to meet",
   "n-time":"Time","d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
   "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
@@ -1153,6 +1230,24 @@ function settingDetail(id){
      +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
      +'<span>18</span><span>70</span></div></div>'
      +NOTE("Arch will not put anyone outside this in "+rosterName()+", and will not put you in theirs.");
+  } else if(id==="d-seeking"){
+    b=multiOpts(GENDERS.map(g=>[g[0],g[2]]),x.seeking,"setSeeking")
+     +NOTE("Arch will not put anyone outside this in "+rosterName()+", whatever else lines up. It is not shown on your profile, and nobody is told what you picked.");
+  } else if(id==="a-delete"){
+    /* Three consequences, named. "This cannot be undone" on its own says nothing;
+       the one that matters is the one nobody expects. No red anywhere — dressing
+       this up as a hazard would discourage something you are entitled to do. */
+    b='<div class="v gap-m">'
+     +'<div class="body">Your profile, photos and answers are deleted.</div>'
+     +'<div class="body">The people you are talking to will see the conversation disappear.</div>'
+     +'<div class="body">You cannot undo this, and the same number can start again from scratch.</div></div>'
+     +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s roster, but your conversations keep working.")
+     +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
+  } else if(id==="n-blocked"){
+    b='<div class="titleM">Arch cannot send you anything</div>'
+     +NOTE("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that &mdash; turn them back on there and your choices come back exactly as you left them.")
+     +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>'
+     +NOTE("Arch only ever sends two: one in the morning when your roster is ready, and one when somebody writes to you.");
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
@@ -1208,7 +1303,7 @@ function settingDetail(id){
 }
 
 /* ============================ onboarding ============================ */
-const STEPS=["verify","identity","about","photos","answers","interests","questions","notifications"];
+const STEPS=["verify","identity","about","seeking","photos","answers","interests","questions","notifications"];
 function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
@@ -1263,11 +1358,32 @@ function onboarding(){
         <div class="field onNight"><div class="lbl">Age</div><input id="obAge" inputmode="numeric" value="${esc(o.age)}" placeholder="30"></div>
         <div class="field onNight"><div class="lbl">Neighbourhood</div><input id="obHood" value="${esc(o.hood)}" placeholder="Fort Greene"></div>
         <div class="field onNight"><div class="lbl">City</div><input id="obCity" value="${esc(o.city)}" placeholder="Brooklyn"></div>
-        <div class="field onNight"><div class="lbl">Height</div><input id="obHeight" value="${esc(o.height)}" placeholder="5 ft 10"></div>
+        <button class="field onNight" data-a="obHeight" style="display:flex; width:100%">
+          <div class="lbl">Height</div>
+          <div class="callout ${o.height?"":"mortar"}" style="flex:1">${o.height?esc(o.height):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
         <div class="field onNight"><div class="lbl">Work</div><input id="obWork" value="${esc(o.work)}" placeholder="Sound engineer"></div></div>
+      <div class="v gap-xs mt-xl"><div class="footnote mortar">Gender</div>
+        ${GENDERS.map(g=>`<button data-a="obGender" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${o.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
+      <div class="field onNight mt-m"><div class="lbl">Pronouns</div>
+        <input id="obPronouns" maxlength="20" value="${esc(o.pronouns)}" placeholder="Optional"></div>
       ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
         <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
-    enabled=o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim();
+    enabled=o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim()&&o.gender;
+  } else if(step==="seeking"){
+    /* Its own step rather than another row on "About you": it is not a fact about
+       you, it is a requirement, and it belongs with the questionnaire's three hard
+       ones rather than with your height. */
+    body=`<div class="titleL">Who you want to meet</div>
+      <div class="body mortar mt-s">Pick as many as apply. Arch will not put anyone
+        outside this in your five.</div>
+      <div class="v gap-xs mt-xl">
+        ${GENDERS.map(g=>`<button data-a="obSeeking" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${o.seeking.indexOf(g[0])>=0?"sel":""}">${g[2]}</div></button>`).join("")}</div>
+      <div class="footnote mortar mt-xl">This is not shown on your profile, and nobody
+        is told what you picked. You can change it in Settings.</div>`;
+    enabled=o.seeking.length>0;
   } else if(step==="photos"){
     const slots=photoSlots(o,{rm:"obRmPhoto",add:"obAddPhoto",retry:"obRetryPhoto"});
     /* A photo that did not upload is not a photo yet. Letting it count would walk
@@ -1428,6 +1544,41 @@ function composerSheet(id){
 /* Question and answer are one decision, so they live in one sheet. Changing the
    question clears the answer — an answer written for a different question is a non
    sequitur — but nothing commits until Save. */
+/* Height was a text field, which accepted "tall" and "1.8m" and every other way
+   people write this, none of which two profiles can be compared on. Not a system
+   wheel either — the same option rows the questionnaire uses cost nothing extra
+   and look like the app. */
+function openDetails(){
+  openSheet(`<div class="titleM" style="padding-top:8px">Your details</div>
+      <div class="v gap-xs mt-m">
+        ${[["Name",S.you.name],["Age",S.you.age],["Neighbourhood",S.you.hood],["City",S.you.city]]
+          .map(([l,v])=>`<div class="field"><div class="lbl">${l}</div><input value="${esc(v)}"></div>`).join("")}
+        <button class="field" data-a="youHeight" style="display:flex; width:100%">
+          <div class="lbl">Height</div>
+          <div class="callout ${S.you.h?"":"mortar"}" style="flex:1">${S.you.h?esc(S.you.h):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
+        <div class="field"><div class="lbl">Work</div><input value="${esc(S.you.work)}"></div></div>
+      <div class="v gap-xs mt-m"><div class="footnote mortar">Gender</div>
+        ${GENDERS.map(g=>`<button data-a="youGender" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${S.you.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
+      <div class="field mt-m"><div class="lbl">Pronouns</div>
+        <input maxlength="20" value="${esc(S.you.pronouns)}" placeholder="Optional"></div>`
+    +`<div class="footnote mortar mt-s">Your neighbourhood and city show together, as
+        ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
+      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
+
+function heightSheet(target){
+  openSheet(`<div class="titleM" style="padding-top:8px">Height</div>
+    <div class="v gap-xs mt-m" style="max-height:360px; overflow-y:auto">
+      ${HEIGHTS.map(v=>`<button data-a="setHeight" data-o="${esc(v)}" data-t="${target}"
+        style="display:block;width:100%"><div class="opt ${
+        (target==="ob"?S.onboarding.height:S.you.h)===v?"sel":""}">${esc(v)}</div></button>`).join("")}
+    </div>
+    <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
+}
+
 function answerSheet(){
   const e=S.edit;
   if(e.choosing){
@@ -1591,6 +1742,42 @@ document.addEventListener("click",e=>{
     setting:()=>push({name:"settingDetail",id:el.dataset.id}),
     toggleSetting:()=>{const k=TOGGLES[el.dataset.id]; S.set[k]=!S.set[k]; render();},
     setIntent:()=>{S.set.intent=el.dataset.o; render();},
+    /* Never empties. A preference for nobody is not a preference, and the row would
+       silently stop matching anyone with nothing on screen saying why. */
+    setSeeking:()=>{
+      const g=el.dataset.o, at=S.set.seeking.indexOf(g);
+      if(at>=0){ if(S.set.seeking.length>1) S.set.seeking.splice(at,1); }
+      else S.set.seeking.push(g);
+      render();
+    },
+    unpause:()=>{S.set.paused=false; render();},
+    allowNotifs:()=>{S.set.notifsAllowed=true; S.stacks.you=[{name:"settings"}]; render();},
+    deleteOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Delete your account?</div>
+      <div class="body mortar mt-s">Everything goes now, including the conversations you
+        are in the middle of. There is no undo and no grace period.</div>
+      <button class="btn quiet mt-xxl" data-a="deleteDo">Delete my account</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    setHeight:()=>{
+      const v=el.dataset.o;
+      if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
+      closeSheet(); render();
+    },
+    obHeight:()=>heightSheet("ob"),
+    youHeight:()=>heightSheet("you"),
+    obGender:()=>{S.onboarding.gender=el.dataset.o; render();},
+    obSeeking:()=>{
+      const g=el.dataset.o, at=S.onboarding.seeking.indexOf(g);
+      if(at>=0){ if(S.onboarding.seeking.length>1) S.onboarding.seeking.splice(at,1); }
+      else S.onboarding.seeking.push(g);
+      render();
+    },
+    youGender:()=>{S.you.gender=el.dataset.o; render(); openDetails();},
+    retrySend:()=>{
+      const c=S.convos.find(x=>x.id===current().id), m=c.msgs[+el.dataset.i];
+      m[3]="sending"; render();
+      setTimeout(()=>{ m[3]="sent"; m[2]="Just now"; render(); },1400);
+    },
     setTime:()=>{S.set.time=el.dataset.o; render();},
     setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
     goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
@@ -1620,15 +1807,7 @@ document.addEventListener("click",e=>{
         `<div class="field"><input value="${esc(t)}" maxlength="24"></div>`).join("")}</div>
       <button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    editDetails:()=>openSheet(`<div class="titleM" style="padding-top:8px">Your details</div>
-      <div class="v gap-xs mt-m">
-        ${[["Name",S.you.name],["Age",S.you.age],["Neighbourhood",S.you.hood],["City",S.you.city],
-           ["Height",S.you.h],["Work",S.you.work]].map(([l,v])=>
-        `<div class="field"><div class="lbl">${l}</div><input value="${esc(v)}"></div>`).join("")}</div>
-      <div class="footnote mortar mt-s">Your neighbourhood and city show together, as
-        ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
-      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
-      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    editDetails:()=>openDetails(),
     convoMenu:()=>convoMenuSheet(id),
     blockOpen:()=>{ closeSheet(); setTimeout(()=>blockSheet(id),220); },
     leaveOpen:()=>{ closeSheet(); setTimeout(()=>leaveSheet(id),220); },
@@ -1740,7 +1919,7 @@ document.addEventListener("input",e=>{
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
   if(o){
     const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
-               obHood:"hood",obCity:"city",obHeight:"height",obWork:"work"};
+               obHood:"hood",obCity:"city",obWork:"work",obPronouns:"pronouns"};
     if(map[t.id]){
       o[map[t.id]]=t.id==="obCode"?t.value.replace(/\D/g,"").slice(0,6):t.value;
       const btn=document.querySelector('[data-a="obNext"]');
@@ -1758,7 +1937,8 @@ function refreshCTA(){
   if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
   else if(step==="verify") ok=o.code.length===6;
   else if(step==="identity") ok=!!o.name.trim()&&o.email.includes("@");
-  else if(step==="about") ok=!!(o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim());
+  else if(step==="about") ok=!!(o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim()&&o.gender);
+  else if(step==="seeking") ok=o.seeking.length>0;
   else if(step==="answers") ok=o.answers.filter(a=>a.trim()).length>=3;
   else if(step==="interests") ok=o.interests.filter(t=>t.trim()).length>=3;
   const btn=document.querySelector('[data-a="obNext"]');
@@ -1767,7 +1947,8 @@ function refreshCTA(){
 
 function startOnboarding(){
   S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
-    age:"",hood:"",city:"",height:"",work:"",photos:[],up:[],answers:["","",""],
+    age:"",hood:"",city:"",height:"",work:"",gender:null,pronouns:"",seeking:[],
+    photos:[],up:[],answers:["","",""],
     interests:["","",""],q:null,qa:{}};
   render();
 }
@@ -1776,6 +1957,8 @@ function finishOnboarding(){
   if(o.name.trim()){
     S.you.name=o.name.trim(); S.you.age=o.age||S.you.age; S.you.hood=o.hood||S.you.hood;
     S.you.city=o.city||S.you.city; S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
+    S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
+    if(o.seeking.length) S.set.seeking=o.seeking.slice();
     if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
     o.answers.forEach((a,i)=>{ if(a.trim()) S.you.prompts[i][1]=a.trim(); });
     const ints=o.interests.filter(t=>t.trim());

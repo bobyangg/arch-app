@@ -7,7 +7,12 @@ import SwiftUI
 ///
 /// Bubbles carry no colour — outgoing on `stoneRaised`, incoming on `stone`, both
 /// in `limestone`. Position and surface lightness say who is speaking, which is
-/// enough. There are no read receipts and no delivery state.
+/// enough.
+///
+/// **No read receipts, and no "delivered".** What the other person has done with
+/// your message is between them and their phone. The one exception is a message
+/// that did not leave *yours*, which is not information about them at all — and
+/// leaving it looking sent would be the app lying about its own end of the wire.
 struct MessageThreadView: View {
     let conversation: Conversation
     /// Whether this person is still holding one of your slots, which changes what
@@ -16,6 +21,7 @@ struct MessageThreadView: View {
     var actions = ConversationActions()
     var onAccept: (Conversation) -> Void = { _ in }
     var onDecline: (Conversation) -> Void = { _ in }
+    var onRetry: (Message) -> Void = { _ in }
 
     @State private var draft = ""
     @State private var action: ConversationAction?
@@ -124,7 +130,7 @@ struct MessageThreadView: View {
                 }
 
                 ForEach(conversation.messages) { message in
-                    MessageBubble(message: message)
+                    MessageBubble(message: message) { onRetry(message) }
                 }
             }
             .padding(.horizontal, ArchSpacing.screenMargin)
@@ -196,6 +202,7 @@ struct MessageThreadView: View {
 
 struct MessageBubble: View {
     let message: Message
+    var onRetry: () -> Void = {}
 
     var body: some View {
         HStack {
@@ -212,16 +219,41 @@ struct MessageBubble: View {
                         RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
                             .fill(message.isOutgoing ? ArchColor.stoneRaised : ArchColor.stone)
                     )
-                Text(message.timestamp)
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .padding(.horizontal, ArchSpacing.xxs)
+                // The failure replaces the timestamp rather than sitting beside
+                // it. "9:14 · Not sent" reads as a message that was sent at 9:14.
+                if message.delivery == .failed {
+                    Button(action: onRetry) {
+                        Text("Not sent. Tap to try again.")
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                            .padding(.horizontal, ArchSpacing.xxs)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 1))
+                } else {
+                    Text(message.delivery == .sending ? "Sending" : message.timestamp)
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .padding(.horizontal, ArchSpacing.xxs)
+                }
             }
+            // Held back while it is in the air, and again once it is clear it is
+            // not going anywhere. No red: the network is not the reader's fault.
+            .opacity(message.delivery == .sent ? 1 : 0.55)
 
             if !message.isOutgoing { Spacer(minLength: ArchSpacing.xxxl) }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(message.isOutgoing ? "You" : "Them"): \(message.text)")
+        .accessibilityLabel(label)
+    }
+
+    private var label: String {
+        let who = message.isOutgoing ? "You" : "Them"
+        switch message.delivery {
+        case .sent:    return "\(who): \(message.text)"
+        case .sending: return "\(who): \(message.text). Sending."
+        case .failed:  return "\(who): \(message.text). Not sent. Tap to try again."
+        }
     }
 }
 
@@ -230,6 +262,14 @@ struct MessageBubble: View {
 #Preview("Thread") {
     NavigationStack {
         MessageThreadView(conversation: MockData.conversations[0])
+    }
+    .preferredColorScheme(.dark)
+}
+
+/// One in the air and one that never left.
+#Preview("A message that did not send") {
+    NavigationStack {
+        MessageThreadView(conversation: MockData.conversationWithFailure)
     }
     .preferredColorScheme(.dark)
 }

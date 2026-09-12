@@ -114,19 +114,14 @@ final class ProfileStore {
 
     // MARK: Details
 
-    func updateDetails(
-        name: String,
-        age: Int,
-        neighbourhood: String,
-        city: String,
-        height: String,
-        work: String
-    ) {
-        person.name = name
-        person.age = age
-        person.neighbourhood = neighbourhood
-        person.city = city
-        person.height = height
-        person.work = work
+    func updateDetails(_ details: PersonDetails) {
+        person.name = details.name
+        person.age = details.age
+        person.gender = details.gender
+        person.pronouns = details.pronouns
+        person.neighbourhood = details.neighbourhood
+        person.city = details.city
+        person.height = details.height
+        person.work = details.work
     }
 }

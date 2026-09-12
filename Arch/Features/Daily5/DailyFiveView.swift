@@ -14,6 +14,10 @@ struct DailyFiveView: View {
     var conversationLimit: Int = DailyFiveStore.freeConversations
     /// Sends the reader to Messages from the held state.
     var onOpenMessages: () -> Void = {}
+    /// Paused in Discovery settings. The people already here stay; only the
+    /// refilling stops.
+    var isPaused: Bool = false
+    var onUnpause: () -> Void = {}
     let onDismiss: (Person) -> Void
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
@@ -38,7 +42,13 @@ struct DailyFiveView: View {
                     } else {
                         approachingNotice
                         people
-                        openSlots
+                        if isPaused {
+                            pausedNotice
+                        } else if roster.people.isEmpty {
+                            emptyNotice
+                        } else {
+                            openSlots
+                        }
                     }
                 }
                 .padding(.horizontal, ArchSpacing.screenMargin)
@@ -128,6 +138,59 @@ struct DailyFiveView: View {
         .padding(.bottom, ArchSpacing.sectionGap)
     }
 
+    /// Paused.
+    ///
+    /// The roster above is untouched — the people already in it are still yours,
+    /// and a pause that threw them away would be a punishment for taking a break.
+    /// Only the part that refills is replaced.
+    ///
+    /// Nothing is greyed out. Greying is what an error looks like, and this is a
+    /// thing you chose on purpose.
+    private var pausedNotice: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Rectangle()
+                .fill(ArchColor.hairline)
+                .frame(height: ArchSpacing.hairline)
+                .padding(.bottom, ArchSpacing.m)
+                .padding(.top, roster.people.isEmpty ? 0 : ArchSpacing.sectionGap)
+
+            Text("Your profile is paused")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+
+            Text("Nobody new will arrive, and you are not in anyone else's roster. Your conversations are not affected.")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ArchButton(title: "Unpause", kind: .quiet, action: onUnpause)
+                .padding(.top, ArchSpacing.m)
+        }
+    }
+
+    /// Nothing here at all.
+    ///
+    /// Five identical open-slot cards stacked up is what the general case produces
+    /// and it reads as five separate pieces of bad news. One sentence is the whole
+    /// state — and on the first morning it is not bad news at all.
+    private var emptyNotice: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text(roster.isFirstMorning
+                 ? "Your first five arrive in the morning"
+                 : "All \(ArchCopy.word(roster.capacity)) slots are open")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text(roster.isFirstMorning
+                 ? "Arch is choosing them overnight. There is nothing to do until then — it is not a queue and there is no way to hurry it."
+                 : "People arrive at nine, wherever you are. Nothing here needs fixing.")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     /// One line, only in the last two. Said early enough to be useful and late
     /// enough not to nag.
     @ViewBuilder
@@ -207,6 +270,35 @@ struct DailyFiveView: View {
 
 #Preview("Nearly empty") {
     DailyFivePreview(roster: MockData.rosterNearlyEmpty)
+}
+
+#Preview("The first morning") {
+    DailyFivePreview(roster: MockData.rosterFirstMorning)
+}
+
+#Preview("Everybody gone") {
+    DailyFivePreview(roster: MockData.rosterEmpty)
+}
+
+#Preview("Paused") {
+    DailyFiveView(
+        roster: MockData.rosterFull,
+        isPaused: true,
+        onDismiss: { _ in },
+        onSend: { _, _, _ in MockData.conversations[0] }
+    )
+    .preferredColorScheme(.dark)
+}
+
+/// Paused with nothing in the roster — the two notices must not both appear.
+#Preview("Paused and empty") {
+    DailyFiveView(
+        roster: MockData.rosterEmpty,
+        isPaused: true,
+        onDismiss: { _ in },
+        onSend: { _, _, _ in MockData.conversations[0] }
+    )
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Held at ten conversations") {

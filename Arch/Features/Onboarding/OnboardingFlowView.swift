@@ -6,7 +6,9 @@ import SwiftUI
 /// rule — plus the Continue button, so the step views are just their content and
 /// none of them re-implements a footer.
 struct OnboardingFlowView: View {
-    let onFinish: (ProfileStore) -> Void
+    /// The profile, and whether notifications were allowed. The second is not the
+    /// profile's business, but Settings has to know and this is where it is asked.
+    let onFinish: (ProfileStore, Bool) -> Void
 
     @State private var store = OnboardingStore()
     @State private var showingWelcome = true
@@ -121,6 +123,8 @@ struct OnboardingFlowView: View {
             OnboardingIdentity(store: store)
         case .about:
             OnboardingAbout(store: store)
+        case .seeking:
+            OnboardingSeeking(store: store)
         case .photos:
             OnboardingPhotos(store: store)
         case .answers:
@@ -136,7 +140,7 @@ struct OnboardingFlowView: View {
 
     private func finish(allowing notifications: Bool) {
         store.allowsNotifications = notifications
-        onFinish(store.profile)
+        onFinish(store.profile, notifications)
     }
 }
 
@@ -163,6 +167,6 @@ struct StepHeading: View {
 }
 
 #Preview("Onboarding") {
-    OnboardingFlowView { _ in }
+    OnboardingFlowView { _, _ in }
         .preferredColorScheme(.dark)
 }
