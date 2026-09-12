@@ -132,8 +132,7 @@ struct PersonDetails: Hashable {
     var age: Int
     var gender: Gender?
     var pronouns: String
-    var neighbourhood: String
-    var city: String
+    var place: Place?
     var height: String
     var work: String
 }
@@ -144,8 +143,18 @@ struct Person: Identifiable, Hashable {
     let id: String
     var name: String
     var age: Int
-    var neighbourhood: String
-    var city: String
+    /// Where they say they live. Two strings once, which meant "Bed-Stuy",
+    /// "bed stuy" and "Bedford Stuyvesant" were three different places and none of
+    /// them had a position — so the distance filter had nothing to filter on.
+    var place: Place?
+    /// From the device, already rounded to `Coordinate.grid`, or nil.
+    ///
+    /// Separate from `place` because they are genuinely different facts: the place
+    /// is the words on the profile, and this is the square the matcher works in.
+    /// Somebody who gave Arch their location is placed to about a kilometre
+    /// wherever they live; somebody who did not falls back to the centre of the
+    /// place they picked, which is exact in Fort Greene and blunt in a big suburb.
+    var coordinate: Coordinate?
     var height: String
     var work: String
     /// Required in practice — onboarding will not let you past it — but optional
@@ -177,8 +186,20 @@ struct Person: Identifiable, Hashable {
 
     // MARK: Derived
 
-    /// Built in one place so no view joins these two fields its own way.
-    var location: String { "\(neighbourhood), \(city)" }
+    /// What the chip says. Empty until a place is picked.
+    var location: String { place?.label ?? "" }
+
+    /// What the distance filter measures from, or nil for a profile that has not
+    /// said where it is. The device fix wins when there is one.
+    var matchPoint: Coordinate? { coordinate ?? place?.centre }
+
+    /// Miles between two people, or nil when either has no position. Never shown
+    /// to anybody — Arch puts no distance on a profile — it only decides whether
+    /// somebody is inside your radius.
+    func miles(to other: Person) -> Double? {
+        guard let a = matchPoint, let b = other.matchPoint else { return nil }
+        return a.miles(to: b)
+    }
 
     /// The facts, in reading order. Wraps to two rows more often than not, since
     /// "Crown Heights, Brooklyn" is a wide chip — and reliably now that gender and
@@ -188,14 +209,15 @@ struct Person: Identifiable, Hashable {
     var vitals: [String] {
         ["\(age)"]
             + [gender?.label, pronouns.isEmpty ? nil : pronouns].compactMap { $0 }
-            + [location, height, work]
+            + (location.isEmpty ? [] : [location])
+            + [height, work]
     }
 
     /// Everything `EditDetailsSheet` edits, gathered.
     var details: PersonDetails {
         PersonDetails(
             name: name, age: age, gender: gender, pronouns: pronouns,
-            neighbourhood: neighbourhood, city: city, height: height, work: work
+            place: place, height: height, work: work
         )
     }
 
@@ -301,8 +323,7 @@ struct Person: Identifiable, Hashable {
             id: "you",
             name: "",
             age: 0,
-            neighbourhood: "",
-            city: "",
+            place: nil,
             height: "",
             work: "",
             gender: nil,
@@ -489,8 +510,7 @@ enum MockData {
         id: "nadia",
         name: "Nadia",
         age: 29,
-        neighbourhood: "Gowanus",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-gowanus"),
         height: "5 ft 7",
         work: "Structural engineer",
         gender: .woman,
@@ -529,8 +549,7 @@ enum MockData {
         id: "teo",
         name: "Teo",
         age: 33,
-        neighbourhood: "Ridgewood",
-        city: "Queens",
+        place: PlaceLibrary.place(matching: "qn-ridgewood"),
         height: "6 ft",
         work: "Pastry cook",
         gender: .man,
@@ -569,8 +588,7 @@ enum MockData {
         id: "priya",
         name: "Priya",
         age: 27,
-        neighbourhood: "Crown Heights",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-crown-heights"),
         height: "5 ft 4",
         work: "Restores film cameras",
         gender: .woman,
@@ -609,8 +627,7 @@ enum MockData {
         id: "marcus",
         name: "Marcus",
         age: 31,
-        neighbourhood: "Bed-Stuy",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-bed-stuy"),
         height: "5 ft 11",
         work: "Nurse, emergency",
         gender: .man,
@@ -649,8 +666,7 @@ enum MockData {
         id: "lena",
         name: "Lena",
         age: 30,
-        neighbourhood: "Bushwick",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-bushwick"),
         height: "5 ft 9",
         work: "Translator",
         gender: .woman,
@@ -689,8 +705,7 @@ enum MockData {
         id: "hana",
         name: "Hana",
         age: 28,
-        neighbourhood: "Greenpoint",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-greenpoint"),
         height: "5 ft 6",
         work: "Landscape architect",
         gender: .woman,
@@ -715,8 +730,7 @@ enum MockData {
         id: "ines",
         name: "Ines",
         age: 32,
-        neighbourhood: "Sunset Park",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-sunset-park"),
         height: "5 ft 5",
         work: "Bookbinder",
         gender: .woman,
@@ -755,8 +769,7 @@ enum MockData {
         id: "dev",
         name: "Dev",
         age: 29,
-        neighbourhood: "Astoria",
-        city: "Queens",
+        place: PlaceLibrary.place(matching: "qn-astoria"),
         height: "6 ft 1",
         work: "Bus mechanic",
         gender: .nonBinary,
@@ -796,8 +809,7 @@ enum MockData {
         id: "yusuf",
         name: "Yusuf",
         age: 34,
-        neighbourhood: "Harlem",
-        city: "Manhattan",
+        place: PlaceLibrary.place(matching: "mn-harlem"),
         height: "5 ft 8",
         work: "Piano tuner",
         gender: .man,
@@ -839,8 +851,7 @@ enum MockData {
         id: "you",
         name: "Sam",
         age: 30,
-        neighbourhood: "Fort Greene",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-fort-greene"),
         height: "5 ft 10",
         work: "Sound engineer",
         gender: .woman,
@@ -883,8 +894,7 @@ enum MockData {
         id: "you",
         name: "Sam",
         age: 30,
-        neighbourhood: "Fort Greene",
-        city: "Brooklyn",
+        place: PlaceLibrary.place(matching: "bk-fort-greene"),
         height: "5 ft 10",
         work: "Sound engineer",
         gender: .woman,

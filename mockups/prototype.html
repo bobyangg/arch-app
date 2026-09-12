@@ -238,8 +238,9 @@ const TONES=[["#29313C","#232A34"],["#3B322A","#332B24"],["#2B3733","#25302C"],
              ["#333941","#2C3138"],["#443329","#3B2C23"],["#4A4640","#413E38"]];
 const tone=i=>`background:linear-gradient(${TONES[i%6][0]},${TONES[i%6][1]})`;
 
-const P=(id,name,age,hood,city,h,work,photos,prompts,interests,gender,pronouns)=>
-  ({id,name,age,hood,city,h,work,photos,prompts,interests,gender,pronouns:pronouns||""});
+const P=(id,name,age,placeId,h,work,photos,prompts,interests,gender,pronouns)=>
+  ({id,name,age,place:placeById(placeId),h,work,photos,prompts,interests,
+    gender,pronouns:pronouns||"",coord:null});
 
 /* Three options, and they are required: an opt-out would read as generous and
    would quietly exclude you, because the candidate set cannot be built without an
@@ -256,53 +257,124 @@ const gSentence=set=>{
   if(names.length===2) return names[0]+" and "+names[1];
   return names.slice(0,-1).join(", ")+", and "+names[names.length-1];
 };
+/* The gazetteer. A few dozen rows for one metro is the whole of it — no geocoding
+   service, no map tiles, no per-lookup bill.
+
+   Coordinates are approximate centres, which is the point: they are the fallback
+   for somebody who did not give Arch a location, and they are never finer than the
+   square GRID would round them to anyway. */
+const GRID=0.01;                      /* ~1.1km. The only precision Arch holds. */
+const coarse=c=>({lat:Math.round(c.lat/GRID)*GRID, lon:Math.round(c.lon/GRID)*GRID});
+const PLACES=[
+ ["bk-fort-greene","Fort Greene","Brooklyn",40.691,-73.974],
+ ["bk-gowanus","Gowanus","Brooklyn",40.674,-73.989],
+ ["bk-crown-heights","Crown Heights","Brooklyn",40.668,-73.944],
+ ["bk-bed-stuy","Bed-Stuy","Brooklyn",40.687,-73.941],
+ ["bk-sunset-park","Sunset Park","Brooklyn",40.645,-74.012],
+ ["bk-bushwick","Bushwick","Brooklyn",40.694,-73.921],
+ ["bk-greenpoint","Greenpoint","Brooklyn",40.730,-73.951],
+ ["bk-williamsburg","Williamsburg","Brooklyn",40.714,-73.957],
+ ["bk-park-slope","Park Slope","Brooklyn",40.671,-73.978],
+ ["bk-prospect-heights","Prospect Heights","Brooklyn",40.677,-73.968],
+ ["bk-carroll-gardens","Carroll Gardens","Brooklyn",40.679,-73.999],
+ ["bk-bay-ridge","Bay Ridge","Brooklyn",40.626,-74.030],
+ ["qn-astoria","Astoria","Queens",40.764,-73.923],
+ ["qn-ridgewood","Ridgewood","Queens",40.708,-73.897],
+ ["qn-long-island-city","Long Island City","Queens",40.745,-73.949],
+ ["qn-sunnyside","Sunnyside","Queens",40.743,-73.920],
+ ["qn-jackson-heights","Jackson Heights","Queens",40.755,-73.883],
+ ["qn-flushing","Flushing","Queens",40.768,-73.833],
+ ["mn-harlem","Harlem","Manhattan",40.811,-73.946],
+ ["mn-washington-heights","Washington Heights","Manhattan",40.840,-73.940],
+ ["mn-upper-west-side","Upper West Side","Manhattan",40.787,-73.975],
+ ["mn-east-village","East Village","Manhattan",40.727,-73.982],
+ ["mn-west-village","West Village","Manhattan",40.736,-74.003],
+ ["mn-lower-east-side","Lower East Side","Manhattan",40.715,-73.984],
+ ["bx-mott-haven","Mott Haven","The Bronx",40.809,-73.923],
+ ["bx-riverdale","Riverdale","The Bronx",40.890,-73.912],
+ ["si-st-george","St. George","Staten Island",40.644,-74.077],
+ /* Two miles from Manhattan and a different state, which is exactly why the
+    filter is a radius and not a city boundary. */
+ ["nj-jersey-city","Jersey City","New Jersey",40.728,-74.078],
+ ["nj-hoboken","Hoboken","New Jersey",40.744,-74.032],
+ /* Towns, where a neighbourhood is not a thing anybody would name. */
+ ["ny-beacon","Beacon","New York",41.505,-73.970],
+ ["ny-hudson","Hudson","New York",42.253,-73.791],
+ ["ny-new-paltz","New Paltz","New York",41.747,-74.087]
+].map(([id,name,city,lat,lon])=>({id,name,city,centre:coarse({lat,lon})}));
+
+const placeById=id=>PLACES.find(p=>p.id===id);
+const placeLabel=p=>p?p.name+", "+p.city:"";
+/* Grouped for the picker, in the order the list first mentions each city. */
+const placeGroups=()=>{
+  const order=[],by={};
+  PLACES.forEach(p=>{ if(!by[p.city]){order.push(p.city); by[p.city]=[];} by[p.city].push(p); });
+  return order.map(c=>[c,by[c]]);
+};
+const placeSearch=t=>{
+  const n=(t||"").trim().toLowerCase();
+  return n?PLACES.filter(p=>placeLabel(p).toLowerCase().includes(n)):PLACES;
+};
+/* Great-circle miles. Never shown to anybody — Arch puts no distance on a profile
+   — it only decides whether somebody is inside your radius. */
+const milesBetween=(a,b)=>{
+  const R=3958.8, r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r, dLon=(b.lon-a.lon)*r;
+  const h=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+};
+const nearestPlace=c=>PLACES.reduce((best,p)=>
+  milesBetween(p.centre,c)<milesBetween(best.centre,c)?p:best, PLACES[0]);
+/* The device fix wins when there is one; otherwise the centre of the place picked. */
+const matchPoint=p=>p.coord||(p.place?p.place.centre:null);
+
 /* Every height the picker offers, so nobody types "tall". */
 const HEIGHTS=(()=>{const out=[];for(let i=54;i<=80;i++){
   const f=Math.floor(i/12), r=i%12; out.push(r===0?f+" ft":f+" ft "+r);} return out;})();
 
 const PEOPLE=[
- P("nadia","Nadia",29,"Gowanus","Brooklyn","5 ft 7","Structural engineer",[0,3,1,5],
+ P("nadia","Nadia",29,"bk-gowanus","5 ft 7","Structural engineer",[0,3,1,5],
    [["The last thing I read twice","A field guide to bridges I found in my grandad's garage. Half of it is tables of load limits and I still went back to the beginning."],
     ["Where I go when I need to think","The walkway on the Manhattan Bridge, heading the unpopular direction so nobody is walking at me."],
     ["Something I am slower at than everyone else","Ordering. I will read the entire menu twice and then get whatever you got."]],
    ["Bridge inspections","Long-distance walking","Brutalist car parks"],"woman","she/her"),
- P("teo","Teo",33,"Ridgewood","Queens","6 ft","Pastry cook",[4,2,0,3],
+ P("teo","Teo",33,"qn-ridgewood","6 ft","Pastry cook",[4,2,0,3],
    [["A thing I have changed my mind about","That working nights was temporary. It has been four years and I have stopped apologising for being awake at three."],
     ["The best argument I have lost","My sister spent an entire drive to Hudson convincing me that sourdough is mostly theatre. She is right. I have kept doing it anyway."],
     ["Where I go when I need to think","The all-night laundromat on Fresh Pond. Warm, and loud in a way that is not people talking to you."]],
    ["Night baking","Laundromats","Dulce de leche"],"man",""),
- P("priya","Priya",27,"Crown Heights","Brooklyn","5 ft 4","Restores film cameras",[2,5,1,4],
+ P("priya","Priya",27,"bk-crown-heights","5 ft 4","Restores film cameras",[2,5,1,4],
    [["Something I am slower at than everyone else","Replying. It is not avoidance. I write the message, put the phone down, and find it three days later still sitting there."],
     ["The last thing I read twice","The service manual for a Rolleiflex, in German, which I do not read. The exploded diagrams are enough."],
     ["A thing I have changed my mind about","Digital. I was insufferable about it for about six years. Now I mostly want the picture."]],
    ["Rolleiflex repair","Darkroom printing","German manuals"],"woman","she/her"),
- P("marcus","Marcus",31,"Bed-Stuy","Brooklyn","5 ft 11","Nurse, emergency",[1,4,3,0],
+ P("marcus","Marcus",31,"bk-bed-stuy","5 ft 11","Nurse, emergency",[1,4,3,0],
    [["Where I go when I need to think","Prospect Park at eight in the morning after a shift, when it is only dog people and me, all of us quiet."],
     ["A thing I have changed my mind about","That I would get used to it. You do not. You get better at leaving it at the door, which is a different skill."],
     ["The best argument I have lost","A patient's grandmother explained that I was holding a mop wrong. She had cleaned offices for forty years. I hold it her way now."]],
    ["Dawn in Prospect Park","Mop technique","Sleeping through noise"],"man","he/him"),
- P("ines","Ines",32,"Sunset Park","Brooklyn","5 ft 5","Bookbinder",[1,4,0,2],
+ P("ines","Ines",32,"bk-sunset-park","5 ft 5","Bookbinder",[1,4,0,2],
    [["The last thing I made with my hands","A slipcase for a book that did not deserve one. Nine hours, and I would do it again."],
     ["Something I do that takes far too long","Choosing paper. I have stood in the same aisle for forty minutes and left with nothing."],
     ["A thing I am probably wrong about","That anything worth keeping should be physical. I say it constantly and my phone is always in my hand."]],
    ["Japanese paper","Cloth spines","Repairs that take months"],"woman","she/they"),
- P("dev","Dev",29,"Astoria","Queens","6 ft 1","Bus mechanic",[3,5,2,1],
+ P("dev","Dev",29,"qn-astoria","6 ft 1","Bus mechanic",[3,5,2,1],
    [["What I would happily explain for an hour","Why the articulated buses bend where they do, and why almost everyone guesses it wrong."],
     ["Where I go when I need to think","The depot at four in the morning, before anyone is in. Sixty buses and no noise at all."],
     ["A risk that worked out","Turning down the desk job my parents wanted for me. It took about six years to stop being an argument."]],
    ["Articulated buses","Four in the morning","Engine noise"],"nonBinary","they/them"),
- P("yusuf","Yusuf",34,"Harlem","Manhattan","5 ft 8","Piano tuner",[5,1,3,0],
+ P("yusuf","Yusuf",34,"mn-harlem","5 ft 8","Piano tuner",[5,1,3,0],
    [["Something I notice that other people do not","Which rooms are in tune with themselves. Some rooms make everything sound slightly sour and nobody can say why."],
     ["A detail I get unreasonably interested in","The felt on a hammer. You can read someone\u2019s whole playing history off eighty-eight pieces of felt."],
     ["What I miss about where I grew up","Being able to hear the sea from a room with no window facing it."]],
    ["Hammer felt","Rooms with good sound","Walking at night"],"man",""),
- P("lena","Lena",30,"Bushwick","Brooklyn","5 ft 9","Translator",[5,0,2,1],
+ P("lena","Lena",30,"bk-bushwick","5 ft 9","Translator",[5,0,2,1],
    [["Something I am slower at than everyone else","Jokes in English. I get there, about four seconds after the table has moved on to something else."],
     ["The last thing I read twice","A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."],
     ["Where I go when I need to think","The Q platform at Kings Highway. It is above ground, so you can watch weather arrive from a long way off."]],
    ["Untranslatable tenses","Above-ground platforms","Portuguese poetry"],"woman","she/her")];
 
-const YOU=P("you","Sam",30,"Fort Greene","Brooklyn","5 ft 10","Sound engineer",[3,1,4,0,2,5],
+const YOU=P("you","Sam",30,"bk-fort-greene","5 ft 10","Sound engineer",[3,1,4,0,2,5],
   [["Where I go when I need to think","The bench at the top of the hill in Fort Greene Park, early, before the tennis courts start up."],
    ["Something I am slower at than everyone else","Leaving. I will say goodbye at the door and still be there twenty minutes later, coat on."],
    ["The best argument I have lost","A drummer once explained why the click track was not the problem. It was me. It was me for about a year."]],
@@ -324,6 +396,9 @@ const WARN=()=>LIMIT()-2;
 const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"roster");
 const rosterName=()=>"your "+rosterWord();
 const rosterTitle=()=>"Your "+rosterWord();
+/* The top of the range stops being a number: somebody in a small town needs no
+   ceiling at all, and they are the people a radius starves first. */
+const distanceText=()=>S.set.distance>=100?"Anywhere":"Within "+S.set.distance+" miles";
 
 /* Subscribing adds slots; cancelling takes them away. Empty slots go first, so
    cancelling never drops somebody who is still in your roster. */
@@ -339,7 +414,7 @@ function setSubscribed(v){
   }
   render();
 }
-const HANA=P("hana","Hana",28,"Greenpoint","Brooklyn","5 ft 6","Landscape architect",[2],
+const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2],
   [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
   ["Street trees","Drainage","Chairs outdoors"],"woman","she/her");
 
@@ -495,6 +570,7 @@ const S={
   set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
        daily:true,time:"9:00",newPeople:true,msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
+       locationPermission:"notAsked",
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
        visibility:"Anyone Arch picks me for",blocked:[]},
   edit:null,
@@ -579,7 +655,7 @@ const vitals=p=>`<div class="chips">
   <div class="chip">${p.age}</div>
   ${p.gender?`<div class="chip">${esc(gLabel(p.gender))}</div>`:""}
   ${p.pronouns?`<div class="chip">${esc(p.pronouns)}</div>`:""}
-  <div class="chip">${esc(p.hood)}, ${esc(p.city)}</div>
+  ${p.place?`<div class="chip">${esc(placeLabel(p.place))}</div>`:""}
   <div class="chip">${esc(p.h)}</div><div class="chip">${esc(p.work)}</div></div>`;
 
 const photoBox=(t,ar,extra="")=>`<div class="photo ${extra}" style="${tone(t)}; aspect-ratio:${ar}"></div>`;
@@ -774,7 +850,7 @@ function requestsRoot(){
         <div style="display:flex; gap:12px; align-items:center">
           <div class="avatar" style="width:44px;height:44px;border-radius:22px;${tone(c.person.photos[0])}"></div>
           <div><div class="subhead">${esc(c.person.name)}</div>
-            <div class="footnote mortar">${esc(c.person.hood)}, ${esc(c.person.city)}</div></div>
+            <div class="footnote mortar">${esc(placeLabel(c.person.place))}</div></div>
           <div style="flex:1"></div>
           <div class="footnote mortar">${esc(c.when)}</div></div>
         <div class="quoted mt-s"><div class="footnote mortar">${esc(q[0])}</div>
@@ -1148,7 +1224,7 @@ function settingsSections(){
       ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
     ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
-      ["d-distance","Distance","Within "+x.distance+" miles","push"],
+      ["d-distance","Distance",distanceText(),"push"],
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
       ["d-intent","Looking for",x.intent,"push"],
       ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
@@ -1219,11 +1295,12 @@ const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch P
 function settingDetail(id){
   const x=S.set; let b="";
   if(id==="d-distance"){
-    b='<div class="v gap-s">'+HEADING("Within "+x.distance+" miles")
-     +'<input class="slider" type="range" min="1" max="50" value="'+x.distance+'" data-s="distance">'
+    b='<div class="v gap-s">'+HEADING(distanceText())
+     +'<input class="slider" type="range" min="5" max="100" value="'+x.distance+'" data-s="distance">'
      +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
-     +'<span>1 mile</span><span>50 miles</span></div></div>'
-     +NOTE("Everyone in "+rosterName()+" is inside this. Widening it gives Arch more people to choose from &mdash; it does not give you more slots.");
+     +'<span>5 miles</span><span>Anywhere</span></div></div>'
+     +NOTE("Everyone in "+rosterName()+" is inside this. Widening it gives Arch more people to choose from &mdash; it does not give you more slots.")
+     +NOTE("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.");
   } else if(id==="d-age"){
     b='<div class="v gap-s">'+HEADING(x.minAge+" to "+x.maxAge)
      +'<div id="rangeTrack" class="rangetrack"><div class="rangefill"></div>'
@@ -1358,13 +1435,15 @@ function onboarding(){
         <div class="field onNight"><div class="lbl">Email</div><input id="obEmail" value="${esc(o.email)}" placeholder="sam@example.com"></div></div>`;
     enabled=o.name.trim()&&o.email.includes("@");
   } else if(step==="about"){
-    const loc=[o.hood.trim(),o.city.trim()].filter(Boolean).join(", ");
+    const loc=placeLabel(o.place);
     body=`<div class="titleL">About you</div>
       <div class="body mortar mt-s">The facts that sit under your name. Nothing else is asked.</div>
       <div class="v gap-xs mt-xl">
         <div class="field onNight"><div class="lbl">Age</div><input id="obAge" inputmode="numeric" value="${esc(o.age)}" placeholder="30"></div>
-        <div class="field onNight"><div class="lbl">Neighbourhood</div><input id="obHood" value="${esc(o.hood)}" placeholder="Fort Greene"></div>
-        <div class="field onNight"><div class="lbl">City</div><input id="obCity" value="${esc(o.city)}" placeholder="Brooklyn"></div>
+        <button class="field onNight" data-a="obPlace" style="display:flex; width:100%">
+          <div class="lbl">Where you live</div>
+          <div class="callout ${o.place?"":"mortar"}" style="flex:1">${o.place?esc(loc):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
         <button class="field onNight" data-a="obHeight" style="display:flex; width:100%">
           <div class="lbl">Height</div>
           <div class="callout ${o.height?"":"mortar"}" style="flex:1">${o.height?esc(o.height):"Choose"}</div>
@@ -1377,7 +1456,7 @@ function onboarding(){
         <input id="obPronouns" maxlength="20" value="${esc(o.pronouns)}" placeholder="Optional"></div>
       ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
         <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
-    enabled=o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim()&&o.gender;
+    enabled=o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender;
   } else if(step==="seeking"){
     /* Its own step rather than another row on "About you": it is not a fact about
        you, it is a requirement, and it belongs with the questionnaire's three hard
@@ -1551,7 +1630,7 @@ function composerSheet(id){
   openSheet(`<div style="display:flex; gap:12px; align-items:center; padding-top:8px">
       <div style="width:44px; height:44px; border-radius:12px; ${tone(p.photos[0])}"></div>
       <div><div class="subhead">${esc(p.name)}</div>
-        <div class="footnote mortar">${esc(p.hood)}, ${esc(p.city)}</div></div></div>
+        <div class="footnote mortar">${esc(placeLabel(p.place))}</div></div></div>
     ${q}
     <div class="field mt-m" style="align-items:flex-start"><textarea id="composeText" rows="5"
       placeholder="${S.selected?"Say something about it.":"Start a conversation."}"></textarea></div>
@@ -1571,8 +1650,13 @@ function composerSheet(id){
 function openDetails(){
   openSheet(`<div class="titleM" style="padding-top:8px">Your details</div>
       <div class="v gap-xs mt-m">
-        ${[["Name",S.you.name],["Age",S.you.age],["Neighbourhood",S.you.hood],["City",S.you.city]]
+        ${[["Name",S.you.name],["Age",S.you.age]]
           .map(([l,v])=>`<div class="field"><div class="lbl">${l}</div><input value="${esc(v)}"></div>`).join("")}
+        <button class="field" data-a="youPlace" style="display:flex; width:100%">
+          <div class="lbl">Where you live</div>
+          <div class="callout ${S.you.place?"":"mortar"}" style="flex:1">${
+            S.you.place?esc(placeLabel(S.you.place)):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
         <button class="field" data-a="youHeight" style="display:flex; width:100%">
           <div class="lbl">Height</div>
           <div class="callout ${S.you.h?"":"mortar"}" style="flex:1">${S.you.h?esc(S.you.h):"Choose"}</div>
@@ -1583,10 +1667,53 @@ function openDetails(){
           <div class="opt ${S.you.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
       <div class="field mt-m"><div class="lbl">Pronouns</div>
         <input maxlength="20" value="${esc(S.you.pronouns)}" placeholder="Optional"></div>`
-    +`<div class="footnote mortar mt-s">Your neighbourhood and city show together, as
-        ${esc(S.you.hood)}, ${esc(S.you.city)}.</div>
-      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+    +`<button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
+
+/* The picker is the mechanism; the device is a convenience. Asking first and
+   falling back to a list would be two paths, and the fallback is always the one
+   that gets less care — so the list is the path, and a location, when there is
+   one, fills it in.
+
+   A list rather than a map for a reason that is not effort: Arch never shows a
+   distance, so precision here buys nothing visible, and a dropped pin would store
+   roughly where somebody sleeps. A neighbourhood name is already the public chip. */
+function placeSheet(target,query){
+  const cur=target==="ob"?S.onboarding.place:S.you.place;
+  const q=query||"";
+  const searching=!!q.trim();
+  const found=placeSearch(q);
+  const row=p=>`<button data-a="setPlace" data-o="${p.id}" data-t="${target}"
+      style="display:block;width:100%">
+      <div class="opt ${cur&&cur.id===p.id?"sel":""}" style="display:flex; gap:12px; align-items:center">
+        <span style="flex:1">${esc(p.name)}${searching
+          ?`<span class="footnote mortar"> ${esc(p.city)}</span>`:""}</span>
+        ${cur&&cur.id===p.id?'<span class="footnote">&#10003;</span>':""}</div></button>`;
+  let body="";
+  if(!found.length){
+    body=`<div class="v gap-xs"><div class="body">Nothing by that name</div>
+      <div class="footnote mortar">Try the borough or the town instead &mdash; Arch is only
+        in New York so far.</div></div>`;
+  } else if(searching){
+    body=`<div class="v gap-xs">${found.map(row).join("")}</div>`;
+  } else {
+    body=placeGroups().map(([city,list])=>
+      `<div class="v gap-xs"><div class="prompt mortar">${esc(city)}</div>
+        <div class="v gap-xs">${list.map(row).join("")}</div></div>`).join("");
+  }
+  const offer=S.set.locationPermission!=="denied"&&!searching
+    ? `<button data-a="useLocation" data-t="${target}" style="display:block;width:100%">
+        <div class="srow" style="background:var(--stoneRaised); border-radius:var(--r-control)">
+          <div><div class="body">Use my location</div>
+            <div class="footnote mortar" style="margin-top:4px">Fills this in, and places you to
+              about a kilometre. Arch keeps nothing finer than that.</div></div></div></button>`
+    : "";
+  openSheet(`<div class="titleM" style="padding-top:8px">Where you live</div>
+    <div class="field mt-m"><input id="placeSearch" data-t="${target}"
+      placeholder="Search" value="${esc(q)}"></div>
+    <div class="v gap-xl mt-m" style="max-height:420px; overflow-y:auto">${offer}${body}</div>
+    <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
 }
 
 function heightSheet(target){
@@ -1784,6 +1911,24 @@ document.addEventListener("click",e=>{
       closeSheet(); render();
     },
     obHeight:()=>heightSheet("ob"),
+    obPlace:()=>placeSheet("ob"),
+    youPlace:()=>placeSheet("you"),
+    setPlace:()=>{
+      const p=placeById(el.dataset.o);
+      if(el.dataset.t==="ob") S.onboarding.place=p; else S.you.place=p;
+      closeSheet(); render();
+    },
+    /* A location, taken once and immediately rounded. The nearest place fills the
+       chip, because a geocoder saying "Bedford-Stuyvesant" is not what somebody who
+       writes "Bed-Stuy" wants under their name — the picker corrects it. */
+    useLocation:()=>{
+      const fix={lat:40.6913,lon:-73.9742};      // stands in for a device fix
+      S.set.locationPermission="granted";
+      const t=el.dataset.t, target=t==="ob"?S.onboarding:S.you;
+      target.coord=coarse(fix);
+      if(!target.place) target.place=nearestPlace(fix);
+      placeSheet(t);
+    },
     youHeight:()=>heightSheet("you"),
     obGender:()=>{S.onboarding.gender=el.dataset.o; render();},
     obSeeking:()=>{
@@ -1950,11 +2095,18 @@ document.addEventListener("click",e=>{
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
-    const h=document.querySelector(".titleL"); if(h) h.textContent="Within "+t.value+" miles"; return; }
+    const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
+  if(t.id==="placeSearch"){
+    const at=t.selectionStart;
+    placeSheet(t.dataset.t,t.value);
+    const f=document.getElementById("placeSearch");
+    if(f){ f.focus(); f.setSelectionRange(at,at); }
+    return;
+  }
   if(o){
     const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
-               obHood:"hood",obCity:"city",obWork:"work",obPronouns:"pronouns"};
+               obWork:"work",obPronouns:"pronouns"};
     if(map[t.id]){
       o[map[t.id]]=t.id==="obCode"?t.value.replace(/\D/g,"").slice(0,6):t.value;
       const btn=document.querySelector('[data-a="obNext"]');
@@ -1972,7 +2124,7 @@ function refreshCTA(){
   if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
   else if(step==="verify") ok=o.code.length===6;
   else if(step==="identity") ok=!!o.name.trim()&&o.email.includes("@");
-  else if(step==="about") ok=!!(o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim()&&o.gender);
+  else if(step==="about") ok=!!(o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender);
   else if(step==="seeking") ok=o.seeking.length>0;
   else if(step==="answers") ok=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
   else if(step==="interests") ok=o.interests.filter(t=>t.trim()).length>=3;
@@ -1982,7 +2134,7 @@ function refreshCTA(){
 
 function startOnboarding(){
   S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
-    age:"",hood:"",city:"",height:"",work:"",gender:null,pronouns:"",seeking:[],
+    age:"",place:null,coord:null,height:"",work:"",gender:null,pronouns:"",seeking:[],
     photos:[],up:[],questions:["","",""],answers:["","",""],
     interests:["","",""],q:null,qa:{}};
   render();
@@ -1990,8 +2142,9 @@ function startOnboarding(){
 function finishOnboarding(){
   const o=S.onboarding;
   if(o.name.trim()){
-    S.you.name=o.name.trim(); S.you.age=o.age||S.you.age; S.you.hood=o.hood||S.you.hood;
-    S.you.city=o.city||S.you.city; S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
+    S.you.name=o.name.trim(); S.you.age=o.age||S.you.age;
+    S.you.place=o.place||S.you.place; S.you.coord=o.coord||S.you.coord;
+    S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
     S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
     if(o.seeking.length) S.set.seeking=o.seeking.slice();
     if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }

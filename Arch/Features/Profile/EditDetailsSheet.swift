@@ -16,17 +16,18 @@ struct EditDetailsSheet: View {
     @State private var age = ""
     @State private var gender: Gender?
     @State private var pronouns = ""
-    @State private var neighbourhood = ""
-    @State private var city = ""
+    @State private var place: Place?
     @State private var height = ""
     @State private var work = ""
     @State private var isPickingHeight = false
+    @State private var isPickingPlace = false
     @Environment(\.dismiss) private var dismiss
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
             && Int(age) != nil
             && gender != nil
+            && place != nil
     }
 
     var body: some View {
@@ -40,8 +41,7 @@ struct EditDetailsSheet: View {
                 VStack(spacing: ArchSpacing.xs) {
                     ArchField(text: $name, label: "Name")
                     ArchField(text: $age, label: "Age", keyboard: .numberPad)
-                    ArchField(text: $neighbourhood, label: "Neighbourhood")
-                    ArchField(text: $city, label: "City")
+                    PlaceRow(place: place) { isPickingPlace = true }
                     HeightRow(height: height) { isPickingHeight = true }
                     ArchField(text: $work, label: "Work")
                 }
@@ -50,11 +50,6 @@ struct EditDetailsSheet: View {
 
                 ArchField(text: $pronouns, label: "Pronouns", placeholder: "Optional")
 
-                Text("Your neighbourhood and city show together, as \(previewLocation).")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
-
                 ArchButton(title: "Save", isEnabled: isValid) {
                     onSave(
                         PersonDetails(
@@ -62,8 +57,7 @@ struct EditDetailsSheet: View {
                             age: Int(age) ?? person.age,
                             gender: gender,
                             pronouns: pronouns.trimmingCharacters(in: .whitespaces),
-                            neighbourhood: neighbourhood.trimmingCharacters(in: .whitespaces),
-                            city: city.trimmingCharacters(in: .whitespaces),
+                            place: place,
                             height: height,
                             work: work.trimmingCharacters(in: .whitespaces)
                         )
@@ -86,14 +80,26 @@ struct EditDetailsSheet: View {
         .sheet(isPresented: $isPickingHeight) {
             HeightPickerSheet(current: height) { height = $0 }
         }
+        .sheet(isPresented: $isPickingPlace) {
+            PlacePickerView(
+                current: place,
+                onChoose: { place = $0; isPickingPlace = false },
+                onCancel: { isPickingPlace = false }
+            )
+            .padding(.horizontal, ArchSpacing.screenMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(ArchColor.stone)
+            .presentationDetents([.large])
+            .presentationCornerRadius(ArchRadius.sheet)
+            .presentationBackground(ArchColor.stone)
+        }
         .onAppear {
             let details = person.details
             name = details.name
             age = details.age == 0 ? "" : "\(details.age)"
             gender = details.gender
             pronouns = details.pronouns
-            neighbourhood = details.neighbourhood
-            city = details.city
+            place = details.place
             height = details.height
             work = details.work
         }
@@ -115,12 +121,6 @@ struct EditDetailsSheet: View {
         }
     }
 
-    private var previewLocation: String {
-        let n = neighbourhood.trimmingCharacters(in: .whitespaces)
-        let c = city.trimmingCharacters(in: .whitespaces)
-        if n.isEmpty { return c.isEmpty ? "one chip" : c }
-        return c.isEmpty ? n : "\(n), \(c)"
-    }
 }
 
 #Preview("Edit details") {
