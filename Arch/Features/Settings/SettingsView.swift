@@ -208,7 +208,7 @@ struct SettingsToggleRow: View {
     NavigationStack {
         SettingsView(store: {
             let s = SettingsStore()
-            s.dailyFiveAlert = false
+            s.messageAlert = false
             s.isPaused = true
             return s
         }())

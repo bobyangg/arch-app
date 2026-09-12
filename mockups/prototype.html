@@ -104,6 +104,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
           border-radius:var(--r-photo); display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:4px;}
 
+/* Above the tabs rather than inside a screen: losing a connection happens to the
+   app, not to the roster. It pushes the app down rather than floating over it —
+   a bar that overlays content covers what you were reading at the moment you least
+   want to lose your place. No red: this is a train tunnel, not a fault. */
+.offline{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
+         padding:12px 20px; text-align:center;}
 .bottombar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
            padding:12px 20px calc(4px + env(safe-area-inset-bottom,0px));}
 
@@ -573,7 +579,7 @@ const S={
   you:JSON.parse(JSON.stringify(YOU)),
   plan:1,
   set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
-       daily:true,time:"9:00",newPeople:true,msgAlert:true,
+       msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
@@ -581,6 +587,9 @@ const S={
   edit:null,
   report:{reason:null,block:true,sent:false},
   number:null,
+  /* A design build has no network to lose. A real one watches the system and
+     writes here; everything else reads it. */
+  offline:false,
   onboarding:null,
   /* null, or {target, left, ids, step, zoom, ox, oy}. step -1 is the library grid. */
   picker:null,
@@ -748,12 +757,16 @@ function dailyRoot(){
     /* Five identical open-slot cards stacked up reads as five separate pieces of
        bad news. One sentence is the whole state. */
     h+=`<div class="v gap-s">
-      <div class="titleM">${S.firstMorning
-        ? "Your first five arrive in the morning"
-        : "All "+numWord(S.slots.length)+" slots are open"}</div>
-      <div class="body mortar">${S.firstMorning
-        ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
-        : "People arrive at nine, wherever you are. Nothing here needs fixing."}</div></div>`;
+      <div class="titleM">${S.offline
+        ? "Arch could not load your roster"
+        : S.firstMorning
+          ? "Your first five arrive in the morning"
+          : "All "+numWord(S.slots.length)+" slots are open"}</div>
+      <div class="body mortar">${S.offline
+        ? "This is a connection, not your roster. Whoever is in it is still in it."
+        : S.firstMorning
+          ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
+          : "People arrive at nine, wherever you are. Nothing here needs fixing."}</div></div>`;
   } else if(open.length){
     h+=`<div class="hairline mt-xxxl"></div>
       <div class="footnote mortar mt-m">New people arrive in these slots.</div>
@@ -885,15 +898,20 @@ function thread(id){
       <div class="quoted" style="margin-bottom:16px">
         <div class="footnote mortar">${esc(q[0])}</div>
         <div class="callout mt-xxs" style="margin-top:4px">${esc(q[1])}</div></div>`;
+  /* Only the last thing you wrote is still in question. A column of "Sent" down
+     the whole thread is clutter answering something nobody is still asking. */
+  let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
   c.msgs.forEach((m,i)=>{
     /* No read receipts and no "delivered" — what the other person has done with
        your message is between them and their phone. A message that did not leave
        *yours* is not information about them, and leaving it looking sent would be
        the app lying about its own end of the wire. */
     const state=m[3]||"sent";
+    const shows=i===lastOut;
     const foot=state==="failed"
       ? `<button class="footnote mortar" data-a="retrySend" data-i="${i}">Not sent. Tap to try again.</button>`
-      : `<div class="footnote mortar">${state==="sending"?"Sending":esc(m[2])}</div>`;
+      : `<div class="footnote mortar">${shows&&state==="sending"?"Sending"
+          :shows&&state==="sent"?"Sent":esc(m[2])}</div>`;
     h+=`<div class="msg ${m[0]==="out"?"out":""}" ${state==="sent"?"":'style="opacity:.55"'}>
       <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
       ${foot}</div>`;
@@ -1230,9 +1248,9 @@ function settingsSections(){
      taken the group away. */
   let notif;
   if(x.notifsAllowed){
-    notif=[["n-daily","Your daily five",null,"toggle"]];
-    if(x.daily) notif.push(["n-time","Time",x.time,"push"]);
-    notif.push(["n-new","New people",null,"toggle"],["n-msg","Messages",null,"toggle"]);
+    /* One, not three. Two of the old three fired at the same moment for the same
+       reason, and both were the app telling you to come back. */
+    notif=[["n-msg","Messages",null,"toggle"]];
   } else {
     notif=[["n-blocked","Notifications are off","In your iPhone settings","push"]];
   }
@@ -1252,7 +1270,7 @@ function settingsSections(){
     ["Help",[["h-how","How Arch works",null,"push"],["h-safety","Safety",null,"push"],
       ["h-contact","Contact us",null,"push"]]]];
 }
-const TOGGLES={"n-daily":"daily","n-new":"newPeople","n-msg":"msgAlert","d-pause":"paused"};
+const TOGGLES={"n-msg":"msgAlert","d-pause":"paused"};
 
 function settings(){
   let h=navbar("Settings");
@@ -1282,7 +1300,10 @@ function settings(){
     +'<div class="caption mortar">&rsaquo;</div></div></button>'
     +'<button class="group" data-a="signOutOpen" style="display:block;width:100%">'
     +'<div class="srow"><div class="t mortar">Sign out</div></div></button>'
-    +'<div class="footnote mortar center">Arch 1.0</div></div></div></div>';
+    +'<div class="footnote mortar center">Arch 1.0</div>'
+    +'<button class="footnote mortar center" data-a="toggleOffline" style="width:100%">'
+    +'Prototype only: '+(S.offline?"restore the connection":"simulate no connection")
+    +'</button></div></div></div>';
   return h;
 }
 
@@ -1307,7 +1328,7 @@ function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div
 const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
   "d-seeking":"Who you want to meet",
-  "n-time":"Time","d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
+  "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
   "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
 
@@ -1344,13 +1365,10 @@ function settingDetail(id){
     b='<div class="titleM">Arch cannot send you anything</div>'
      +NOTE("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that &mdash; turn them back on there and your choices come back exactly as you left them.")
      +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>'
-     +NOTE("Arch only ever sends two: one in the morning when your roster is ready, and one when somebody writes to you.");
+     +NOTE("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.");
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
-  } else if(id==="n-time"){
-    b=opts(["7:00","8:00","9:00","10:00","12:00","18:00"],x.time,"setTime")
-     +NOTE(rosterTitle()+" are ready at the same time every day. This only changes when Arch tells you about them.");
   } else if(id==="p-visible"){
     b=opts(["Anyone Arch picks me for","Nobody new while I have unread messages"],x.visibility,"setVisibility")
      +NOTE("Either way you keep the people already in "+rosterName()+", and they keep you. To come off Arch entirely, pause your profile.");
@@ -1557,11 +1575,12 @@ function onboarding(){
     body+=`</div>`;
   } else {
     body=`<div class="titleL">Notifications</div>
-      <div class="body mortar mt-s">Two kinds, and nothing else.</div>
+      <div class="body mortar mt-s">One kind, and nothing else.</div>
       <div class="v gap-m mt-xl">
-        <div class="body">One in the morning, when your five are ready.</div>
-        <div class="body">One when somebody writes to you.</div></div>
-      <div class="footnote mortar mt-xl">No reminders to come back, and nothing at all in the evening.</div>`;
+        <div class="body">When somebody writes to you. That is the whole list.</div></div>
+      <div class="footnote mortar mt-xl">Your five are waiting whenever you open Arch, and it
+        will not tell you they are there &mdash; that is a reason to open an app, not a reason
+        to interrupt your day. No reminders to come back, and nothing at all in the evening.</div>`;
     cta="Allow notifications";
   }
 
@@ -1581,8 +1600,12 @@ function onboarding(){
 function render(){
   const r=document.getElementById("root");
   /* Above onboarding, because the picker is opened from inside it too. */
-  if(S.picker){ r.innerHTML=S.picker.step<0?pickerRoot():cropRoot(); return; }
-  if(S.onboarding){ r.innerHTML=onboarding(); return; }
+  const offlineBar=S.offline?`<div class="offline">
+      <div class="subhead">No connection</div>
+      <div class="footnote mortar" style="margin-top:4px">You can read what is already here.
+        Anything you write waits until Arch is back.</div></div>`:"";
+  if(S.picker){ r.innerHTML=offlineBar+(S.picker.step<0?pickerRoot():cropRoot()); return; }
+  if(S.onboarding){ r.innerHTML=offlineBar+onboarding(); return; }
   const t=current();
   let screen;
   if(!t){
@@ -1603,7 +1626,7 @@ function render(){
     return `<button class="tab" data-a="tab" data-k="${k}" aria-selected="${S.tab===k}">
       <div class="glyph">${glyph(k,S.tab===k)}${badge}</div><div class="lbl">${label}</div></button>`;
   }).join("");
-  r.innerHTML=screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
+  r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
 }
 
 /* ============================ sheets ============================ */
@@ -1962,6 +1985,9 @@ document.addEventListener("click",e=>{
       render();
     },
     unpause:()=>{S.set.paused=false; render();},
+    /* Not part of the design — there is no network here to lose, and a real build
+       watches the system instead. It is the only way to see the state on a phone. */
+    toggleOffline:()=>{S.offline=!S.offline; render();},
     allowNotifs:()=>{S.set.notifsAllowed=true; S.stacks.you=[{name:"settings"}]; render();},
     deleteOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Delete your account?</div>
       <div class="body mortar mt-s">Your profile goes now, and every conversation you are
@@ -2030,9 +2056,8 @@ document.addEventListener("click",e=>{
     retrySend:()=>{
       const c=S.convos.find(x=>x.id===current().id), m=c.msgs[+el.dataset.i];
       m[3]="sending"; render();
-      setTimeout(()=>{ m[3]="sent"; m[2]="Just now"; render(); },1400);
+      setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; m[2]="Just now"; render(); },1400);
     },
-    setTime:()=>{S.set.time=el.dataset.o; render();},
     setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
     goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
     subscribe:()=>setSubscribed(true),
@@ -2115,8 +2140,10 @@ document.addEventListener("click",e=>{
     threadSend:()=>{
       const i=document.getElementById("threadInput"); if(!i||!i.value.trim()) return;
       const c=S.convos.find(x=>x.id===current().id);
-      c.msgs.push(["out",i.value.trim(),"Just now"]); c.when="Just now"; render();
+      c.msgs.push(["out",i.value.trim(),"Just now","sending"]); c.when="Just now"; render();
       const sc=document.querySelector(".screen"); if(sc) sc.scrollTop=sc.scrollHeight;
+      const m=c.msgs[c.msgs.length-1];
+      setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; render(); },900);
     },
     send:()=>{
       const t=document.getElementById("composeText");

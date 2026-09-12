@@ -18,6 +18,10 @@ struct DailyFiveView: View {
     /// refilling stops.
     var isPaused: Bool = false
     var onUnpause: () -> Void = {}
+    /// Only so the empty state can tell the truth. An empty roster and a roster
+    /// that never arrived looked identical, and the empty one says "nothing here
+    /// needs fixing" — which is a reassuring sentence and, offline, a lie.
+    var isOffline: Bool = false
     let onDismiss: (Person) -> Void
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
@@ -175,16 +179,20 @@ struct DailyFiveView: View {
     /// state — and on the first morning it is not bad news at all.
     private var emptyNotice: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(roster.isFirstMorning
-                 ? "Your first five arrive in the morning"
-                 : "All \(ArchCopy.word(roster.capacity)) slots are open")
+            Text(isOffline
+                 ? "Arch could not load your roster"
+                 : roster.isFirstMorning
+                   ? "Your first five arrive in the morning"
+                   : "All \(ArchCopy.word(roster.capacity)) slots are open")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(roster.isFirstMorning
-                 ? "Arch is choosing them overnight. There is nothing to do until then — it is not a queue and there is no way to hurry it."
-                 : "People arrive at nine, wherever you are. Nothing here needs fixing.")
+            Text(isOffline
+                 ? "This is a connection, not your roster. Whoever is in it is still in it."
+                 : roster.isFirstMorning
+                   ? "Arch is choosing them overnight. There is nothing to do until then — it is not a queue and there is no way to hurry it."
+                   : "People arrive at nine, wherever you are. Nothing here needs fixing.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -278,6 +286,18 @@ struct DailyFiveView: View {
 
 #Preview("Everybody gone") {
     DailyFivePreview(roster: MockData.rosterEmpty)
+}
+
+/// Offline with nothing loaded. The sentence that used to sit here said nothing
+/// needed fixing, which was the wrong thing to say to somebody in a tunnel.
+#Preview("Offline, nothing loaded") {
+    DailyFiveView(
+        roster: MockData.rosterEmpty,
+        isOffline: true,
+        onDismiss: { _ in },
+        onSend: { _, _, _ in MockData.conversations[0] }
+    )
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Paused") {

@@ -9,10 +9,16 @@ import SwiftUI
 /// in `limestone`. Position and surface lightness say who is speaking, which is
 /// enough.
 ///
-/// **No read receipts, and no "delivered".** What the other person has done with
-/// your message is between them and their phone. The one exception is a message
-/// that did not leave *yours*, which is not information about them at all — and
-/// leaving it looking sent would be the app lying about its own end of the wire.
+/// **No read receipts, and nothing about their phone.** What the other person has
+/// done with your message is between them and their device, and "delivered" is a
+/// quiet presence signal — it says their phone is on and online, which is the same
+/// class of thing as the green dot Arch does not have.
+///
+/// Your own end of the wire is different, and the app owes you the truth about it:
+/// a bad connection means a message can sit there looking sent when it never left.
+/// So the last message you wrote says whether it got out, and the ones above it go
+/// back to being timestamps — a column of "Sent" down the whole thread is clutter
+/// answering a question nobody is still asking.
 struct MessageThreadView: View {
     let conversation: Conversation
     /// Whether this person is still holding one of your slots, which changes what
@@ -125,6 +131,10 @@ struct MessageThreadView: View {
         }
     }
 
+    private var lastOutgoing: Message? {
+        conversation.messages.last { $0.isOutgoing }
+    }
+
     private var transcript: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -134,7 +144,12 @@ struct MessageThreadView: View {
                 }
 
                 ForEach(conversation.messages) { message in
-                    MessageBubble(message: message) { onRetry(message) }
+                    MessageBubble(
+                        message: message,
+                        // Only the last thing you wrote is still in question.
+                        showsDelivery: message.id == lastOutgoing?.id,
+                        onRetry: { onRetry(message) }
+                    )
                 }
             }
             .padding(.horizontal, ArchSpacing.screenMargin)
@@ -231,6 +246,9 @@ struct MessageThreadView: View {
 
 struct MessageBubble: View {
     let message: Message
+    /// True for the last message you sent, which is the only one whose fate is
+    /// still an open question.
+    var showsDelivery: Bool = false
     var onRetry: () -> Void = {}
 
     var body: some View {
@@ -260,7 +278,7 @@ struct MessageBubble: View {
                     }
                     .buttonStyle(PressScaleStyle(scale: 1))
                 } else {
-                    Text(message.delivery == .sending ? "Sending" : message.timestamp)
+                    Text(footnote)
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
                         .padding(.horizontal, ArchSpacing.xxs)
@@ -274,6 +292,17 @@ struct MessageBubble: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel(label)
+    }
+
+    /// "Sending" while it is in the air, "Sent" once it is out, and the timestamp
+    /// for everything that is no longer a question.
+    private var footnote: String {
+        guard message.isOutgoing, showsDelivery else { return message.timestamp }
+        switch message.delivery {
+        case .sending: return "Sending"
+        case .sent:    return "Sent"
+        case .failed:  return message.timestamp
+        }
     }
 
     private var label: String {
