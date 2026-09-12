@@ -10,6 +10,8 @@ struct SettingsView: View {
     /// Sends the reader to the Premium tab, since a paywall inside a settings push
     /// would be the same screen in two places.
     var onOpenPremium: () -> Void = {}
+    /// Takes the reader back to onboarding, which is what a deleted account is.
+    var onDeleteAccount: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
 
@@ -33,7 +35,12 @@ struct SettingsView: View {
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(for: SettingsRow.self) { row in
-            SettingsDetailView(row: row, store: store, onOpenPremium: onOpenPremium)
+            SettingsDetailView(
+                row: row,
+                store: store,
+                onOpenPremium: onOpenPremium,
+                onDeleteAccount: onDeleteAccount
+            )
         }
     }
 

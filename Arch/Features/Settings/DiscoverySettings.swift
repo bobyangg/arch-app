@@ -68,6 +68,32 @@ struct AgeSetting: View {
     }
 }
 
+/// Who you want to meet.
+///
+/// A requirement, not a weight. It sits in Discovery with distance and age because
+/// that is where you would look for it, but it behaves like the questionnaire's
+/// three hard questions: nobody outside it reaches you, whatever else lines up.
+struct SeekingSetting: View {
+    let store: SettingsStore
+
+    var body: some View {
+        SettingsPage(title: "Who you want to meet") {
+            VStack(spacing: ArchSpacing.xs) {
+                ForEach(Gender.allCases) { option in
+                    OptionRow(
+                        text: option.plural,
+                        isSelected: store.seeking.contains(option)
+                    ) {
+                        withAnimation(ArchMotion.quick) { store.toggleSeeking(option) }
+                    }
+                }
+            }
+
+            SettingNote("Arch will not put anyone outside this in \(store.rosterName), whatever else lines up. It is not shown on your profile, and nobody is told what you picked.")
+        }
+    }
+}
+
 /// What you are here for.
 struct IntentionSetting: View {
     let store: SettingsStore
@@ -99,5 +125,10 @@ struct IntentionSetting: View {
 
 #Preview("Looking for") {
     NavigationStack { IntentionSetting(store: SettingsStore()) }
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Who you want to meet") {
+    NavigationStack { SeekingSetting(store: SettingsStore()) }
         .preferredColorScheme(.dark)
 }

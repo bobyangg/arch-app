@@ -65,7 +65,10 @@ enum PromptLibrary {
     /// about the person rather than three versions of one.
     /// compactMap rather than force-unwraps: this runs when a profile is created,
     /// and a typo in an id should give a shorter list, not a crash at launch.
-    static let starting: [PromptQuestion] = ["q-think", "q-slower", "q-lost"]
+    /// One from "How you spend your time", one from "What you notice", one from
+    /// "What you think". Two of these used to come from the same group, which made
+    /// the opening three narrower than the library they are drawn from.
+    static let starting: [PromptQuestion] = ["q-think", "q-twice", "q-lost"]
         .compactMap { id in all.first { $0.id == id } }
 
     static func question(matching text: String) -> PromptQuestion? {

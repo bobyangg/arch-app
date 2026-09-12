@@ -10,6 +10,11 @@ struct RootTabView: View {
     /// Built by onboarding and handed over, so the profile you filled in is the
     /// one the You tab edits.
     let profile: ProfileStore
+    /// What iOS answered when onboarding asked. Seeded here so "Not now" is
+    /// reflected in Settings from the first launch rather than the second.
+    var allowsNotifications: Bool = true
+    /// Deleting an account puts you back where you came from.
+    var onDeleteAccount: () -> Void = {}
 
     @State private var store = DailyFiveStore()
     @State private var settings = SettingsStore()
@@ -21,6 +26,7 @@ struct RootTabView: View {
             TabBar(selection: $selection, unreadCount: store.unreadCount)
         }
         .background(ArchColor.night)
+        .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
     }
 
     /// Blocking writes to two places: the roster and conversations live in the
@@ -60,6 +66,8 @@ struct RootTabView: View {
                     conversationCount: store.openConversations.count,
                     conversationLimit: store.conversationLimit,
                     onOpenMessages: { selection = .messages },
+                    isPaused: settings.isPaused,
+                    onUnpause: { settings.isPaused = false },
                     onDismiss: { store.dismiss($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
                     actions: conversationActions
@@ -81,7 +89,8 @@ struct RootTabView: View {
                     store: profile,
                     settings: settings,
                     writtenAbout: MockData.writtenAbout,
-                    onOpenPremium: { selection = .premium }
+                    onOpenPremium: { selection = .premium },
+                    onDeleteAccount: onDeleteAccount
                 )
             }
         }

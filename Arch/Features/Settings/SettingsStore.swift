@@ -15,12 +15,18 @@ final class SettingsStore {
     var isSubscribed = false
 
     // Notifications
+    /// What iOS has decided, which is not the same thing as what you want.
+    /// When this is false the three switches below cannot do anything, so they are
+    /// not shown pretending to.
+    var systemNotificationsAllowed = true
     var dailyFiveAlert = true
     var dailyFiveTime = "9:00"
     var newPeopleAlert = true
     var messageAlert = true
 
     // Discovery
+    /// A requirement rather than a preference: nobody outside it reaches you.
+    var seeking: Set<Gender> = [.man, .woman, .nonBinary]
     var distance = 10
     var minAge = 26
     var maxAge = 36
@@ -46,6 +52,9 @@ final class SettingsStore {
     /// The same word `Roster.name` derives from the slots themselves.
     var rosterName: String { isSubscribed ? "your seven" : "your five" }
     var rosterTitle: String { isSubscribed ? "Your seven" : "Your five" }
+    var seekingText: String { Gender.sentence(seeking) }
+    /// The row says so, so that pausing does not need a second screen to be legible.
+    var pausedText: String? { isPaused ? "Paused" : nil }
     var blockedText: String { blocked.isEmpty ? "None" : "\(blocked.count)" }
 
     /// The whole list, rebuilt from current values.
@@ -54,28 +63,39 @@ final class SettingsStore {
     /// row that flips gets a switch — never both, and never a switch hidden behind
     /// a push.
     var sections: [SettingsSection] {
-        var notifications: [SettingsRow] = [
-            .init(id: "n-daily", title: "Your daily five", control: .toggle(dailyFiveAlert))
-        ]
-        // The time only exists if the notification does.
-        if dailyFiveAlert {
-            notifications.append(.init(id: "n-time", title: "Time", detail: dailyFiveTime, control: .push))
+        var notifications: [SettingsRow] = []
+        if systemNotificationsAllowed {
+            notifications.append(.init(id: "n-daily", title: "Your daily five", control: .toggle(dailyFiveAlert)))
+            // The time only exists if the notification does.
+            if dailyFiveAlert {
+                notifications.append(.init(id: "n-time", title: "Time", detail: dailyFiveTime, control: .push))
+            }
+            notifications.append(.init(id: "n-new", title: "New people", control: .toggle(newPeopleAlert)))
+            notifications.append(.init(id: "n-msg", title: "Messages", control: .toggle(messageAlert)))
+        } else {
+            // Three switches that cannot do anything are worse than one row that
+            // says why. This is the only place in Settings a row stands in for a
+            // group, and it is because iOS has taken the group away.
+            notifications.append(
+                .init(id: "n-blocked", title: "Notifications are off",
+                      detail: "In your iPhone settings", control: .push)
+            )
         }
-        notifications.append(.init(id: "n-new", title: "New people", control: .toggle(newPeopleAlert)))
-        notifications.append(.init(id: "n-msg", title: "Messages", control: .toggle(messageAlert)))
 
         return [
             SettingsSection(id: "account", title: "Account", rows: [
                 .init(id: "a-phone", title: "Phone number", detail: phone, control: .push),
                 .init(id: "a-email", title: "Email", detail: email, control: .push),
-                .init(id: "a-premium", title: "Arch Premium", detail: premiumText, control: .push)
+                .init(id: "a-premium", title: "Arch Premium", detail: premiumText, control: .push),
+                .init(id: "a-delete", title: "Delete your account", control: .push)
             ]),
             SettingsSection(id: "notifications", title: "Notifications", rows: notifications),
             SettingsSection(id: "discovery", title: "Discovery", rows: [
+                .init(id: "d-seeking", title: "Who you want to meet", detail: seekingText, control: .push),
                 .init(id: "d-distance", title: "Distance", detail: distanceText, control: .push),
                 .init(id: "d-age", title: "Age range", detail: ageText, control: .push),
                 .init(id: "d-intent", title: "Looking for", detail: lookingFor, control: .push),
-                .init(id: "d-pause", title: "Pause my profile", control: .toggle(isPaused))
+                .init(id: "d-pause", title: "Pause my profile", detail: pausedText, control: .toggle(isPaused))
             ]),
             SettingsSection(id: "privacy", title: "Privacy", rows: [
                 .init(id: "p-visible", title: "Who can see me", detail: visibility, control: .push),
@@ -97,6 +117,17 @@ final class SettingsStore {
         case "n-msg":   messageAlert.toggle()
         case "d-pause": isPaused.toggle()
         default: break
+        }
+    }
+
+    /// Never empties. A preference for nobody is not a preference, and the row
+    /// would silently stop matching anyone with nothing on screen saying why.
+    func toggleSeeking(_ gender: Gender) {
+        if seeking.contains(gender) {
+            guard seeking.count > 1 else { return }
+            seeking.remove(gender)
+        } else {
+            seeking.insert(gender)
         }
     }
 

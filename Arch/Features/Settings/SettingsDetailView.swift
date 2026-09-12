@@ -72,13 +72,17 @@ struct SettingsDetailView: View {
     let row: SettingsRow
     let store: SettingsStore
     var onOpenPremium: () -> Void = {}
+    var onDeleteAccount: () -> Void = {}
 
     var body: some View {
         switch row.id {
         case "a-phone":    PhoneSetting(store: store)
         case "a-email":    EmailSetting(store: store)
         case "a-premium":  PremiumSetting(store: store, onOpen: onOpenPremium)
+        case "a-delete":   DeleteAccountSetting(store: store, onDelete: onDeleteAccount)
         case "n-time":     TimeSetting(store: store)
+        case "n-blocked":  NotificationsBlockedSetting(store: store)
+        case "d-seeking":  SeekingSetting(store: store)
         case "d-distance": DistanceSetting(store: store)
         case "d-age":      AgeSetting(store: store)
         case "d-intent":   IntentionSetting(store: store)
@@ -89,6 +93,9 @@ struct SettingsDetailView: View {
         case "h-safety":   HelpPage(topic: .safety)
         case "h-contact":  HelpPage(topic: .contact)
         default:
+            // Not dead code: a `switch` over a `String` has no exhaustive form, so
+            // this is the compiler's requirement *and* what stops a mistyped row
+            // id becoming a screen with nothing on it.
             SettingsPage(title: row.title) {
                 SettingNote("This setting is not built yet.")
             }

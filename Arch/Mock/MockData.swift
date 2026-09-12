@@ -75,6 +75,69 @@ enum ProfileRow: Identifiable, Hashable {
     }
 }
 
+/// Who somebody is, and — read as a set — who they want to meet.
+///
+/// Three options, and they are required. An opt-out would read as generous and
+/// would quietly exclude you from the app, because the candidate set cannot be
+/// built without an answer: worse than not asking.
+///
+/// Anything more specific about yourself goes in `Person.pronouns`, which is free
+/// text and optional. This enum exists to answer one question — who reaches whom —
+/// and it stays that small so the answer stays unambiguous.
+enum Gender: String, CaseIterable, Hashable, Identifiable {
+    case man
+    case woman
+    case nonBinary
+
+    var id: String { rawValue }
+
+    /// On a profile: "Woman".
+    var label: String {
+        switch self {
+        case .man:       return "Man"
+        case .woman:     return "Woman"
+        case .nonBinary: return "Non-binary"
+        }
+    }
+
+    /// In a preference: "Women". Never "Everyone" — a word that hides who is
+    /// actually included is not an answer.
+    var plural: String {
+        switch self {
+        case .man:       return "Men"
+        case .woman:     return "Women"
+        case .nonBinary: return "Non-binary people"
+        }
+    }
+
+    /// Spelled out in reading order, however many are chosen.
+    static func sentence(_ set: Set<Gender>) -> String {
+        let names = allCases.filter(set.contains).map(\.plural)
+        switch names.count {
+        case 0:  return "Nobody"
+        case 1:  return names[0]
+        case 2:  return "\(names[0]) and \(names[1])"
+        default: return names.dropLast().joined(separator: ", ") + ", and \(names[names.count - 1])"
+        }
+    }
+}
+
+/// The facts under your name, as one value.
+///
+/// This used to be six positional arguments through a closure. At eight it stopped
+/// being readable and started being a place to transpose two strings, so it became
+/// a struct — the compiler now checks what the argument order used to.
+struct PersonDetails: Hashable {
+    var name: String
+    var age: Int
+    var gender: Gender?
+    var pronouns: String
+    var neighbourhood: String
+    var city: String
+    var height: String
+    var work: String
+}
+
 struct Person: Identifiable, Hashable {
     // `var` throughout: your own profile is edited in place by `ProfileStore`.
     // Other people's copies are never mutated — nothing hands them to a store.
@@ -85,6 +148,15 @@ struct Person: Identifiable, Hashable {
     var city: String
     var height: String
     var work: String
+    /// Required in practice — onboarding will not let you past it — but optional
+    /// here because `Person.empty` starts with it unanswered.
+    var gender: Gender? = nil
+    /// Optional, free text, and shown on the profile when it is filled in.
+    ///
+    /// The app writes every sentence around names because it has no business
+    /// guessing anyone's pronouns. That is a rule about what *Arch* may assume; it
+    /// was never a reason to stop you saying.
+    var pronouns: String = ""
 
     /// Ordered. `photos[0]` is the main photo — the one the roster shows — and
     /// reordering is the only way to change which that is.
@@ -108,10 +180,29 @@ struct Person: Identifiable, Hashable {
     /// Built in one place so no view joins these two fields its own way.
     var location: String { "\(neighbourhood), \(city)" }
 
-    /// Four facts, in reading order. Wraps to two rows more often than not, since
-    /// "Crown Heights, Brooklyn" is a wide chip.
+    /// The facts, in reading order. Wraps to two rows more often than not, since
+    /// "Crown Heights, Brooklyn" is a wide chip — and reliably now that gender and
+    /// pronouns sit in front of it.
+    ///
+    /// Both new entries drop out when unset rather than leaving a blank chip.
     var vitals: [String] {
-        ["\(age)", location, height, work]
+        ["\(age)"]
+            + [gender?.label, pronouns.isEmpty ? nil : pronouns].compactMap { $0 }
+            + [location, height, work]
+    }
+
+    /// Everything `EditDetailsSheet` edits, gathered.
+    var details: PersonDetails {
+        PersonDetails(
+            name: name, age: age, gender: gender, pronouns: pronouns,
+            neighbourhood: neighbourhood, city: city, height: height, work: work
+        )
+    }
+
+    /// Every height the picker offers, so nobody types "tall".
+    static let heights: [String] = (54...80).map { inches in
+        let feet = inches / 12, rest = inches % 12
+        return rest == 0 ? "\(feet) ft" : "\(feet) ft \(rest)"
     }
 
     var mainPhoto: Photo? { photos.first }
@@ -211,6 +302,8 @@ struct Person: Identifiable, Hashable {
             city: "",
             height: "",
             work: "",
+            gender: nil,
+            pronouns: "",
             photos: [],
             prompts: MockData.startingPrompts,
             interests: []
@@ -227,12 +320,6 @@ struct Person: Identifiable, Hashable {
     }
 }
 
-/// One of the five slots. There are always exactly five: a slot is either holding
-/// someone or waiting for tomorrow. Nothing is ever "finished".
-///
-/// A slot says nothing about *why* it is empty. You dismissing someone and someone
-/// dismissing you produce the identical state, because the app never tells you
-/// which happened.
 /// Why a slot is open.
 ///
 /// The app says *that* someone left, never *who* and never *why*. Dismissing you
@@ -245,6 +332,12 @@ enum SlotOpening: Hashable {
     case theirs
 }
 
+/// One of the slots. A slot is either holding someone or waiting for tomorrow;
+/// nothing is ever "finished".
+///
+/// A slot says nothing about *why* it is empty. You dismissing someone and someone
+/// dismissing you produce the identical state, because the app never tells you
+/// which happened.
 enum RosterSlot: Identifiable, Hashable {
     case filled(Person)
     case empty(id: String, refillsAt: Date, opening: SlotOpening)
@@ -276,6 +369,9 @@ enum RosterSlot: Identifiable, Hashable {
 /// first and groups the open slots underneath.
 struct Roster: Hashable {
     var slots: [RosterSlot]
+    /// Nobody has ever been in it, which is a different thing from everybody
+    /// having left — and the two want different words.
+    var isFirstMorning: Bool = false
 
     var people: [Person] { slots.compactMap(\.person) }
     var openSlots: [RosterSlot] { slots.filter { $0.person == nil } }
@@ -297,11 +393,25 @@ struct Roster: Hashable {
     }
 }
 
+/// Whether a message you wrote actually left the phone.
+///
+/// Not a read receipt and not "delivered" — Arch tells you nothing about what the
+/// other person has done. This is only about your own end of the wire, and the app
+/// owes you the truth about that: a message sitting in a bubble looking sent when
+/// it never left is the one piece of silence nobody should have to interpret.
+enum MessageDelivery: Hashable {
+    case sending
+    case sent
+    case failed
+}
+
 struct Message: Identifiable, Hashable {
     let id: String
     let text: String
     let isOutgoing: Bool
     let timestamp: String
+    /// Defaulted, so every existing fixture stays as it was.
+    var delivery: MessageDelivery = .sent
 }
 
 /// Where a conversation sits.
@@ -341,6 +451,16 @@ struct PremiumPlan: Identifiable, Hashable {
     let isRecommended: Bool
 }
 
+/// What a settings row does when you touch it.
+///
+/// A row either goes somewhere or flips — never both. A switch hidden behind a
+/// push is the classic settings mistake: you tap expecting a screen and something
+/// silently changes instead.
+enum SettingsControl: Hashable {
+    case push
+    case toggle(Bool)
+}
+
 struct SettingsRow: Identifiable, Hashable {
     let id: String
     let title: String
@@ -370,6 +490,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 7",
         work: "Structural engineer",
+        gender: .woman,
+        pronouns: "she/her",
         photos: [
             Photo(id: "nadia-p1", toneIndex: 0),
             Photo(id: "nadia-p2", toneIndex: 3),
@@ -408,6 +530,8 @@ enum MockData {
         city: "Queens",
         height: "6 ft",
         work: "Pastry cook",
+        gender: .man,
+        pronouns: "",
         photos: [
             Photo(id: "teo-p1", toneIndex: 4),
             Photo(id: "teo-p2", toneIndex: 2),
@@ -446,6 +570,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 4",
         work: "Restores film cameras",
+        gender: .woman,
+        pronouns: "she/her",
         photos: [
             Photo(id: "priya-p1", toneIndex: 2),
             Photo(id: "priya-p2", toneIndex: 5),
@@ -484,6 +610,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 11",
         work: "Nurse, emergency",
+        gender: .man,
+        pronouns: "he/him",
         photos: [
             Photo(id: "marcus-p1", toneIndex: 1),
             Photo(id: "marcus-p2", toneIndex: 4),
@@ -522,6 +650,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 9",
         work: "Translator",
+        gender: .woman,
+        pronouns: "she/her",
         photos: [
             Photo(id: "lena-p1", toneIndex: 5),
             Photo(id: "lena-p2", toneIndex: 0),
@@ -560,6 +690,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 6",
         work: "Landscape architect",
+        gender: .woman,
+        pronouns: "she/her",
         photos: [Photo(id: "hana-p1", toneIndex: 2)],
         prompts: [
             Prompt(
@@ -584,6 +716,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 5",
         work: "Bookbinder",
+        gender: .woman,
+        pronouns: "she/they",
         photos: [
             Photo(id: "ines-p1", toneIndex: 1),
             Photo(id: "ines-p2", toneIndex: 4),
@@ -622,6 +756,8 @@ enum MockData {
         city: "Queens",
         height: "6 ft 1",
         work: "Bus mechanic",
+        gender: .nonBinary,
+        pronouns: "they/them",
         photos: [
             Photo(id: "dev-p1", toneIndex: 3),
             Photo(id: "dev-p2", toneIndex: 5),
@@ -661,6 +797,8 @@ enum MockData {
         city: "Manhattan",
         height: "5 ft 8",
         work: "Piano tuner",
+        gender: .man,
+        pronouns: "",
         photos: [
             Photo(id: "yusuf-p1", toneIndex: 5),
             Photo(id: "yusuf-p2", toneIndex: 1),
@@ -702,6 +840,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 10",
         work: "Sound engineer",
+        gender: .woman,
+        pronouns: "she/her",
         photos: [
             Photo(id: "you-p1", toneIndex: 3),
             Photo(id: "you-p2", toneIndex: 1),
@@ -744,6 +884,8 @@ enum MockData {
         city: "Brooklyn",
         height: "5 ft 10",
         work: "Sound engineer",
+        gender: .woman,
+        pronouns: "she/her",
         photos: Array(you.photos.prefix(3)),
         prompts: Array(you.prompts.prefix(2)),
         interests: Array(you.interests.prefix(2))
@@ -765,6 +907,19 @@ enum MockData {
     static let rosterFull = Roster(slots: [
         .filled(priya), .filled(marcus), .filled(hana), .filled(ines), .filled(dev)
     ])
+
+    /// Day one. The account exists, the questionnaire is answered, and the
+    /// overnight run has not happened yet — so there is nothing here and nothing
+    /// has gone wrong.
+    static let rosterFirstMorning = Roster(
+        slots: (1...5).map { RosterSlot.empty(id: "slot-\($0)", refillsAt: hours(11), opening: .yours) },
+        isFirstMorning: true
+    )
+
+    /// Everybody gone at once. Rare, and it should not read as a failure.
+    static let rosterEmpty = Roster(
+        slots: (1...5).map { RosterSlot.empty(id: "slot-\($0)", refillsAt: hours(14), opening: .yours) }
+    )
 
     /// A subscriber's roster: seven slots rather than five. The arch draws seven
     /// voussoirs, so the indicator generalises without a second design.
@@ -796,6 +951,22 @@ enum MockData {
     ])
 
     // MARK: Messages
+
+    /// Teo's conversation with two outgoing messages that did not land: one still
+    /// in the air, one that gave up. Used by the thread preview and by nothing else.
+    static let conversationWithFailure = Conversation(
+        id: "c-teo",
+        person: teo,
+        opening: .prompt(teo.prompts[2]),
+        messages: [
+            Message(id: "f1", text: "A laundromat is a genuinely good answer and I am annoyed I did not think of it", isOutgoing: true, timestamp: "Monday"),
+            Message(id: "f2", text: "It is the last indoor place you can sit for an hour without buying anything.", isOutgoing: false, timestamp: "Monday"),
+            Message(id: "f3", text: "Well now I want to know your second-best one", isOutgoing: true, timestamp: "Just now", delivery: .failed),
+            Message(id: "f4", text: "Second best is the bit of the Botanic Garden nobody walks to", isOutgoing: true, timestamp: "Just now", delivery: .sending)
+        ],
+        unreadCount: 0,
+        lastActivity: "Just now"
+    )
 
     static let conversations: [Conversation] = [
         Conversation(

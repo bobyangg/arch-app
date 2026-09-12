@@ -15,6 +15,7 @@ struct YouProfileView: View {
     /// Switches to the Premium tab, rather than rebuilding the paywall inside a
     /// settings push.
     var onOpenPremium: () -> Void = {}
+    var onDeleteAccount: () -> Void = {}
 
     // NavigationPath rather than [Route]: Settings pushes SettingsRow values into
     // this same stack, and a typed array path only accepts one type.
@@ -50,7 +51,12 @@ struct YouProfileView: View {
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .arrange:  ArrangeProfileView(store: store)
-                case .settings: SettingsView(store: settings, onOpenPremium: onOpenPremium)
+                case .settings:
+                    SettingsView(
+                        store: settings,
+                        onOpenPremium: onOpenPremium,
+                        onDeleteAccount: onDeleteAccount
+                    )
                 case .review:   ProfileReviewView(person: person, writtenAbout: writtenAbout)
                 }
             }
@@ -58,11 +64,8 @@ struct YouProfileView: View {
         .sheet(item: $editing) { sheet in
             switch sheet {
             case .details:
-                EditDetailsSheet(person: person) { name, age, neighbourhood, city, height, work in
-                    store.updateDetails(
-                        name: name, age: age, neighbourhood: neighbourhood,
-                        city: city, height: height, work: work
-                    )
+                EditDetailsSheet(person: person) { details in
+                    store.updateDetails(details)
                     editing = nil
                 }
             case .interests:

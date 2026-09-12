@@ -34,19 +34,25 @@ struct OnboardingIdentity: View {
     }
 }
 
-/// Age, where you live, height, work.
+/// Age, gender, where you live, height, work.
 ///
 /// The neighbourhood and city fields preview the chip they become, using the same
 /// `Person.location` string the roster renders — so you can see what a stranger
 /// will actually read before you commit to it.
+///
+/// Height is a picker. It was a text field, which accepted "tall" and "1.8m" and
+/// every other way people write this, none of which two profiles can be compared
+/// on. Pronouns are the one optional thing on the screen and are marked as such.
 struct OnboardingAbout: View {
     let store: OnboardingStore
+
+    @State private var isPickingHeight = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "About you",
-                detail: "Four facts that sit under your name. Nothing else is asked."
+                detail: "The facts that sit under your name. Nothing else is asked."
             )
 
             VStack(spacing: ArchSpacing.xs) {
@@ -69,12 +75,10 @@ struct OnboardingAbout: View {
                     placeholder: "Brooklyn",
                     surface: ArchColor.stone
                 )
-                ArchField(
-                    text: Binding(get: { store.height }, set: { store.height = $0 }),
-                    label: "Height",
-                    placeholder: "5 ft 10",
+                HeightRow(
+                    height: store.height,
                     surface: ArchColor.stone
-                )
+                ) { isPickingHeight = true }
                 ArchField(
                     text: Binding(get: { store.work }, set: { store.work = $0 }),
                     label: "Work",
@@ -82,6 +86,25 @@ struct OnboardingAbout: View {
                     surface: ArchColor.stone
                 )
             }
+
+            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                Text("Gender")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                ForEach(Gender.allCases) { option in
+                    OptionRow(text: option.label, isSelected: store.genderDraft == option) {
+                        store.genderDraft = option
+                    }
+                }
+            }
+
+            ArchField(
+                text: Binding(get: { store.pronounsDraft }, set: { store.pronounsDraft = $0 }),
+                label: "Pronouns",
+                placeholder: "Optional",
+                characterLimit: 20,
+                surface: ArchColor.stone
+            )
 
             if !preview.isEmpty {
                 VStack(alignment: .leading, spacing: ArchSpacing.xs) {
@@ -91,6 +114,9 @@ struct OnboardingAbout: View {
                     VitalsChip(text: preview)
                 }
             }
+        }
+        .sheet(isPresented: $isPickingHeight) {
+            HeightPickerSheet(current: store.height) { store.height = $0 }
         }
     }
 
