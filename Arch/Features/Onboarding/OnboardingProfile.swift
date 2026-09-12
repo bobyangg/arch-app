@@ -42,10 +42,15 @@ struct OnboardingPhotos: View {
     }
 }
 
-/// Three answers.
+/// Three questions, chosen and answered.
 ///
-/// The three questions you start on are a starting point, not an assignment —
-/// tapping one opens the same picker the You tab uses.
+/// The slots start empty and each one opens the library — the same picker the You
+/// tab uses. They used to arrive pre-filled with three suggestions, which is a
+/// quieter way of choosing for somebody: a default is what most people keep, so
+/// three of the twenty-four were doing all the work and the rest were scenery.
+///
+/// The answer field appears only once a question is on the slot. Writing an answer
+/// to a question you have not picked is not a thing anybody does.
 struct OnboardingAnswers: View {
     let store: OnboardingStore
 
@@ -57,7 +62,7 @@ struct OnboardingAnswers: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Three answers",
-                detail: "This is the part people actually read. The specific version always beats the general one."
+                detail: "Pick three from the list and answer them. This is the part people actually read, and the specific version always beats the general one."
             )
 
             VStack(spacing: ArchSpacing.m) {
@@ -85,41 +90,53 @@ struct OnboardingAnswers: View {
         }
     }
 
+    @ViewBuilder
     private func answer(_ prompt: Prompt) -> some View {
+        let isChosen = !prompt.question.trimmingCharacters(in: .whitespaces).isEmpty
+
         VStack(alignment: .leading, spacing: ArchSpacing.xs) {
             Button { choosingFor = prompt } label: {
                 HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
-                    Text(prompt.question)
+                    Text(isChosen ? prompt.question : "Choose a question")
                         .archText(.prompt)
                         .foregroundStyle(ArchColor.mortar)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 0)
-                    Text("Change")
-                        .archText(.footnote)
-                        .foregroundStyle(ArchColor.mortar)
+                    if isChosen {
+                        Text("Change")
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                    }
                 }
                 .contentShape(Rectangle())
             }
             .buttonStyle(PressScaleStyle(scale: 1))
-            .accessibilityLabel("Question: \(prompt.question)")
-            .accessibilityHint("Choose a different question")
+            .accessibilityLabel(isChosen ? "Question: \(prompt.question)" : "Choose a question")
+            .accessibilityHint(isChosen ? "Choose a different question" : "Opens the list")
 
-            TextField(
-                "",
-                text: binding(for: prompt),
-                prompt: Text("Answer it properly.").foregroundColor(ArchColor.mortar),
-                axis: .vertical
-            )
-            .archText(.callout)
-            .foregroundStyle(ArchColor.limestone)
-            .lineLimit(3...7)
-            .padding(.horizontal, ArchSpacing.s)
-            .padding(.vertical, ArchSpacing.s)
-            .background(
-                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .fill(ArchColor.stone)
-            )
+            // Only once there is a question. An answer to nothing is not an answer.
+            if isChosen {
+                TextField(
+                    "",
+                    text: binding(for: prompt),
+                    prompt: Text("Answer it properly.").foregroundColor(ArchColor.mortar),
+                    axis: .vertical
+                )
+                .archText(.callout)
+                .foregroundStyle(ArchColor.limestone)
+                .lineLimit(3...7)
+                .padding(.horizontal, ArchSpacing.s)
+                .padding(.vertical, ArchSpacing.s)
+                .background(
+                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                        .fill(ArchColor.stone)
+                )
+            }
         }
     }
 
