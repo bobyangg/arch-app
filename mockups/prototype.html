@@ -439,13 +439,14 @@ const PROMPT_LIBRARY=[
 /* Questions already used by your other answers stay visible and inert rather than
    hidden — hiding them makes the library look shorter and leaves you hunting for
    one you already have. */
-function promptPicker(currentText,taken){
+function promptPicker(currentText,taken,act){
+  act=act||"pickQuestion";
   let h='<div class="v gap-xl">';
   PROMPT_LIBRARY.forEach(function(g){
     h+='<div class="v gap-xs"><div class="prompt mortar">'+g[0]+'</div><div class="v gap-xs">';
     g[1].forEach(function(q){
       const isCur=q===currentText, isTaken=taken.indexOf(q)>=0 && !isCur;
-      h+='<button '+(isTaken?'':'data-a="pickQuestion" data-q="'+esc(q)+'"')
+      h+='<button '+(isTaken?'':'data-a="'+act+'" data-q="'+esc(q)+'"')
         +' style="display:block;width:100%">'
         +'<div class="opt '+(isCur?"sel":"")+'" style="display:flex; gap:12px; align-items:center'
         +(isTaken?'; color:var(--mortar)':'')+'">'
@@ -1410,14 +1411,27 @@ function onboarding(){
             :`You can add ${numWord(6-o.photos.length)} more.`}</div>`;
     enabled=short===0;
   } else if(step==="answers"){
+    /* The slots start empty and each one opens the library. They used to arrive
+       pre-filled with three suggestions, which is a quieter way of choosing for
+       somebody: a default is what most people keep, so three of the twenty-four
+       were doing all the work and the rest were scenery. */
     body=`<div class="titleL">Three answers</div>
-      <div class="body mortar mt-s">This is the part people actually read.</div><div class="v gap-m mt-xl">`;
-    o.answers.forEach((a,i)=>{body+=`<div class="v gap-xs">
-      <div class="prompt mortar">${esc(YOU.prompts[i][0])}</div>
-      <div class="field onNight"><textarea rows="3" data-ob="answer" data-i="${i}"
-        placeholder="Answer it properly.">${esc(a)}</textarea></div></div>`;});
+      <div class="body mortar mt-s">Pick three from the list and answer them. This is the
+        part people actually read, and the specific version always beats the general one.</div>
+      <div class="v gap-m mt-xl">`;
+    o.answers.forEach((a,i)=>{
+      const q=o.questions[i];
+      body+=`<div class="v gap-xs">
+        <button data-a="obPickQuestion" data-i="${i}" style="display:block;width:100%">
+          <div style="display:flex; gap:12px; align-items:baseline">
+            <div class="prompt mortar" style="flex:1">${q?esc(q):"Choose a question"}</div>
+            <div class="${q?"footnote":"caption"} mortar">${q?"Change":"&rsaquo;"}</div></div></button>
+        ${q?`<div class="field onNight"><textarea rows="3" data-ob="answer" data-i="${i}"
+          placeholder="Answer it properly.">${esc(a)}</textarea></div>`:""}</div>`;
+    });
     body+=`</div>`;
-    enabled=o.answers.filter(a=>a.trim()).length>=3;
+    /* An answer to no question is not an answer. */
+    enabled=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
   } else if(step==="interests"){
     const ex=["Night baking","Rolleiflex repair","Above-ground platforms"];
     body=`<div class="titleL">Three interests</div>
@@ -1897,6 +1911,21 @@ document.addEventListener("click",e=>{
     obRmPhoto:()=>{const i=+el.dataset.i;
       o.photos.splice(i,1); o.up.splice(i,1); render();},
     obRetryPhoto:()=>retryUpload(o,+el.dataset.i),
+    obPickQuestion:()=>{
+      const i=+el.dataset.i;
+      S.obPicking=i;
+      openSheet('<div class="v gap-s" style="padding-top:4px">'
+        +'<div class="titleM">Choose a question</div></div>'
+        +'<div class="mt-m">'+promptPicker(o.questions[i],
+            o.questions.filter((_,j)=>j!==i).filter(Boolean),"obChooseQuestion")+'</div>');
+    },
+    obChooseQuestion:()=>{
+      const i=S.obPicking, q=el.dataset.q;
+      // Changing the question clears the answer: an answer written for a different
+      // question is a non sequitur.
+      if(q!==o.questions[i]){ o.questions[i]=q; o.answers[i]=""; }
+      closeSheet(); render();
+    },
     obAnswer:()=>{
       o.qa[o.q]=el.dataset.o; render();
       setTimeout(()=>{
@@ -1945,7 +1974,7 @@ function refreshCTA(){
   else if(step==="identity") ok=!!o.name.trim()&&o.email.includes("@");
   else if(step==="about") ok=!!(o.age&&o.hood.trim()&&o.city.trim()&&o.height.trim()&&o.work.trim()&&o.gender);
   else if(step==="seeking") ok=o.seeking.length>0;
-  else if(step==="answers") ok=o.answers.filter(a=>a.trim()).length>=3;
+  else if(step==="answers") ok=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
   else if(step==="interests") ok=o.interests.filter(t=>t.trim()).length>=3;
   const btn=document.querySelector('[data-a="obNext"]');
   if(btn) btn.disabled=!ok;
@@ -1954,7 +1983,7 @@ function refreshCTA(){
 function startOnboarding(){
   S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
     age:"",hood:"",city:"",height:"",work:"",gender:null,pronouns:"",seeking:[],
-    photos:[],up:[],answers:["","",""],
+    photos:[],up:[],questions:["","",""],answers:["","",""],
     interests:["","",""],q:null,qa:{}};
   render();
 }
@@ -1966,7 +1995,9 @@ function finishOnboarding(){
     S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
     if(o.seeking.length) S.set.seeking=o.seeking.slice();
     if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
-    o.answers.forEach((a,i)=>{ if(a.trim()) S.you.prompts[i][1]=a.trim(); });
+    o.answers.forEach((a,i)=>{
+      if(a.trim()&&o.questions[i]) S.you.prompts[i]=[o.questions[i],a.trim()];
+    });
     const ints=o.interests.filter(t=>t.trim());
     if(ints.length) S.you.interests=ints;
   }

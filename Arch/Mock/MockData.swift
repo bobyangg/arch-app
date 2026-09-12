@@ -274,7 +274,10 @@ struct Person: Identifiable, Hashable {
     /// somewhere to write, so counting `prompts` would report an untouched profile
     /// as finished.
     var answeredPrompts: [Prompt] {
-        prompts.filter { !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        prompts.filter {
+            !$0.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
     }
 
     var missing: [String] {
@@ -1113,10 +1116,17 @@ enum MockData {
 
     // MARK: Onboarding
 
-    /// The three a new profile starts on. They are a starting point, not an
-    /// assignment — every one can be swapped during onboarding or afterwards.
-    static let startingPrompts: [Prompt] = PromptLibrary.starting.enumerated().map { index, question in
-        Prompt(id: "you-q\(index + 1)", question: question.text, answer: "")
+    /// Three empty slots, question included.
+    ///
+    /// They used to arrive carrying three suggested questions, which made the
+    /// library decoration: a default is what most people keep, so handing over
+    /// three of twenty-four meant the other twenty-one were never read. Choosing is
+    /// now the act, and the picker's four groups are what show the range.
+    ///
+    /// The slots exist so `ProfileStore.updatePrompt` has somewhere to write; what
+    /// decides whether they count is `Person.answeredPrompts`.
+    static let startingPrompts: [Prompt] = (1...Person.requiredPrompts).map { index in
+        Prompt(id: "you-q\(index)", question: "", answer: "")
     }
 
     static let onboardingHeadline = "Five people a day"

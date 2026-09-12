@@ -60,17 +60,8 @@ enum PromptLibrary {
 
     static var all: [PromptQuestion] { groups.flatMap(\.questions) }
 
-    /// The three a new profile starts on. Deliberately one from three different
-    /// groups, so a profile that is never edited still says three unrelated things
-    /// about the person rather than three versions of one.
-    /// compactMap rather than force-unwraps: this runs when a profile is created,
-    /// and a typo in an id should give a shorter list, not a crash at launch.
-    /// One from "How you spend your time", one from "What you notice", one from
-    /// "What you think". Two of these used to come from the same group, which made
-    /// the opening three narrower than the library they are drawn from.
-    static let starting: [PromptQuestion] = ["q-think", "q-twice", "q-lost"]
-        .compactMap { id in all.first { $0.id == id } }
-
+    /// Finds a question by its text, for a profile that stores the words rather
+    /// than the id.
     static func question(matching text: String) -> PromptQuestion? {
         all.first { $0.text == text }
     }
