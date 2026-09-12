@@ -25,13 +25,15 @@ struct DistanceSetting: View {
                 HStack {
                     Text("\(SettingsStore.distanceRange.lowerBound) miles")
                     Spacer()
-                    Text("\(SettingsStore.distanceRange.upperBound) miles")
+                    Text("Anywhere")
                 }
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
             }
 
             SettingNote("Everyone in \(store.rosterName) is inside this. Widening it gives Arch more people to choose from — it does not give you more slots.")
+
+            SettingNote("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.")
         }
     }
 }

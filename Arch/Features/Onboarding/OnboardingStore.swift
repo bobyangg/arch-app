@@ -59,8 +59,12 @@ final class OnboardingStore {
     var name = ""
     var email = ""
     var ageText = ""
-    var neighbourhood = ""
-    var city = ""
+    /// Picked from the library, so it carries a position as well as its name.
+    var place: Place?
+    /// What iOS has said, and the square it gave back. The precise fix never
+    /// leaves the moment it arrives in.
+    var locationPermission: LocationPermission = .notAsked
+    var coordinate: Coordinate?
     var height = ""
     var work = ""
     var genderDraft: Gender?
@@ -102,8 +106,8 @@ final class OnboardingStore {
         case .identity:
             return !name.isBlank && email.contains("@") && !email.hasSuffix("@")
         case .about:
-            return Int(ageText) != nil && !neighbourhood.isBlank
-                && !city.isBlank && !height.isBlank && !work.isBlank
+            return Int(ageText) != nil && place != nil
+                && !height.isBlank && !work.isBlank
                 && genderDraft != nil
         case .seeking:
             // Nobody is a valid preference for exactly nobody.
@@ -211,15 +215,30 @@ final class OnboardingStore {
 
     // MARK: Details
 
+    /// A location, taken once and immediately rounded.
+    ///
+    /// The nearest place fills the profile chip, because a geocoder saying
+    /// "Bedford-Stuyvesant" is not what somebody who writes "Bed-Stuy" wants under
+    /// their name — the picker is still there to correct it.
+    func useDeviceLocation(_ fix: Coordinate) {
+        locationPermission = .granted
+        coordinate = fix.coarsened
+        if place == nil { place = PlaceLibrary.nearest(to: fix) }
+    }
+
+    func refuseDeviceLocation() {
+        locationPermission = .denied
+    }
+
     private func commitDetails() {
+        profile.setCoordinate(coordinate)
         profile.updateDetails(
             PersonDetails(
                 name: name.trimmed,
                 age: Int(ageText) ?? 0,
                 gender: genderDraft,
                 pronouns: pronounsDraft.trimmed,
-                neighbourhood: neighbourhood.trimmed,
-                city: city.trimmed,
+                place: place,
                 height: height.trimmed,
                 work: work.trimmed
             )

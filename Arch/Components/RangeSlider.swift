@@ -124,7 +124,7 @@ private struct SliderPreview: View {
                 Text("Within \(distance) miles")
                     .archText(.titleL)
                     .foregroundStyle(ArchColor.limestone)
-                ValueSlider(value: $distance, bounds: 1...50)
+                ValueSlider(value: $distance, bounds: SettingsStore.distanceRange)
             }
         }
         .padding(ArchSpacing.screenMargin)

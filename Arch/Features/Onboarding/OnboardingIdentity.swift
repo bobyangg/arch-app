@@ -36,9 +36,10 @@ struct OnboardingIdentity: View {
 
 /// Age, gender, where you live, height, work.
 ///
-/// The neighbourhood and city fields preview the chip they become, using the same
-/// `Person.location` string the roster renders — so you can see what a stranger
-/// will actually read before you commit to it.
+/// Where you live is picked from a list rather than typed. Free text gave three
+/// spellings of Bed-Stuy and no position at all, which left the distance filter
+/// with nothing to filter on — and the name you pick is the chip a stranger reads,
+/// so it may as well be the same value the matcher uses.
 ///
 /// Height is a picker. It was a text field, which accepted "tall" and "1.8m" and
 /// every other way people write this, none of which two profiles can be compared
@@ -47,6 +48,7 @@ struct OnboardingAbout: View {
     let store: OnboardingStore
 
     @State private var isPickingHeight = false
+    @State private var isPickingPlace = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
@@ -63,18 +65,9 @@ struct OnboardingAbout: View {
                     keyboard: .numberPad,
                     surface: ArchColor.stone
                 )
-                ArchField(
-                    text: Binding(get: { store.neighbourhood }, set: { store.neighbourhood = $0 }),
-                    label: "Neighbourhood",
-                    placeholder: "Fort Greene",
-                    surface: ArchColor.stone
-                )
-                ArchField(
-                    text: Binding(get: { store.city }, set: { store.city = $0 }),
-                    label: "City",
-                    placeholder: "Brooklyn",
-                    surface: ArchColor.stone
-                )
+                PlaceRow(place: store.place, surface: ArchColor.stone) {
+                    isPickingPlace = true
+                }
                 HeightRow(
                     height: store.height,
                     surface: ArchColor.stone
@@ -106,29 +99,41 @@ struct OnboardingAbout: View {
                 surface: ArchColor.stone
             )
 
-            if !preview.isEmpty {
+            if let place = store.place {
                 VStack(alignment: .leading, spacing: ArchSpacing.xs) {
                     Text("People will see this as")
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
-                    VitalsChip(text: preview)
+                    VitalsChip(text: place.label)
                 }
             }
         }
         .sheet(isPresented: $isPickingHeight) {
             HeightPickerSheet(current: store.height) { store.height = $0 }
         }
+        .sheet(isPresented: $isPickingPlace) {
+            PlacePickerView(
+                permission: store.locationPermission,
+                current: store.place,
+                onChoose: { store.place = $0; isPickingPlace = false },
+                // The design build has no CoreLocation, so this stands in for a
+                // fix arriving: a point in Fort Greene, coarsened on the way in.
+                onUseLocation: {
+                    store.useDeviceLocation(
+                        Coordinate(latitude: 40.6913, longitude: -73.9742)
+                    )
+                },
+                onCancel: { isPickingPlace = false }
+            )
+            .padding(.horizontal, ArchSpacing.screenMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(ArchColor.stone)
+            .presentationDetents([.large])
+            .presentationCornerRadius(ArchRadius.sheet)
+            .presentationBackground(ArchColor.stone)
+        }
     }
 
-    /// Mirrors `Person.location` rather than inventing a second way to join these.
-    private var preview: String {
-        let n = store.neighbourhood.trimmed
-        let c = store.city.trimmed
-        if n.isEmpty && c.isEmpty { return "" }
-        if n.isEmpty { return c }
-        if c.isEmpty { return n }
-        return "\(n), \(c)"
-    }
 }
 
 #Preview("Name and email") {
@@ -142,8 +147,7 @@ struct OnboardingAbout: View {
 #Preview("About you") {
     OnboardingAbout(store: .configured {
         $0.ageText = "30"
-        $0.neighbourhood = "Fort Greene"
-        $0.city = "Brooklyn"
+        $0.place = PlaceLibrary.place(matching: "bk-fort-greene")
     })
         .padding(ArchSpacing.screenMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

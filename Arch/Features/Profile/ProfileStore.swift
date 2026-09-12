@@ -114,13 +114,18 @@ final class ProfileStore {
 
     // MARK: Details
 
+    /// Set from the device, never typed. Kept apart from `updateDetails` because
+    /// it is not something anybody edits — see `Person.coordinate`.
+    func setCoordinate(_ coordinate: Coordinate?) {
+        person.coordinate = coordinate
+    }
+
     func updateDetails(_ details: PersonDetails) {
         person.name = details.name
         person.age = details.age
         person.gender = details.gender
         person.pronouns = details.pronouns
-        person.neighbourhood = details.neighbourhood
-        person.city = details.city
+        person.place = details.place
         person.height = details.height
         person.work = details.work
     }

@@ -37,7 +37,21 @@ final class SettingsStore {
     var visibility = "Anyone Arch picks me for"
     var blocked: [String] = []
 
-    static let distanceRange = 1...50
+    /// Five to a hundred, and the top of the slider means anywhere.
+    ///
+    /// It started at one mile, which promised a precision Arch does not have and
+    /// does not want: a location is kept to about a kilometre, and somebody who
+    /// declined and picked a place instead is only as precise as that place is
+    /// wide. Five is comfortably above both.
+    ///
+    /// A mile was never the right floor for this app anyway. Distance here is a
+    /// "could we plausibly meet" filter, not a proximity feature — Arch picks five
+    /// people on compatibility and never sorts or shows anybody by how near they
+    /// are.
+    static let distanceRange = 5...100
+    /// The top of the range stops being a number: somebody in a small town needs
+    /// no ceiling at all, and they are the people a radius starves first.
+    static func isUnlimited(_ distance: Int) -> Bool { distance >= distanceRange.upperBound }
     static let ageRange = 18...70
     static let intentions = ["Something serious", "Still working it out", "Something casual"]
     static let visibilities = ["Anyone Arch picks me for", "Nobody new while I have unread messages"]
@@ -45,7 +59,9 @@ final class SettingsStore {
 
     // MARK: Display
 
-    var distanceText: String { "Within \(distance) miles" }
+    var distanceText: String {
+        Self.isUnlimited(distance) ? "Anywhere" : "Within \(distance) miles"
+    }
     var ageText: String { "\(minAge) to \(maxAge)" }
     var premiumText: String { isSubscribed ? "Subscribed" : "Not subscribed" }
     /// What to call the roster in settings copy, which has no roster to read.
