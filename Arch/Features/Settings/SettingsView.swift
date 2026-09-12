@@ -12,8 +12,10 @@ struct SettingsView: View {
     var onOpenPremium: () -> Void = {}
     /// Takes the reader back to onboarding, which is what a deleted account is.
     var onDeleteAccount: () -> Void = {}
+    var onSignOut: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
+    @State private var isSigningOut = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -40,6 +42,15 @@ struct SettingsView: View {
                 store: store,
                 onOpenPremium: onOpenPremium,
                 onDeleteAccount: onDeleteAccount
+            )
+        }
+        .sheet(isPresented: $isSigningOut) {
+            SignOutConfirmSheet(
+                onConfirm: {
+                    isSigningOut = false
+                    onSignOut()
+                },
+                onCancel: { isSigningOut = false }
             )
         }
     }
@@ -113,7 +124,7 @@ struct SettingsView: View {
     /// Quiet, not `lamp`. Signing out is not what the app is encouraging, and it is
     /// not an emergency either.
     private var signOut: some View {
-        Button {} label: {
+        Button { isSigningOut = true } label: {
             Text("Sign out")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)

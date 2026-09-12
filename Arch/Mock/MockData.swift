@@ -444,6 +444,16 @@ enum ConversationState: String, Hashable {
     case request
     /// You started it, or you accepted theirs.
     case open
+    /// It ended from their side, and Arch does not say how.
+    ///
+    /// **One state for three different things** — they left the conversation, they
+    /// blocked you, or they deleted their account. If those looked different from
+    /// here, the difference would tell you which happened, and "they are not told"
+    /// would stop being true the moment somebody compared two screens.
+    ///
+    /// So the thread stays readable and stops accepting messages, exactly the way
+    /// an open slot says somebody went and never says who or why.
+    case ended
 }
 
 struct Conversation: Identifiable, Hashable {
@@ -459,6 +469,7 @@ struct Conversation: Identifiable, Hashable {
     let lastActivity: String
 
     var preview: String { messages.last?.text ?? "" }
+    var hasEnded: Bool { state == .ended }
 }
 
 struct PremiumBenefit: Identifiable, Hashable {
@@ -1024,7 +1035,10 @@ enum MockData {
             unreadCount: 0,
             lastActivity: "Monday"
         ),
+        // Ended from Lena's side. Which of the three things she did is not
+        // something this app will ever say.
         Conversation(
+            state: .ended,
             id: "c-lena",
             person: lena,
             opening: .prompt(lena.prompts[1]),

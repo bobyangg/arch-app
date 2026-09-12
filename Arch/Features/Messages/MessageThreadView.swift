@@ -31,7 +31,11 @@ struct MessageThreadView: View {
         VStack(spacing: 0) {
             header
             transcript
-            if conversation.state == .request { requestBar } else { composer }
+            switch conversation.state {
+            case .request: requestBar
+            case .ended:   endedBar
+            case .open:    composer
+            }
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
@@ -166,6 +170,31 @@ struct MessageThreadView: View {
         }
     }
 
+    /// The end of a conversation, with no account of itself.
+    ///
+    /// It says what you can do rather than what happened, and it ties itself to the
+    /// rule the reader already knows from the roster — otherwise an unexplained
+    /// ending is an invitation to assume the worst one.
+    private var endedBar: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+            Text("This conversation has ended")
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+
+            Text("You can read it, but not reply. Arch does not say why a conversation ends, the same way it never says who left your roster.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.vertical, ArchSpacing.s)
+        .background(ArchColor.stoneRaised)
+        .overlay(alignment: .top) {
+            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
+        }
+    }
+
     private var composer: some View {
         HStack(alignment: .bottom, spacing: ArchSpacing.xs) {
             TextField("Message", text: $draft, axis: .vertical)
@@ -258,6 +287,15 @@ struct MessageBubble: View {
 }
 
 // MARK: - Previews
+
+/// Ended from their side. Which of the three things they did is not on this
+/// screen, and that is the point.
+#Preview("A conversation that ended") {
+    NavigationStack {
+        MessageThreadView(conversation: MockData.conversations[3])
+    }
+    .preferredColorScheme(.dark)
+}
 
 #Preview("Thread") {
     NavigationStack {

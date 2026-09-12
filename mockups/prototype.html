@@ -382,7 +382,8 @@ const YOU=P("you","Sam",30,"bk-fort-greene","5 ft 10","Sound engineer",[3,1,4,0,
 
 const byId=id=>PEOPLE.find(p=>p.id===id);
 const isRequest=c=>c.state==="request";
-const openConvos=()=>S.convos.filter(c=>!isRequest(c));
+const hasEnded=c=>c.state==="ended";
+const openConvos=()=>S.convos.filter(c=>!isRequest(c)&&!hasEnded(c));
 const requests=()=>S.convos.filter(isRequest);
 /* The quoted block belongs to whoever was written to: you picked something out of
    their profile, and somebody writing to you picked something out of yours. */
@@ -558,7 +559,11 @@ const S={
       ["in","It is the last indoor place you can sit for an hour without buying anything.","Monday"],
       ["out","Well now I want to know your second-best one","Monday"],
       ["out","Second best is the bit of the Botanic Garden nobody walks to","Just now","failed"]]},
-    {id:"lena",person:byId("lena"),open:["prompt",1],unread:0,when:"Sunday",msgs:[
+    /* Ended from Lena's side. One state for three different things — she left, she
+       blocked you, or she deleted her account — because if they looked different
+       from here the difference would say which, and "they are not told" would stop
+       being true the moment somebody compared two screens. */
+    {id:"lena",person:byId("lena"),state:"ended",open:["prompt",1],unread:0,when:"Sunday",msgs:[
       ["out","What did the translator give up","Sunday"],
       ["in","The tense. Portuguese has one that means something happened and is still happening to you. English makes you pick.","Sunday"],
       ["out","That is going to bother me all week","Sunday"],["in","Good.","Sunday"]]},
@@ -575,6 +580,7 @@ const S={
        visibility:"Anyone Arch picks me for",blocked:[]},
   edit:null,
   report:{reason:null,block:true,sent:false},
+  number:null,
   onboarding:null,
   /* null, or {target, left, ids, step, zoom, ox, oy}. step -1 is the library grid. */
   picker:null,
@@ -815,7 +821,8 @@ function messagesRoot(){
         <div class="badge" style="position:static">${reqs.length}</div>
         <div class="caption mortar" style="margin-left:12px">&rsaquo;</div></div></button>`;
   }
-  openConvos().forEach((c,i)=>{
+  const listed=S.convos.filter(c=>!isRequest(c));
+  listed.forEach((c,i)=>{
     const last=c.msgs[c.msgs.length-1];
     h+=`<button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
       <div class="row"><div class="avatar" style="${tone(c.person.photos[0])}"></div>
@@ -824,7 +831,7 @@ function messagesRoot(){
       <div style="display:flex; gap:8px; margin-top:4px">
         <div class="footnote ${c.unread?"limestone":"mortar"}" style="flex:1">${esc(last[1])}</div>
         ${c.unread?'<div class="dot"></div>':""}</div></div></div></button>`;
-    if(i<openConvos().length-1) h+=`<div class="rowrule"></div>`;
+    if(i<listed.length-1) h+=`<div class="rowrule"></div>`;
   });
   return h+`</div></div>`;
 }
@@ -891,6 +898,17 @@ function thread(id){
       <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
       ${foot}</div>`;
   });
+  if(hasEnded(c)){
+    /* It says what you can do rather than what happened, and ties itself to the
+       rule the reader knows from the roster — an unexplained ending with nothing
+       attached is an invitation to assume the worst one. */
+    return h+`</div></div>
+      <div class="bottombar">
+        <div class="subhead">This conversation has ended</div>
+        <div class="footnote mortar" style="margin-top:4px">You can read it, but not reply.
+          Arch does not say why a conversation ends, the same way it never says who left
+          your roster.</div></div>`;
+  }
   if(isRequest(c)){
     return h+`</div></div>
       <div class="bottombar">
@@ -1262,7 +1280,8 @@ function settings(){
   h+='<button class="group" data-a="replayOnboarding" style="display:block;width:100%">'
     +'<div class="srow"><div class="t">Replay onboarding</div>'
     +'<div class="caption mortar">&rsaquo;</div></div></button>'
-    +'<div class="group"><div class="srow"><div class="t mortar">Sign out</div></div></div>'
+    +'<button class="group" data-a="signOutOpen" style="display:block;width:100%">'
+    +'<div class="srow"><div class="t mortar">Sign out</div></div></button>'
     +'<div class="footnote mortar center">Arch 1.0</div></div></div></div>';
   return h;
 }
@@ -1317,7 +1336,7 @@ function settingDetail(id){
        this up as a hazard would discourage something you are entitled to do. */
     b='<div class="v gap-m">'
      +'<div class="body">Your profile, photos and answers are deleted.</div>'
-     +'<div class="body">The people you are talking to will see the conversation disappear.</div>'
+     +'<div class="body">The people you are talking to can still read what was said, and cannot reply. They are not told why.</div>'
      +'<div class="body">You cannot undo this, and the same number can start again from scratch.</div></div>'
      +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s roster, but your conversations keep working.")
      +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
@@ -1349,7 +1368,7 @@ function settingDetail(id){
   } else if(id==="a-phone"){
     b=HEADING(x.phone)
      +NOTE("This is how Arch knows you are a person. It is never shown to anyone and never appears on your profile.")
-     +'<button class="btn quiet">Change number</button>'
+     +'<button class="btn quiet" data-a="numberOpen">Change number</button>'
      +NOTE("You will have to verify the new number before it takes effect.");
   } else if(id==="a-email"){
     b='<div class="field onNight"><input value="'+esc(x.email)+'" data-s="email"></div>'
@@ -1364,6 +1383,7 @@ function settingDetail(id){
      +sect("Dismissing costs you a slot","If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe.")
      +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them.")
      +sect("You are never told who dismissed whom","People leave your roster. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
+     +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
      +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
   } else if(id==="h-safety"){
     b=sect("Every account has a verified number","It is not a guarantee that someone is who they say, but it makes throwaway accounts expensive, which is most of the problem.")
@@ -1716,6 +1736,50 @@ function placeSheet(target,query){
     <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
 }
 
+/* The number *is* the sign-in — there is no password to fall back on — so changing
+   it is the verification flow again rather than a field you edit. The number
+   already being taken is a real ending, not an error: two accounts cannot share
+   one, so the screen says what to do instead of blinking and leaving you to it. */
+function numberSheet(){
+  const n=S.number;
+  let body="",cta="",back="";
+  if(n.step==="number"){
+    body=`<div class="titleM" style="padding-top:8px">A new number</div>
+      <div class="body mortar mt-s">Arch verifies every number, so you will get a code before
+        anything changes. Until then ${esc(S.set.phone)} still signs you in.</div>
+      <div style="display:flex; gap:8px" class="mt-m">
+        <div class="field" style="flex:none"><span class="mortar">+1</span></div>
+        <div class="field" style="flex:1"><input id="numberInput" inputmode="tel"
+          placeholder="917 555 0142" value="${esc(n.value)}"></div></div>`;
+    cta="Send a code"; back="Cancel";
+  } else if(n.step==="code"){
+    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field center"
+      style="flex:1; justify-content:center; height:56px"><span class="titleM">${n.code[i]||""}</span></div>`;
+    body=`<div class="titleM" style="padding-top:8px">Check your messages</div>
+      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(n.value)}.</div>
+      <div style="display:flex; gap:8px" class="mt-m">${boxes}</div>
+      <input id="numberCode" inputmode="numeric" maxlength="6" value="${esc(n.code)}"
+        style="position:absolute; opacity:.001; width:1px; height:1px">`;
+    cta="Verify"; back="Use a different number";
+  } else if(n.step==="taken"){
+    body=`<div class="titleM" style="padding-top:8px">That number already has an account</div>
+      <div class="body mortar mt-s">Two accounts cannot share a number. If that one is yours,
+        sign out and sign in with it instead &mdash; this account stays exactly as it is
+        until you do.</div>`;
+    cta=""; back="Try another number";
+  } else {
+    body=`<div class="titleM" style="padding-top:8px">Your number has changed</div>
+      <div class="body mortar mt-s">+1 ${esc(n.value)} signs you in from now on. The old one
+        does not reach this account any more, and nothing else about your profile moved.</div>`;
+    cta="Done"; back="";
+  }
+  openSheet(body
+    +(cta?`<button class="btn primary mt-xxl" data-a="numberNext">${cta}</button>`:"")
+    +(back?`<button class="btntext ${cta?"":"mt-xxl"}" data-a="${
+        n.step==="number"?"closeSheet":"numberBack"}">${back}</button>`:""));
+  if(n.step==="code") setTimeout(()=>document.getElementById("numberCode")?.focus(),320);
+}
+
 function heightSheet(target){
   openSheet(`<div class="titleM" style="padding-top:8px">Height</div>
     <div class="v gap-xs mt-m" style="max-height:360px; overflow-y:auto">
@@ -1900,11 +1964,36 @@ document.addEventListener("click",e=>{
     unpause:()=>{S.set.paused=false; render();},
     allowNotifs:()=>{S.set.notifsAllowed=true; S.stacks.you=[{name:"settings"}]; render();},
     deleteOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Delete your account?</div>
-      <div class="body mortar mt-s">Everything goes now, including the conversations you
-        are in the middle of. There is no undo and no grace period.</div>
+      <div class="body mortar mt-s">Your profile goes now, and every conversation you are
+        in stops. There is no undo and no grace period.</div>
       <button class="btn quiet mt-xxl" data-a="deleteDo">Delete my account</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    /* Not the same thing as deleting, even though both land in the same place:
+       with no password, signing in *is* entering your number, so the way back in
+       is the screen a new account starts on. */
+    signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
+      <div class="body mortar mt-s">Your profile, your conversations and the people in your
+        roster all stay exactly as they are. Nothing is deleted. You will need a code sent
+        to your number to come back.</div>
+      <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    signOutDo:()=>{ closeSheet(); startOnboarding(); },
+    numberOpen:()=>{ S.number={step:"number",value:"",code:""}; numberSheet(); },
+    numberNext:()=>{
+      const n=S.number, digits=n.value.replace(/\D/g,"");
+      if(n.step==="number"){
+        if(digits.length<7) return;
+        /* A design build has no carrier, so one number stands in for one already in
+           use. A real build asks the server. */
+        n.step=digits.endsWith("0000")?"taken":"code";
+      } else if(n.step==="code"){
+        if(n.code.length!==6) return;
+        S.set.phone="+1 "+n.value; n.step="done";
+      } else if(n.step==="done"){ closeSheet(); render(); return; }
+      numberSheet();
+    },
+    numberBack:()=>{ S.number.step="number"; S.number.code=""; numberSheet(); },
     setHeight:()=>{
       const v=el.dataset.o;
       if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
@@ -2097,6 +2186,11 @@ document.addEventListener("input",e=>{
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
+  if(t.id==="numberInput"){ S.number.value=t.value; return; }
+  if(t.id==="numberCode"){
+    S.number.code=t.value.replace(/\D/g,"").slice(0,6); numberSheet();
+    document.getElementById("numberCode")?.focus(); return;
+  }
   if(t.id==="placeSearch"){
     const at=t.selectionStart;
     placeSheet(t.dataset.t,t.value);
