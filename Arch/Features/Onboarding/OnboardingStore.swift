@@ -22,10 +22,34 @@ final class OnboardingStore {
         case notifications
     }
 
+    /// Phone verification, on or off.
+    ///
+    /// Off while there is no backend to verify against and no SMS to receive, so
+    /// the flow can be walked end to end without inventing a code. **Nothing is
+    /// deleted**: `OnboardingPhone` and `OnboardingCode` are untouched, their
+    /// previews still build them, and setting this back to `true` puts both
+    /// screens back at the front of the flow exactly as they were.
+    ///
+    /// The design still says every account has a verified number — Safety says so
+    /// in as many words — because that is still the intent. This is a switch for
+    /// working on the rest, not a change of mind.
+    static let isVerificationOn = false
+
+    /// The steps actually in the flow, in order.
+    ///
+    /// Everything that used to do arithmetic on `Step.rawValue` now walks this
+    /// instead, so switching a step off cannot leave the rule counting a screen
+    /// nobody sees or the back button reaching one.
+    static var steps: [Step] {
+        isVerificationOn ? Step.allCases : Step.allCases.filter { $0 != .verify }
+    }
+
+    static var firstStep: Step { steps.first ?? .identity }
+
     /// Built up as you go, then handed to `RootTabView`.
     let profile = ProfileStore(person: .empty)
 
-    var step: Step = .verify
+    var step: Step = OnboardingStore.firstStep
 
     /// Verification is two screens under one step: the number, then the code.
     var hasSentCode = false
@@ -61,12 +85,12 @@ final class OnboardingStore {
     /// Inside the questionnaire the rule switches to the questions, so there is
     /// only ever one rule on screen rather than two competing ones.
     var ruleTotal: Int {
-        questionIndex == nil ? Step.allCases.count : Questionnaire.count
+        questionIndex == nil ? Self.steps.count : Questionnaire.count
     }
 
     var ruleCurrent: Int {
         if let questionIndex { return questionIndex + 1 }
-        return step.rawValue + 1
+        return (Self.steps.firstIndex(of: step) ?? 0) + 1
     }
 
     // MARK: Gating
@@ -123,7 +147,7 @@ final class OnboardingStore {
     // MARK: Moving
 
     var canGoBack: Bool {
-        step != .verify || hasSentCode
+        step != Self.firstStep || hasSentCode
     }
 
     func advance() {
@@ -139,8 +163,18 @@ final class OnboardingStore {
         case .notifications:
             break
         default:
-            if let next = Step(rawValue: step.rawValue + 1) { step = next }
+            if let next = Self.step(after: step) { step = next }
         }
+    }
+
+    private static func step(after current: Step) -> Step? {
+        guard let index = steps.firstIndex(of: current), index + 1 < steps.count else { return nil }
+        return steps[index + 1]
+    }
+
+    private static func step(before current: Step) -> Step? {
+        guard let index = steps.firstIndex(of: current), index > 0 else { return nil }
+        return steps[index - 1]
     }
 
     func back() {
@@ -153,7 +187,7 @@ final class OnboardingStore {
             questionIndex = index == 0 ? nil : index - 1
             return
         }
-        if let previous = Step(rawValue: step.rawValue - 1) { step = previous }
+        if let previous = Self.step(before: step) { step = previous }
     }
 
     // MARK: Questionnaire

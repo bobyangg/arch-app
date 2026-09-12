@@ -1303,7 +1303,13 @@ function settingDetail(id){
 }
 
 /* ============================ onboarding ============================ */
-const STEPS=["verify","identity","about","seeking","photos","answers","interests","questions","notifications"];
+/* Phone verification, on or off. Off while there is no backend to verify against
+   and no SMS to receive, so the flow can be walked end to end without inventing a
+   code. Nothing is deleted — the two screens are still below, and flipping this
+   back to true puts them back at the front. */
+const VERIFY_ON=false;
+const ALL_STEPS=["verify","identity","about","seeking","photos","answers","interests","questions","notifications"];
+const STEPS=VERIFY_ON?ALL_STEPS:ALL_STEPS.filter(x=>x!=="verify");
 function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
@@ -1353,7 +1359,7 @@ function onboarding(){
   } else if(step==="about"){
     const loc=[o.hood.trim(),o.city.trim()].filter(Boolean).join(", ");
     body=`<div class="titleL">About you</div>
-      <div class="body mortar mt-s">Four facts that sit under your name.</div>
+      <div class="body mortar mt-s">The facts that sit under your name. Nothing else is asked.</div>
       <div class="v gap-xs mt-xl">
         <div class="field onNight"><div class="lbl">Age</div><input id="obAge" inputmode="numeric" value="${esc(o.age)}" placeholder="30"></div>
         <div class="field onNight"><div class="lbl">Neighbourhood</div><input id="obHood" value="${esc(o.hood)}" placeholder="Fort Greene"></div>
@@ -1694,7 +1700,7 @@ function performDismiss(id){
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const finish=()=>{
-    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:"About 14 hours"};
+    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:"Nine in the morning"};
     S.selected=null; render();
   };
   if(!card||reduce){ setTimeout(finish,120); return; }
