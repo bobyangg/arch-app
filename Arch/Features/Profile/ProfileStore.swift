@@ -141,9 +141,14 @@ final class ProfileStore {
     private func upload(id: String, position: Int, item: PickedPhoto) {
         guard ArchConfig.isConfigured else { return }
         Task { [weak self] in
-            guard let jpeg = await Task.detached(priority: .userInitiated) {
+            // Hoisted out of the `guard` rather than written inline. A trailing
+            // closure is not allowed in a control-flow condition -- Swift reads the
+            // `{` as the start of the guard body, and the error it gives is about
+            // a missing `else` several lines away from the cause.
+            let rendered = Task.detached(priority: .userInitiated) {
                 PhotoExport.jpeg(from: item.photo, crop: item.crop)
-            }.value else {
+            }
+            guard let jpeg = await rendered.value else {
                 await MainActor.run { self?.failUpload(id: id) }
                 return
             }
