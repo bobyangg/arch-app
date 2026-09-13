@@ -57,7 +57,7 @@ private struct TabBarItem: View {
     let badge: Int
     let action: () -> Void
 
-    /// Premium's keystone lights amber, every other tab terracotta. The palette has
+    /// Premium's star lights amber, every other tab terracotta. The palette has
     /// two accents and this is the seam between them: amber marks the thing you can
     /// buy, terracotta the things you do. Inactive is `mortar` for all four, so the
     /// bar still reads as one set at rest.
@@ -98,9 +98,9 @@ private struct TabBarItem: View {
         let style = StrokeStyle(lineWidth: weight, lineCap: .round, lineJoin: .round)
         switch tab {
         case .premium:
-            KeystoneShape()
-                .strokeBorder(tint, style: style)
-                .frame(width: 20, height: 24)
+            StarGlyph(lineWidth: weight)
+                .stroke(tint, style: style)
+                .frame(width: 24, height: 24)
         case .daily:
             ArchMark(lineWidth: weight)
                 .stroke(tint, style: style)

@@ -36,6 +36,7 @@ struct MessagesListView: View {
                 }
             }
             .background(ArchColor.night)
+            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Conversation.self) { conversation in
                 MessageThreadView(

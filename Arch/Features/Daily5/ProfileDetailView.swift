@@ -41,6 +41,7 @@ struct ProfileDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
+                header
                 leadPhoto
                 identity
                 hint
@@ -50,9 +51,7 @@ struct ProfileDetailView: View {
         }
         .background(ArchColor.night)
         .scrollIndicators(.hidden)
-        .ignoresSafeArea(edges: .top)
         .toolbar(.hidden, for: .navigationBar)
-        .overlay(alignment: .topLeading) { backButton }
         .safeAreaInset(edge: .bottom) { actionBar }
         .sheet(isPresented: $isComposing) {
             MessageComposerSheet(
@@ -70,12 +69,35 @@ struct ProfileDetailView: View {
 
     // MARK: Pieces
 
+    /// The back control in a row of its own, the way every other pushed screen
+    /// carries it. It used to float over a full-bleed lead photo; the photo is a
+    /// card now, and a button parked on a card is exactly what the profile avoids.
+    private var header: some View {
+        HStack(spacing: ArchSpacing.s) {
+            Button { dismiss() } label: {
+                Image(systemName: "chevron.left")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                    .frame(width: ArchSpacing.minimumTapTarget, height: ArchSpacing.minimumTapTarget)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleStyle())
+            .accessibilityLabel("Back to your roster")
+
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, ArchSpacing.xs)
+        .padding(.vertical, ArchSpacing.xs)
+    }
+
     @ViewBuilder
     private var leadPhoto: some View {
         if let photo = person.photos.first {
             PhotoPlaceholder(toneIndex: photo.toneIndex)
-                .aspectRatio(4.0 / 5.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .aspectRatio(PhotoCard.aspect, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
+                .padding(.horizontal, ArchSpacing.screenMargin)
+                .accessibilityLabel("Photo 1")
         }
     }
 
@@ -140,22 +162,6 @@ struct ProfileDetailView: View {
 
     private func photoPosition(_ photo: Photo) -> Int {
         (person.photos.firstIndex(of: photo) ?? 0) + 1
-    }
-
-    private var backButton: some View {
-        Button { dismiss() } label: {
-            Image(systemName: "chevron.left")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
-                .frame(width: 36, height: 36)
-                .background(Circle().fill(ArchColor.stone))
-                .frame(width: ArchSpacing.minimumTapTarget, height: ArchSpacing.minimumTapTarget)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(PressScaleStyle())
-        .padding(.leading, ArchSpacing.s)
-        .padding(.top, ArchSpacing.xs)
-        .accessibilityLabel("Back to your roster")
     }
 
     /// Both available actions, weighted honestly: writing to someone is what the
