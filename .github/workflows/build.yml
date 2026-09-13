@@ -55,8 +55,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use a pinned Xcode
-        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+      # The newest Xcode on the image, not a pinned one.
+      #
+      # Pinning 16.2 is what broke the first build: its SDK is iOS 18.2 and the
+      # runner carries simulator runtimes for 18.5, 18.6 and 26.x, so the asset
+      # catalog compiler could not find a runtime matching the SDK and failed
+      # before a single line of Swift was read. Taking the newest keeps the SDK and
+      # the runtimes on the image in step with each other, which is the property
+      # that actually matters here.
+      - name: Use the newest Xcode on the image
+        run: |
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          echo "Selecting $newest"
+          sudo xcode-select -switch "$newest"
+          xcodebuild -version
+
+      # Printed so that the next runtime mismatch is one line to read rather than
+      # a guess.
+      - name: What this image actually has
+        run: |
+          ls -d /Applications/Xcode*.app
+          xcrun simctl list runtimes || true
 
       - name: Install XcodeGen
         run: brew install xcodegen
