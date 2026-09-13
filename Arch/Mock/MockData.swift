@@ -1189,9 +1189,9 @@ enum MockData {
         // Ended from Lena's side. Which of the three things she did is not
         // something this app will ever say.
         Conversation(
-            state: .ended,
             id: "c-lena",
             person: lena,
+            state: .ended,
             opening: .prompt(lena.prompts[1]),
             messages: [
                 Message(id: "m8", text: "What did the translator give up", isOutgoing: true, timestamp: "Sunday"),
