@@ -75,6 +75,22 @@ def test_geo():
     hud = geo.BY_ID["ny-hudson"]
     d = geo.miles(fg.point, hud.point)
     check("Fort Greene to Hudson is about 108 miles", 107.0 < d < 109.0, "%.1f" % d)
+
+    # Exact values, because `private.arch_miles` in the database has to return the
+    # same ones. The cross-check compares pair sets, so a disagreement here would
+    # show up only for pairs sitting within a rounding error of somebody's radius
+    # -- a handful of people, quietly, in a way that reads as an algorithm
+    # difference rather than as arithmetic.
+    #
+    # Confirmed against the live database to 3.7e-10.
+    for label, a, b, expected in [
+        ("Fort Greene to Hudson", "bk-fort-greene", "ny-hudson", 108.188806478373),
+        ("Fort Greene to Gowanus", "bk-fort-greene", "bk-gowanus", 1.734310093105),
+        ("Beacon to New Paltz", "ny-beacon", "ny-new-paltz", 17.702788902533),
+    ]:
+        got = geo.miles(geo.BY_ID[a].point, geo.BY_ID[b].point)
+        check("%s is exactly %.6f" % (label, expected),
+              abs(got - expected) < 1e-9, "%.12f" % got)
     check("zero distance to yourself", geo.miles(fg.point, fg.point) == 0.0)
 
     # The trap: Anywhere means no filter, not a 100-mile circle.

@@ -105,6 +105,15 @@ struct SettingsView: View {
                     .fill(ArchColor.stone)
             )
             .animation(ArchMotion.standard, value: section.rows.count)
+
+            if let note = section.note {
+                Text(note)
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, ArchSpacing.xxs)
+                    .padding(.top, ArchSpacing.xxs)
+            }
         }
     }
 

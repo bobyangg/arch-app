@@ -108,7 +108,12 @@ struct DeleteAccountSetting: View {
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
                 line("Your profile, photos and answers are deleted.")
                 line("The people you are talking to can still read what was said, and cannot reply. They are not told why.")
-                line("You cannot undo this, and the same number can start again from scratch.")
+                // Was "the same number can start again from scratch", which was
+                // wrong twice over: phone verification went when Apple sign-in
+                // arrived, and `delete_account` deliberately keeps the Apple id
+                // claimed so that somebody removed for abuse cannot delete their
+                // way to a clean one.
+                line("You cannot undo this, and this Apple ID cannot make another account.")
             }
 
             SettingNote("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else's roster, but your conversations keep working.")
