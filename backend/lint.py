@@ -26,7 +26,7 @@ import sqlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql",
-         "005_compatibility.sql"]
+         "005_compatibility.sql", "006_matcher.sql"]
 
 problems = []
 notes = []
@@ -73,7 +73,8 @@ TABLES = {}
 def parse_tables(text):
     """{table: [column names]} plus the raw body, for the reference checks."""
     for match in re.finditer(
-            r"create table\s+(?:if not exists\s+)?(\w+)\s*\((.*?)\n\);",
+            r"create\s+(?:unlogged\s+|temp\s+)?table\s+(?:if not exists\s+)?"
+            r"(\w+)\s*\((.*?)\n\);",
             text, re.S | re.I):
         name, body = match.group(1), match.group(2)
         columns = []
@@ -135,7 +136,10 @@ for table, info in TABLES.items():
 for table, info in TABLES.items():
     for col, raw in info["declared"]:
         typ = raw.lower()
-        if typ in BUILTIN or typ in TYPES or typ.rstrip("[]") in TYPES:
+        # `smallint[]` and `gender[]` are both legal; strip the brackets before
+        # deciding. This checked enum arrays but not builtin ones.
+        bare = typ.rstrip("[]")
+        if typ in BUILTIN or typ in TYPES or bare in BUILTIN or bare in TYPES:
             continue
         problems.append("%s.%s: unknown type '%s'" % (table, col, raw))
 
@@ -194,7 +198,10 @@ for table in TABLES:
 # the compatibility tables would let a client compute its own score, which Arch
 # shows to nobody.
 SEALED = {"device_bits", "attest_challenges",
-          "compatibility_cells", "requirement_cells", "compatibility_digest"}
+          "compatibility_cells", "requirement_cells", "compatibility_digest",
+          # The matcher's working tables and its log. Read by the nightly job,
+          # which runs as the owner; no client has any business with any of them.
+          "match_runs", "match_people", "match_edges", "match_state"}
 policed = set(re.findall(r"create policy\s+\w+\s+on\s+(\w+)", clean, re.I))
 for table in rls:
     if table not in policed and table not in SEALED:

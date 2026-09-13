@@ -36,6 +36,23 @@ create schema if not exists private;
 revoke all on schema private from public;
 grant usage on schema private to authenticated, service_role;
 
+-- The date a roster belongs to.
+--
+-- **One definition, because there were briefly two and they disagreed.**
+-- `arch_paired_now` used `current_date` -- the session timezone's date, which on
+-- Supabase is UTC -- while `start_conversation` used the New York date. Verified:
+-- at 20:30 New York the first says the 14th and the second says the 13th, so for
+-- four evening hours the pairing window closed a day early for reading a profile
+-- but not for writing to one. You could message somebody whose profile had already
+-- gone dark. Nothing raised.
+--
+-- The batch is global and runs on New York time, so that is the only date that
+-- means anything here.
+create or replace function private.arch_night(at timestamptz default now())
+returns date language sql stable as $$
+    select ($1 at time zone 'America/New_York')::date
+$$;
+
 -- Has either person blocked the other? Direction does not matter: a block stops
 -- the pair in both directions, and neither side is told which way it went.
 create or replace function private.arch_blocked(a uuid, b uuid)
@@ -56,7 +73,7 @@ create or replace function private.arch_paired_now(a uuid, b uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select exists (
         select 1 from pairings p
-        where p.night > current_date - interval '2 days'
+        where p.night > private.arch_night() - 2
           and ((p.lo_account = a and p.hi_account = b)
             or (p.lo_account = b and p.hi_account = a))
           and not exists (

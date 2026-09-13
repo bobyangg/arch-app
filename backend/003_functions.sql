@@ -31,7 +31,7 @@ declare
     lo uuid;
     hi uuid;
     conversation_id uuid;
-    today date := (now() at time zone 'America/New_York')::date;
+    today date := private.arch_night();
 begin
     if me is null then
         raise exception 'not signed in' using errcode = '28000';
