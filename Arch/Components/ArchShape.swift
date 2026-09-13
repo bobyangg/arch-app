@@ -6,8 +6,10 @@ import SwiftUI
 /// 180 degrees is the left springing point, 270 the crown, 360 the right springing point.
 private func pointOnCircle(_ centre: CGPoint, _ radius: CGFloat, _ angle: Angle) -> CGPoint {
     CGPoint(
-        x: centre.x + radius * cos(angle.radians),
-        y: centre.y + radius * sin(angle.radians)
+        // `cos` returns a Double and `radius` is a CGFloat, and the multiply has
+        // overloads for both -- ambiguous rather than wrong. Converted explicitly.
+        x: centre.x + radius * CGFloat(cos(angle.radians)),
+        y: centre.y + radius * CGFloat(sin(angle.radians))
     )
 }
 
