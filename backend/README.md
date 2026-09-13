@@ -37,8 +37,14 @@ does not have to.
 **Public off**. Reads go through signed URLs, so that a photo stops being reachable
 when somebody is blocked. A public bucket would keep serving it forever.
 
-**5. Point the app at it.** Project Settings → API gives you the URL and the
-`anon` key. Both go in `Info.plist`:
+**5. Point the app at it — not yet possible.** This needs an `Info.plist`, which
+arrives with the Xcode project, and there is no Xcode project in this repo. Keep
+the two values somewhere safe until there is one; nothing reads them before then.
+
+They live in Project Settings (the gear, bottom-left) → **API**: "Project URL" and
+the `anon` / `public` key. Newer dashboards may file these under *API Keys* or
+*Data API*, and may call the anon key "publishable". When the project exists they
+go in as:
 
 ```xml
 <key>ARCH_SUPABASE_URL</key>
@@ -53,6 +59,16 @@ the opposite: it bypasses RLS entirely.** It belongs in edge functions and the
 nightly job, and must never appear in the iOS target.
 
 ## Checking it before trusting it
+
+Run `004_rls_test.sql` in the SQL Editor. It invents three people, has one of them
+try to read everything they should not be able to, prints a PASS/FAIL table, and
+**ends in ROLLBACK so nothing it creates survives** — safe to run against a
+database with real rows in it.
+
+This matters more than it looks. The SQL Editor normally runs as an admin who
+bypasses RLS entirely, so everything looks readable in the dashboard whether the
+policies work or not. Setting the role to `authenticated` with a jwt claim is the
+only way these policies get exercised before a real phone does it.
 
 There is no Postgres on this machine, so the SQL has never been executed.
 `lint.py` is the partial answer:
