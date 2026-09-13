@@ -269,9 +269,35 @@ enum Compatibility {
         drinking, family, money, work
     ]
 
-    /// 13.0 — the weights are chosen to sum to it, so a perfect pair scores 13 and
-    /// anybody reading a log can tell at a glance how good a pairing was.
+    /// 13.0 — what the weights sum to.
+    ///
+    /// **Not what a pair can score.** `processing` has no 1.00 cell, because two
+    /// people who both need to talk it through immediately are good for each other
+    /// but not perfect, so every pair on earth gives up 0.13 and the real ceiling is
+    /// `attainableMaximum`. Use that one for anything a reader will see; use this
+    /// only to check the weights still sum to what they were meant to.
     static var maximumScore: Double { tables.reduce(0) { $0 + $1.weight } }
+
+    /// 12.87 — the best score any two people can actually reach.
+    ///
+    /// Scores live between this and `attainableMinimum`, a range of about 7.5 points
+    /// rather than 13. Reporting a pair as a percentage of `maximumScore` squashes
+    /// every real pairing into a narrow band near 77% and makes the tables look like
+    /// they separate nobody, which is the opposite of what they do.
+    static var attainableMaximum: Double {
+        tables.reduce(0) { total, table in
+            let best = table.grid.flatMap { $0 }.max() ?? 0
+            return total + table.weight * best
+        }
+    }
+
+    /// 5.345 — the worst two people can do while still answering every question.
+    static var attainableMinimum: Double {
+        tables.reduce(0) { total, table in
+            let worst = table.grid.flatMap { $0 }.min() ?? 0
+            return total + table.weight * worst
+        }
+    }
 
     /// Two people's answers, as one number.
     ///
