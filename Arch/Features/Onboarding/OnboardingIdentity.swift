@@ -1,6 +1,14 @@
 import SwiftUI
 
-/// Name and email.
+/// Your name.
+///
+/// The email field is gone: signing in with Apple already supplied one, usually a
+/// private relay address, and asking again would be asking for something Arch
+/// already has and does not show to anybody.
+///
+/// The name arrives filled in for the same reason, and stays editable — Apple hands
+/// over whatever is on the Apple ID, which is not always what somebody wants a
+/// stranger to read.
 struct OnboardingIdentity: View {
     let store: OnboardingStore
 
@@ -8,7 +16,7 @@ struct OnboardingIdentity: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Your name",
-                detail: "This is what people see. Your email is only for signing in and account notices."
+                detail: "This is what people see. Apple gave us the one on your account — change it if it is not what you go by."
             )
 
             VStack(spacing: ArchSpacing.xs) {
@@ -18,16 +26,9 @@ struct OnboardingIdentity: View {
                     placeholder: "Sam",
                     surface: ArchColor.stone
                 )
-                ArchField(
-                    text: Binding(get: { store.email }, set: { store.email = $0 }),
-                    label: "Email",
-                    placeholder: "sam@example.com",
-                    keyboard: .emailAddress,
-                    surface: ArchColor.stone
-                )
             }
 
-            Text("Your email is never shown to anyone.")
+            Text("Your Apple email is never shown to anyone, and Arch only uses it for account notices.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
         }
@@ -136,7 +137,7 @@ struct OnboardingAbout: View {
 
 }
 
-#Preview("Name and email") {
+#Preview("Your name") {
     OnboardingIdentity(store: OnboardingStore())
         .padding(ArchSpacing.screenMargin)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)

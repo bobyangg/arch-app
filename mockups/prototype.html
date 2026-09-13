@@ -184,6 +184,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);
      transition:background .25s ease;}
 .seg.on{background:var(--lamp);}
+.applebtn{height:52px; border-radius:var(--r-control); background:#fff; color:#000;
+          display:flex; align-items:center; justify-content:center; gap:8px;
+          font-size:17px; font-weight:600; width:100%;}
 .opt{background:var(--stone); border-radius:var(--r-control); padding:var(--s-m);
      font-size:17px; line-height:24px;}
 .opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
@@ -1411,7 +1414,7 @@ function settingDetail(id){
      +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
      +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
   } else if(id==="h-safety"){
-    b=sect("Every account has a verified number","It is not a guarantee that someone is who they say, but it makes throwaway accounts expensive, which is most of the problem.")
+    b=sect("Every account is tied to an Apple ID and a device","It is not a guarantee that somebody is who they say. It does mean that starting again after being removed costs a new Apple ID and usually a new phone, rather than thirty seconds &mdash; and making throwaway accounts expensive is most of the problem.")
      +sect("Blocking is silent and complete","A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told.")
      +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
      +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
@@ -1443,7 +1446,9 @@ function onboarding(){
       <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
         actually like. You read them properly, you decide, and then you are done until tomorrow.</div>
       <div style="flex:1"></div>
-      <button class="btn primary" data-a="obStart">Get started</button></div></div>`;
+      <button class="applebtn" data-a="obStart">Continue with Apple</button>
+      <div class="footnote mortar center mt-s">Arch does not post anything, and never sees
+        your Apple password. Your email stays hidden if you want it to.</div></div></div>`;
   }
   const step=STEPS[o.step];
   const inQ=o.q!==null&&o.q!==undefined;
@@ -1474,11 +1479,13 @@ function onboarding(){
     cta="Verify"; enabled=o.code.length===6;
   } else if(step==="identity"){
     body=`<div class="titleL">Your name</div>
-      <div class="body mortar mt-s">This is what people see. Your email is only for signing in.</div>
+      <div class="body mortar mt-s">This is what people see. Apple gave us the one on your
+        account &mdash; change it if it is not what you go by.</div>
       <div class="v gap-xs mt-xl">
-        <div class="field onNight"><div class="lbl">Name</div><input id="obName" value="${esc(o.name)}" placeholder="Sam"></div>
-        <div class="field onNight"><div class="lbl">Email</div><input id="obEmail" value="${esc(o.email)}" placeholder="sam@example.com"></div></div>`;
-    enabled=o.name.trim()&&o.email.includes("@");
+        <div class="field onNight"><div class="lbl">Name</div><input id="obName" value="${esc(o.name)}" placeholder="Sam"></div></div>
+      <div class="footnote mortar mt-m">Your Apple email is never shown to anyone, and Arch
+        only uses it for account notices.</div>`;
+    enabled=!!o.name.trim();
   } else if(step==="about"){
     const loc=placeLabel(o.place);
     body=`<div class="titleL">About you</div>
@@ -2113,8 +2120,8 @@ document.addEventListener("click",e=>{
        is the screen a new account starts on. */
     signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
       <div class="body mortar mt-s">Your profile, your conversations and the people in your
-        roster all stay exactly as they are. Nothing is deleted. You will need a code sent
-        to your number to come back.</div>
+        roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple
+        brings you straight back to it.</div>
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     signOutDo:()=>{ closeSheet(); startOnboarding(); },
@@ -2274,7 +2281,14 @@ document.addEventListener("click",e=>{
       S.tab="messages"; S.stacks.messages=[{name:"thread",id}]; render();
     },
     /* onboarding */
-    obStart:()=>{o.welcome=false; render();},
+    /* Apple hands over a name and a relay email on the first authorization only.
+       A real build persists them then or loses them for good. */
+    obStart:()=>{
+      o.appleUserID="001234.abcdef";
+      if(!o.name.trim()) o.name="Sam";
+      if(!o.email) o.email="sam@privaterelay.appleid.com";
+      o.welcome=false; render();
+    },
     obBack:()=>{
       if(o.q!==null&&o.q!==undefined){ o.q=o.q===0?null:o.q-1; render(); return; }
       if(o.step===0&&o.sent){ o.sent=false; o.code=""; render(); return; }
@@ -2357,7 +2371,7 @@ function refreshCTA(){
   let ok=true;
   if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
   else if(step==="verify") ok=o.code.length===6;
-  else if(step==="identity") ok=!!o.name.trim()&&o.email.includes("@");
+  else if(step==="identity") ok=!!o.name.trim();
   else if(step==="about") ok=!!(o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender);
   else if(step==="seeking") ok=o.seeking.length>0;
   else if(step==="answers") ok=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
@@ -2368,7 +2382,7 @@ function refreshCTA(){
 
 function startOnboarding(){
   S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
-    age:"",place:null,coord:null,height:"",work:"",gender:null,pronouns:"",seeking:[],
+    appleUserID:"",age:"",place:null,coord:null,height:"",work:"",gender:null,pronouns:"",seeking:[],
     photos:[],up:[],questions:["","",""],answers:["","",""],
     interests:["","",""],q:null,qa:{}};
   render();

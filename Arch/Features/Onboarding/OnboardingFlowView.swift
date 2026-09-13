@@ -18,7 +18,24 @@ struct OnboardingFlowView: View {
             ArchColor.night.ignoresSafeArea()
 
             if showingWelcome {
-                OnboardingWelcome { showingWelcome = false }
+                // Design-only: the real Apple button needs an entitlement and a
+                // signed build, so this build takes the demo path and fills the
+                // name Apple would have supplied.
+                OnboardingWelcome(
+                    onSignIn: { identity in
+                        store.apply(identity)
+                        showingWelcome = false
+                    },
+                    demoSignIn: {
+                        store.apply(
+                            AppleIdentity(
+                                userID: "001234.abcdef", name: "Sam",
+                                email: "sam@privaterelay.appleid.com", identityToken: nil
+                            )
+                        )
+                        showingWelcome = false
+                    }
+                )
                     .transition(.opacity)
             } else {
                 flow
