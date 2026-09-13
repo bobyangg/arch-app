@@ -144,7 +144,7 @@ struct YouProfileView: View {
     @ViewBuilder
     private var leadPhoto: some View {
         if let photo = person.mainPhoto {
-            PhotoPlaceholder(toneIndex: photo.toneIndex)
+            PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
                 .aspectRatio(PhotoCard.aspect, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
                 .padding(.horizontal, ArchSpacing.screenMargin)

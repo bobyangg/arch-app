@@ -142,6 +142,87 @@ enum ArchBackend {
         )
     }
 
+    // MARK: Photographs
+
+    /// The row goes first, then the bytes.
+    ///
+    /// That order is the whole design. The storage policy is a lookup against the
+    /// `photos` row, so an upload with no row behind it is refused — which means a
+    /// path cannot be written by anybody who has not already claimed it. It also
+    /// gives a failed upload a durable meaning: a row with `uploaded_at` still
+    /// null, which survives the app being closed, where the current in-memory
+    /// `uploads` dictionary does not.
+    ///
+    /// The id is minted here rather than by the server because the client needs it
+    /// to build the path before either write.
+    static func addPhoto(id: String, position: Int, jpeg: Data) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        let path = "\(session.userID)/\(id).jpg"
+
+        struct NewPhoto: Encodable {
+            let id: String
+            let accountId: String
+            let position: Int
+            let storagePath: String
+        }
+        try await SupabaseClient.shared.insert(
+            "photos",
+            NewPhoto(id: id, accountId: session.userID,
+                     position: position, storagePath: path)
+        )
+
+        do {
+            try await SupabaseClient.shared.upload(path: path, data: jpeg)
+        } catch {
+            // The row is the record that this upload was attempted, and the grid
+            // reads it to offer "Again". Deleting it here would make a failed
+            // upload vanish instead, which is how somebody ends up with four
+            // photos and no idea why the fifth never appeared.
+            throw error
+        }
+
+        struct Uploaded: Encodable { let uploadedAt: String }
+        try await SupabaseClient.shared.update(
+            "photos",
+            Uploaded(uploadedAt: ISO8601DateFormatter().string(from: Date())),
+            filters: ["id": "eq.\(id)"]
+        )
+    }
+
+    static func removePhoto(id: String) async throws {
+        try await SupabaseClient.shared.delete("photos", filters: ["id": "eq.\(id)"])
+    }
+
+    /// The whole order, not a move.
+    ///
+    /// Positions are unique per account, so writing them one at a time collides
+    /// with itself partway through a permutation. The server function takes the
+    /// same shape and defers the constraint to commit.
+    static func reorderPhotos(_ ids: [String]) async throws {
+        struct Arguments: Encodable { let ids: [String] }
+        struct Empty: Decodable {}
+        _ = try await SupabaseClient.shared.rpc(
+            "reorder_photos", Arguments(ids: ids), returning: Empty?.self
+        )
+    }
+
+    /// Signed URLs for a set of photographs, in one round trip.
+    ///
+    /// Returned keyed by photo id rather than by path, because that is what the
+    /// views hold. A photograph the policy refused simply has no URL, and the
+    /// placeholder tone stands in — which is also what happens while one loads.
+    static func photoURLs(for photos: [PhotoRow]) async throws -> [String: URL] {
+        let byPath = Dictionary(uniqueKeysWithValues: photos.map { ($0.storagePath, $0.id) })
+        let signed = try await SupabaseClient.shared.signedURLs(paths: Array(byPath.keys))
+        var out: [String: URL] = [:]
+        for (path, url) in signed {
+            if let id = byPath[path] { out[id] = url }
+        }
+        return out
+    }
+
     /// The sixteen answers, written once at the end of onboarding.
     ///
     /// Sent as one upsert rather than sixteen inserts so that a connection dropping

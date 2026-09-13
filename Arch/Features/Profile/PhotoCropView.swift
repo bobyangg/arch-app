@@ -14,12 +14,42 @@ import SwiftUI
 /// It has to exist at all because almost nothing on anybody's phone is already square.
 /// The alternative is centre-cropping for people, which is how you get profiles
 /// where the first photo is somebody's forehead.
+/// Which part of a photograph somebody kept.
+///
+/// Normalised into the source image's own space, so it survives the image being
+/// loaded at a different size than it was cropped at — which it always is. The
+/// picker shows a thumbnail and the upload re-renders from the full-resolution
+/// original, and a rect in points would mean something different to each of them.
+struct PhotoCrop: Hashable {
+    /// Top-left of the kept window, 0...1 of the source.
+    var origin: CGPoint
+    /// Its size, 0...1 of the source. Always the shape of `PhotoCard.aspect`.
+    var size: CGSize
+
+    /// The whole photograph, for a source that is already the right shape.
+    static let full = PhotoCrop(origin: .zero, size: CGSize(width: 1, height: 1))
+}
+
+/// A photograph somebody chose, and the part of it they kept.
+///
+/// The two travel together from here to the upload because they are useless apart:
+/// the library item says which image, the crop says which of it, and an upload
+/// given only the first would centre-crop for people — which is how you get
+/// profiles where the first photo is somebody's forehead.
+struct PickedPhoto: Hashable {
+    let photo: LibraryPhoto
+    let crop: PhotoCrop
+}
+
 struct PhotoCropView: View {
     let photo: LibraryPhoto
     /// Which of the chosen photos this is, for the counter.
     var step: Int = 1
     var total: Int = 1
-    let onUse: () -> Void
+    /// Hands back what was framed. It used to hand back nothing, which meant the
+    /// whole screen was a ceremony — somebody positioned their photograph and the
+    /// app then centre-cropped it anyway.
+    let onUse: (PhotoCrop) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
@@ -28,6 +58,11 @@ struct PhotoCropView: View {
     @State private var zoomBase: Int = 100
     @State private var offset: CGSize = .zero
     @State private var drag: CGSize = .zero
+    /// The stage, captured so `crop()` can use the same geometry the view drew
+    /// with. Everything else is derived inside the `GeometryReader` and thrown
+    /// away, and re-deriving it from a guess would export an almost-right rect —
+    /// faces slightly off, and nobody files a bug about slightly.
+    @State private var stageSize: CGSize = .zero
 
     private static let zoomRange = 100...250
     /// The margin of visible, dimmed photograph around the frame.
@@ -102,6 +137,10 @@ struct PhotoCropView: View {
 
             ZStack {
                 Color.clear
+                    // The one piece of the stage geometry that has to outlive the
+                    // closure, so `crop()` can rebuild the rest of it exactly.
+                    .onAppear { stageSize = geo.size }
+                    .onChange(of: geo.size) { _, size in stageSize = size }
 
                 PhotoPlaceholder(toneIndex: photo.toneIndex)
                     .frame(width: image.width, height: image.height)
@@ -168,7 +207,7 @@ struct PhotoCropView: View {
     }
 
     private var footer: some View {
-        ArchButton(title: step < total ? "Next" : useTitle, action: onUse)
+        ArchButton(title: step < total ? "Next" : useTitle) { onUse(crop()) }
             .padding(.horizontal, ArchSpacing.screenMargin)
             .padding(.top, ArchSpacing.s)
             .padding(.bottom, ArchSpacing.s)
@@ -220,6 +259,41 @@ struct PhotoCropView: View {
 
     private func clampZoom(_ value: Int) -> Int {
         min(max(value, Self.zoomRange.lowerBound), Self.zoomRange.upperBound)
+    }
+
+    /// What is inside the frame, as a fraction of the source photograph.
+    ///
+    /// Built from the same four helpers the stage draws with, in the same order,
+    /// so the exported rect is the rectangle that was on screen rather than a
+    /// second opinion about it.
+    ///
+    /// The image is drawn centred and then moved by `placed`, so the frame sits at
+    /// the image's centre *minus* that movement. Dividing by the drawn image size
+    /// cancels both the cover factor and the zoom, which is why the result is
+    /// independent of how large the stage happened to be.
+    private func crop() -> PhotoCrop {
+        let frame = frameSize(in: stageSize)
+        let image = imageSize(covering: frame)
+        guard stageSize.width > 0, image.width > 0, image.height > 0 else {
+            return .full
+        }
+        let limit = limitSize(image: image, frame: frame)
+        let placed = clamped(
+            CGSize(width: offset.width + drag.width, height: offset.height + drag.height),
+            to: limit
+        )
+
+        let x = (image.width / 2 - placed.width - frame.width / 2) / image.width
+        let y = (image.height / 2 - placed.height - frame.height / 2) / image.height
+
+        // Clamped because a rect that starts a hair outside the source is a
+        // decoding error later, a long way from here.
+        let w = min(1, frame.width / image.width)
+        let h = min(1, frame.height / image.height)
+        return PhotoCrop(
+            origin: CGPoint(x: min(max(x, 0), 1 - w), y: min(max(y, 0), 1 - h)),
+            size: CGSize(width: w, height: h)
+        )
     }
 }
 

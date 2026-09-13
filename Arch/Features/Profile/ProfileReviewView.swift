@@ -170,7 +170,7 @@ struct ProfileReviewView: View {
         HStack(alignment: .top, spacing: ArchSpacing.s) {
             switch item {
             case .photo(let photo):
-                PhotoPlaceholder(toneIndex: photo.toneIndex)
+                PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
                     .frame(width: 44, height: 55)
                     .clipShape(RoundedRectangle(cornerRadius: ArchRadius.detail, style: .continuous))
                 Text("Photo \(photoNumber(photo))")

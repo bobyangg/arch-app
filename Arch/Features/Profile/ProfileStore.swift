@@ -45,16 +45,39 @@ final class ProfileStore {
 
     var failedUploads: Int { uploads.values.filter { $0 == .failed }.count }
 
+    /// Photographs moderation would not take, and why.
+    ///
+    /// Kept apart from `uploads` deliberately. An upload is something happening to
+    /// a photo for a few seconds; a rejection arrives hours or days later, against
+    /// a photo that uploaded perfectly well. Folding the two together would mean a
+    /// refusal looked like a network problem, and "Again" is exactly the wrong
+    /// thing to offer somebody whose photograph was refused.
+    private(set) var rejections: [String: PhotoRejection] = [:]
+
+    var rejectedPhotos: Int { rejections.count }
+
+    func reject(id: String, because reason: PhotoRejection) {
+        rejections[id] = reason
+        if let index = person.photos.firstIndex(where: { $0.id == id }) {
+            person.photos[index].state = .rejected
+        }
+    }
+
     /// Adds picked photos in the order they were chosen.
     ///
     /// They appear in the grid immediately and upload behind you. Holding the grid
     /// hostage behind a spinner is how people end up staring at a progress bar
     /// wondering whether the app has frozen, and there is nothing here they need to
     /// wait for — the ordering and the cropping are already done.
-    func addPhotos(_ picked: [LibraryPhoto]) {
-        for photo in picked.prefix(slotsLeft) {
-            let id = "you-p\(UUID().uuidString.prefix(6))"
-            person.photos.append(Photo(id: id, toneIndex: photo.toneIndex))
+    func addPhotos(_ picked: [PickedPhoto]) {
+        for picked in picked.prefix(slotsLeft) {
+            // A real uuid, because the server's column is one and the row is
+            // written before the bytes are. The old "you-p" + six characters was
+            // not a uuid and collided in shape with the seeded mock ids.
+            let id = UUID().uuidString.lowercased()
+            person.photos.append(
+                Photo(id: id, toneIndex: picked.photo.toneIndex, state: .pending)
+            )
             uploads[id] = .uploading
         }
     }
@@ -67,7 +90,16 @@ final class ProfileStore {
         guard canRemovePhoto else { return }
         person.photos.removeAll { $0.id == id }
         uploads[id] = nil
+        rejections[id] = nil
     }
+
+    /// The order, as the whole list rather than as a move.
+    ///
+    /// `reorder_photos` on the server takes the same shape for the same reason:
+    /// positions are unique per account, so writing them one at a time collides
+    /// with itself, and a whole order can be re-sent after a dropped connection
+    /// without working out what landed.
+    var photoOrder: [String] { person.photos.map(\.id) }
 
     // MARK: Answers
 

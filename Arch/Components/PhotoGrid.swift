@@ -50,7 +50,7 @@ struct PhotoGrid: View {
     private func slot(_ photo: Photo, at index: Int) -> some View {
         let upload = uploads[photo.id]
 
-        return PhotoPlaceholder(toneIndex: photo.toneIndex)
+        return PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
             .aspectRatio(1, contentMode: .fit)
             .overlay { if upload == .failed { failedFace(photo) } }
             .overlay(alignment: .bottom) {
@@ -229,7 +229,8 @@ private struct PhotoGridPreview: View {
                 canRemove: store.canRemovePhoto,
                 uploads: store.uploads,
                 onMove: { store.movePhoto(id: $0, to: $1) },
-                onAdd: { store.addPhotos([MockData.photoLibrary[0]]) },
+                onAdd: { store.addPhotos([PickedPhoto(photo: MockData.photoLibrary[0],
+                                                      crop: .full)]) },
                 onRemove: { store.removePhoto(id: $0) },
                 onFinishUpload: { store.finishUpload(id: $0) },
                 onRetryUpload: { store.retryUpload(id: $0) }
@@ -241,7 +242,8 @@ private struct PhotoGridPreview: View {
             isReady = true
             store = ProfileStore(person: person)
             guard adding > 0 else { return }
-            store.addPhotos(Array(MockData.photoLibrary.prefix(adding)))
+            store.addPhotos(MockData.photoLibrary.prefix(adding)
+                .map { PickedPhoto(photo: $0, crop: .full) })
             if failing {
                 for photo in store.person.photos.suffix(adding) {
                     store.failUpload(id: photo.id)

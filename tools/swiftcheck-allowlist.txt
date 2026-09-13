@@ -1,0 +1,89 @@
+# Apple framework and standard library types this project constructs.
+#
+# swiftcheck reports any capitalised name called like a constructor that is
+# neither declared in Arch/ nor listed here. That is the check that catches a
+# SwiftUI view which was invented rather than written: a view used in view
+# position is a bare type name, so the member check sees nothing to resolve and
+# reports nothing. Two such views were written before this existed.
+#
+# Adding a name here is a claim that Apple declares it. If you are adding one
+# because a check failed, make sure that is actually true.
+
+# SwiftUI
+AppStorage
+AsyncImage
+Binding
+Button
+Capsule
+Circle
+Color
+DragGesture
+EmptyView
+Environment
+FillStyle
+Font
+ForEach
+GridItem
+HStack
+Image
+LazyVGrid
+LinearGradient
+MagnifyGesture
+NavigationLink
+NavigationPath
+NavigationStack
+Path
+Preview
+Rectangle
+RoundedRectangle
+Slider
+Spacer
+State
+StrokeStyle
+Text
+TextEditor
+TextField
+Toggle
+VStack
+ZStack
+
+# AuthenticationServices
+SignInWithAppleButton
+
+# CoreGraphics / CoreText / UIKit
+CGFloat
+CGPoint
+CGRect
+CGSize
+CTFontManagerRegisterFontsForURL
+UIColor
+UIFont
+UIFontMetrics
+
+# Foundation and the standard library
+Array
+Calendar
+Data
+Date
+DateComponents
+DateFormatter
+Dictionary
+Double
+ISO8601DateFormatter
+Int
+JSONDecoder
+JSONEncoder
+Set
+TimeInterval
+TimeZone
+URL
+URLQueryItem
+URLRequest
+URLSession
+UUID
+
+# Security
+SecItemAdd
+SecItemCopyMatching
+SecItemDelete
+SecItemUpdate
