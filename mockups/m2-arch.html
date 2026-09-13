@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Arch — slot indicator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+  :root{
+    --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+    --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D;
+    --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
+  .phone{width:393px; height:852px; background:var(--night); overflow:hidden; position:relative;}
+  .screen{padding:36px 20px 24px;}
+  .sec-title{font-size:13px; line-height:18px; color:var(--mortar); margin-bottom:24px;}
+  .row{display:flex; align-items:center; gap:24px; margin-bottom:22px;}
+  .lbl{font-size:13px; line-height:18px; color:var(--mortar); width:126px;}
+  .lbl b{color:var(--limestone); font-weight:600; display:block; font-size:15px;}
+</style>
+</head>
+<body>
+<div class="phone"><div class="screen">
+  <div class="sec-title">Slot indicator &mdash; 132pt wide, 18pt band</div>
+  <div id="rows"></div>
+</div></div>
+
+<script>
+const C={night:'#191715', stone:'#232120', stoneRaised:'#2E2B29',
+         limestone:'#F5EFE6', mortar:'#9A8F86', lamp:'#E5714D'};
+
+function pt(cx,cy,r,deg){const a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
+function segPath(cx,cy,a0,a1,ro,ri){
+  const [x0,y0]=pt(cx,cy,ro,a0), [x1,y1]=pt(cx,cy,ro,a1);
+  const [x2,y2]=pt(cx,cy,ri,a1), [x3,y3]=pt(cx,cy,ri,a0);
+  return `M${x0},${y0} A${ro},${ro} 0 0 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 0 0 ${x3},${y3} Z`;
+}
+
+// Mirrors ArchBand in ArchShape.swift exactly: five equal voussoirs, no proud keystone.
+function drawArch(el, W, filled, capacity){
+  const count = capacity || 5, joint = 1.3, thickness = 18, allowance = 1;
+  const step = 180 / count;
+  const H = W/2 + allowance;
+  const cx = W/2, cy = H;
+  const base = Math.min(W/2, H) - allowance;
+  el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el.setAttribute('width', W); el.setAttribute('height', H);
+  for(let i=0;i<count;i++){
+    const a0 = 180 + i*step + joint, a1 = 180 + (i+1)*step - joint;
+    const ro = base, ri = base - thickness;
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', segPath(cx,cy,a0,a1,ro,ri));
+    if(i < filled){
+      path.setAttribute('fill', C.lamp);
+    } else {
+      path.setAttribute('fill','none');
+      path.setAttribute('stroke', 'rgba(154,143,134,.30)');
+      path.setAttribute('stroke-width','1');
+    }
+    el.appendChild(path);
+  }
+}
+
+const states = [
+  [5,'Full',      'the arch holds'],
+  [4,'Four',      'one slot open'],
+  [3,'Three',     'two slots open'],
+  [2,'Two',       'three slots open'],
+  [1,'One',       'the stress test'],
+  [0,'None',      'every slot open'],
+];
+document.getElementById('rows').innerHTML = states.map((s,i)=>
+  `<div class="row"><svg id="a${i}"></svg><div class="lbl"><b>${s[1]}</b>${s[2]}</div></div>`
+).join('');
+states.forEach((s,i)=> drawArch(document.getElementById('a'+i), 132, s[0], 5));
+</script>
+</body>
+</html>

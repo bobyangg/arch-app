@@ -1,0 +1,2538 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Arch Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+:root{
+  /* Candlelight: the light appearance, and the one the tokens default to.
+     Dark overrides the same names below, so nothing downstream knows which
+     world it is in — exactly as ArchColor.swift works. */
+  --night:#FAF6F0; --stone:#FFFFFF; --stoneRaised:#F2ECE2;
+  --limestone:#232120; --mortar:#6F675F;
+  --lamp:#C9512F; --ember:#A9661A; --verdigris:#3F7359;
+  --onLamp:#FAF6F0;
+  --hairline:rgba(111,103,95,.16);
+  --quiet:rgba(111,103,95,.28);
+  --lampQuiet:rgba(201,81,47,.45);
+  --selected:rgba(35,33,32,.30);
+  --surround:#EDE4D8;
+
+  --tone0a:#E4E0DA; --tone0b:#DAD5CE;
+  --tone1a:#EDDDCE; --tone1b:#E4D2C0;
+  --tone2a:#DFE3D8; --tone2b:#D4DACC;
+  --tone3a:#E6E2DC; --tone3b:#DCD7D0;
+  --tone4a:#F2DFCD; --tone4b:#E9D2BB;
+  --tone5a:#EFE9DE; --tone5b:#E6DED1;
+
+  /* Fraunces for the brand voice, Instrument Sans for chrome. */
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+
+  --r-photo:24px; --r-card:20px; --r-control:12px; --r-sheet:28px; --r-detail:8px;
+  --s-xxs:4px; --s-xs:8px; --s-s:12px; --s-m:16px; --s-l:20px;
+  --s-xl:24px; --s-xxl:32px; --s-xxxl:48px;
+}
+
+/* Rich Charcoal. `system` is resolved to one of these two in script, so this is
+   the only place the dark values are written. */
+html[data-theme="dark"]{
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86;
+  --lamp:#E5714D; --ember:#F0A243; --verdigris:#7FA98F;
+  --onLamp:#1F1C1A;
+  --hairline:rgba(154,143,134,.16);
+  --quiet:rgba(154,143,134,.28);
+  --lampQuiet:rgba(229,113,77,.45);
+  --selected:rgba(245,239,230,.30);
+  --surround:#0E0D0C;
+
+  --tone0a:#2F3138; --tone0b:#282A30;
+  --tone1a:#3E332A; --tone1b:#362C24;
+  --tone2a:#2C3630; --tone2b:#262F2A;
+  --tone3a:#383A3E; --tone3b:#303236;
+  --tone4a:#46332A; --tone4b:#3D2C24;
+  --tone5a:#4A4640; --tone5b:#413E38;
+}
+*{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  background:var(--surround); color:var(--limestone); font-family:var(--sans);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+}
+button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; text-align:left;}
+:focus-visible{outline:2px solid var(--lamp); outline-offset:2px;}
+
+/* ---- the device ---- */
+#device{
+  width:393px; height:852px; max-width:100vw; max-height:100dvh;
+  background:var(--night); position:relative; overflow:hidden;
+  display:flex; flex-direction:column;
+}
+@media (min-width:460px) and (min-height:900px){
+  #device{border-radius:44px; box-shadow:0 0 0 10px var(--stoneRaised), 0 30px 80px rgba(0,0,0,.28);}
+}
+@media (max-width:459px), (max-height:899px){
+  #device{width:100vw; height:100dvh;}
+}
+
+/* ---- type scale ---- */
+/* WONK and SOFT off, matching the static cuts the app ships. Fraunces' own
+   defaults are a wonky black at caption size, which is not the brand. */
+.display,.titleL,.titleM,.prompt{
+  font-family:var(--serif); font-optical-sizing:auto;
+  font-variation-settings:"SOFT" 0,"WONK" 0;
+}
+.display{font-size:40px; line-height:46px; font-weight:600;}
+.titleL{font-size:30px; line-height:36px; font-weight:600;}
+.titleM{font-size:24px; line-height:30px; font-weight:600;}
+.prompt{font-size:19px; line-height:26px; font-weight:400;}
+.bodyL{font-size:20px; line-height:28px;}
+.body{font-size:17px; line-height:24px;}
+.callout{font-size:16px; line-height:22px;}
+.subhead{font-size:15px; line-height:20px; font-weight:600;}
+.footnote{font-size:13px; line-height:18px;}
+.caption{font-size:12px; line-height:16px; font-weight:500;}
+.mortar{color:var(--mortar);}
+.limestone{color:var(--limestone);}
+
+/* ---- scroll region ---- */
+.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;}
+.pad{padding-left:var(--s-l); padding-right:var(--s-l);}
+.safetop{height:env(safe-area-inset-top,0px);}
+.hairline{height:.5px; background:var(--hairline);}
+
+/* ---- chrome ---- */
+.navbar{display:flex; align-items:center; gap:var(--s-s); padding:8px 20px 8px 8px; flex:none;}
+.iconbtn{width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+         font-size:17px; color:var(--limestone); flex:none;}
+.iconbtn.round{width:36px; height:36px; border-radius:18px; background:var(--stone);}
+
+.tabbar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+        display:flex; padding:8px 0 calc(4px + env(safe-area-inset-bottom,0px));}
+.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+.tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+.tab[aria-selected="true"] .lbl{color:var(--lamp);}
+.glyph{width:26px; height:26px; position:relative;}
+.badge{position:absolute; top:-5px; right:-9px; min-width:16px; height:16px; border-radius:8px;
+       background:var(--lamp); color:var(--onLamp); font-size:11px; font-weight:600;
+       display:flex; align-items:center; justify-content:center; padding:0 4px;}
+
+/* ---- pieces ---- */
+.photo{border-radius:var(--r-photo); width:100%;}
+.chips{display:flex; flex-wrap:wrap; gap:var(--s-xs);}
+.chip{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+      font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+.interest{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+          font-size:13px; line-height:18px; color:var(--limestone);}
+.interest.add{background:none; border:1px solid var(--quiet); color:var(--mortar);}
+
+.card{background:var(--stone); border-radius:var(--r-card); padding:var(--s-xl); position:relative;}
+.card.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+.photo.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+
+.btn{height:52px; border-radius:var(--r-control); display:flex; align-items:center;
+     justify-content:center; font-size:15px; font-weight:600; width:100%;}
+.btn.primary{background:var(--lamp); color:var(--onLamp);}
+.btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
+.btn.quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btntext{height:44px; display:flex; align-items:center; justify-content:center;
+         font-size:15px; font-weight:600; color:var(--mortar); width:100%;}
+
+.slotcard{height:112px; background:var(--stone); border:1px solid var(--hairline);
+          border-radius:var(--r-photo); display:flex; flex-direction:column;
+          align-items:center; justify-content:center; gap:4px;}
+
+/* Above the tabs rather than inside a screen: losing a connection happens to the
+   app, not to the roster. It pushes the app down rather than floating over it —
+   a bar that overlays content covers what you were reading at the moment you least
+   want to lose your place. No red: this is a train tunnel, not a fault. */
+.offline{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
+         padding:12px 20px; text-align:center;}
+.bottombar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+           padding:12px 20px calc(4px + env(safe-area-inset-bottom,0px));}
+
+/* ---- rows ---- */
+.row{display:flex; gap:var(--s-s); padding:var(--s-m) 0; align-items:flex-start;}
+.avatar{width:52px; height:52px; border-radius:26px; flex:none;}
+.rowbody{flex:1; min-width:0;}
+.rowline{display:flex; align-items:baseline; gap:var(--s-xs);}
+.dot{width:8px; height:8px; border-radius:4px; background:var(--lamp); margin-top:5px; flex:none;}
+.rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
+
+/* ---- bubbles ---- */
+.bubble{border-radius:var(--r-card); padding:10px 14px; font-size:16px; line-height:22px;
+        max-width:80%; display:inline-block;}
+.bubble.out{background:var(--stoneRaised);}
+.bubble.in{background:var(--stone);}
+.msg{display:flex; flex-direction:column; gap:4px; margin-bottom:var(--s-s);}
+.msg.out{align-items:flex-end;}
+.quoted{background:var(--stoneRaised); border-radius:var(--r-control); padding:var(--s-s);}
+
+/* ---- sheets ---- */
+#scrim{position:absolute; inset:0; background:rgba(15,19,25,.72); opacity:0;
+       transition:opacity .25s ease; pointer-events:none; z-index:20;}
+#scrim.on{opacity:1; pointer-events:auto;}
+#sheet{position:absolute; left:0; right:0; bottom:0; background:var(--stone);
+       border-radius:var(--r-sheet) var(--r-sheet) 0 0; z-index:21;
+       padding:0 20px calc(16px + env(safe-area-inset-bottom,0px));
+       transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.8,.2,1);
+       max-height:88%; overflow-y:auto;}
+#sheet.on{transform:translateY(0);}
+.grabber{width:36px; height:5px; border-radius:3px; background:var(--mortar);
+         opacity:.4; margin:8px auto 12px;}
+
+/* ---- inputs ---- */
+.field{background:var(--night); border-radius:var(--r-control); padding:12px;
+       display:flex; align-items:center; gap:var(--s-s);}
+.field.onNight{background:var(--stone);}
+.field input, .field textarea{
+  flex:1; background:none; border:0; color:var(--limestone);
+  font-family:var(--sans); font-size:16px; line-height:22px; outline:none; resize:none;}
+.field input::placeholder, .field textarea::placeholder{color:var(--mortar);}
+.field .lbl{font-size:13px; color:var(--mortar); width:108px; flex:none;}
+
+/* ---- settings ---- */
+.group{background:var(--stone); border-radius:var(--r-card); overflow:hidden;}
+.srow{display:flex; align-items:center; gap:var(--s-s); padding:var(--s-m);}
+.srow .t{font-size:17px; line-height:24px; flex:1;}
+.srule{height:.5px; background:var(--hairline); margin-left:var(--s-m);}
+
+/* ---- settings controls ---- */
+.switch{width:51px; height:31px; border-radius:16px; background:var(--stoneRaised);
+        position:relative; flex:none; transition:background .2s ease;}
+.switch.on{background:var(--lamp);}
+.switch .knob{position:absolute; top:2px; left:2px; width:27px; height:27px;
+              border-radius:14px; background:var(--limestone); transition:transform .2s ease;}
+.switch.on .knob{transform:translateX(20px);}
+.slider{width:100%; -webkit-appearance:none; appearance:none; height:4px; border-radius:2px;
+        background:var(--stone); outline:none;}
+.slider::-webkit-slider-thumb{-webkit-appearance:none; width:26px; height:26px;
+        border-radius:13px; background:var(--lamp); cursor:pointer;}
+.slider::-moz-range-thumb{width:26px; height:26px; border:0; border-radius:13px;
+        background:var(--lamp); cursor:pointer;}
+.rangetrack{position:relative; height:44px; touch-action:none;}
+.rangetrack::before{content:""; position:absolute; left:13px; right:13px; top:20px;
+        height:4px; border-radius:2px; background:var(--stone);}
+.rangefill{position:absolute; top:20px; height:4px; border-radius:2px; background:var(--lamp);}
+.knobR{position:absolute; top:9px; width:26px; height:26px; border-radius:13px;
+       background:var(--lamp); touch-action:none;}
+
+/* ---- onboarding ---- */
+.rule{display:flex; gap:4px;}
+.seg{flex:1; height:2px; border-radius:1px; background:var(--quiet);
+     transition:background .25s ease;}
+.seg.on{background:var(--lamp);}
+.applebtn{height:52px; border-radius:var(--r-control); background:#fff; color:#000;
+          display:flex; align-items:center; justify-content:center; gap:8px;
+          font-size:17px; font-weight:600; width:100%;}
+.opt{background:var(--stone); border-radius:var(--r-control); padding:var(--s-m);
+     font-size:17px; line-height:24px;}
+.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
+.grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-xs);}
+.slot{aspect-ratio:1; border-radius:var(--r-control); position:relative; overflow:hidden;}
+
+/* ---- the picker ---- */
+.picknum{position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:11px;
+         background:var(--lamp); color:var(--onLamp); font-size:11px; line-height:14px;
+         font-weight:600; display:flex; align-items:center; justify-content:center;}
+/* Uploading is a wait, not an event: a rule filling along the bottom edge rather
+   than a spinner parked on top of the photograph. */
+.upbar{position:absolute; left:0; right:0; bottom:0; height:2px; background:rgba(15,19,25,.45);}
+.upbar i{display:block; height:100%; width:0; background:var(--lamp);
+         animation:upfill 1.4s linear forwards;}
+@keyframes upfill{to{width:100%}}
+/* No red. A photo that did not arrive is not the reader's fault. */
+.failface{position:absolute; inset:0; display:flex; flex-direction:column; gap:2px;
+          align-items:center; justify-content:center; color:var(--mortar); font-size:15px;}
+.failface span{font-size:11px; line-height:14px; font-weight:600;}
+.cropstage{position:relative; padding:28px; overflow:hidden; touch-action:none;}
+.cropframe{position:relative; width:100%; aspect-ratio:4/5; border-radius:var(--r-photo);
+           border:1px solid var(--quiet); box-shadow:0 0 0 9999px rgba(15,19,25,.55);}
+.slot.add{background:var(--stone); display:flex; align-items:center; justify-content:center;
+          color:var(--mortar); font-size:20px;}
+.slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:12px;
+         background:rgba(15,19,25,.75); display:flex; align-items:center;
+         justify-content:center; font-size:12px;}
+
+/* ---- motion ---- */
+.leaving{overflow:hidden;}
+.stone-drop{transition:transform .3s ease-in, opacity .3s ease-in;
+            transform:translateY(14px); opacity:0;}
+@media (prefers-reduced-motion:reduce){
+  *{transition-duration:.01ms !important; animation-duration:.01ms !important;}
+}
+
+/* stacking helpers */
+.v{display:flex; flex-direction:column;}
+.gap-xxs{gap:4px;} .gap-xs{gap:8px;} .gap-s{gap:12px;} .gap-m{gap:16px;}
+.gap-l{gap:20px;} .gap-xl{gap:24px;} .gap-xxl{gap:32px;}
+.mt-s{margin-top:12px;} .mt-m{margin-top:16px;} .mt-l{margin-top:20px;}
+.mt-xl{margin-top:24px;} .mt-xxl{margin-top:32px;} .mt-xxxl{margin-top:48px;}
+.pb-xxxl{padding-bottom:48px;}
+.center{text-align:center;}
+.spread{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
+</style>
+
+<div id="device">
+  <div id="root" class="v" style="flex:1; min-height:0;"></div>
+  <div id="scrim"></div>
+  <div id="sheet"></div>
+</div>
+
+<script>
+/* ============================ data ============================ */
+/* Quarry tones live in CSS rather than here, so a photograph stand-in follows the
+   appearance the same way every other surface does. */
+const tone=i=>`background:linear-gradient(var(--tone${i%6}a),var(--tone${i%6}b))`;
+
+const P=(id,name,age,placeId,h,work,photos,prompts,interests,gender,pronouns)=>
+  ({id,name,age,place:placeById(placeId),h,work,photos,prompts,interests,
+    gender,pronouns:pronouns||"",coord:null});
+
+/* Three options, and they are required: an opt-out would read as generous and
+   would quietly exclude you, because the candidate set cannot be built without an
+   answer. Anything more specific goes in the optional pronouns field. */
+const GENDERS=[["man","Man","Men"],["woman","Woman","Women"],
+               ["nonBinary","Non-binary","Non-binary people"]];
+const gLabel=k=>(GENDERS.find(g=>g[0]===k)||["","",""])[1];
+const gPlural=k=>(GENDERS.find(g=>g[0]===k)||["","",""])[2];
+/* Never "Everyone" — a word that stands in for a list hides what is in the list. */
+const gSentence=set=>{
+  const names=GENDERS.filter(g=>set.includes(g[0])).map(g=>g[2]);
+  if(!names.length) return "Nobody";
+  if(names.length===1) return names[0];
+  if(names.length===2) return names[0]+" and "+names[1];
+  return names.slice(0,-1).join(", ")+", and "+names[names.length-1];
+};
+/* The gazetteer. A few dozen rows for one metro is the whole of it — no geocoding
+   service, no map tiles, no per-lookup bill.
+
+   Coordinates are approximate centres, which is the point: they are the fallback
+   for somebody who did not give Arch a location, and they are never finer than the
+   square GRID would round them to anyway. */
+const GRID=0.01;                      /* ~1.1km. The only precision Arch holds. */
+const coarse=c=>({lat:Math.round(c.lat/GRID)*GRID, lon:Math.round(c.lon/GRID)*GRID});
+const PLACES=[
+ ["bk-fort-greene","Fort Greene","Brooklyn",40.691,-73.974],
+ ["bk-gowanus","Gowanus","Brooklyn",40.674,-73.989],
+ ["bk-crown-heights","Crown Heights","Brooklyn",40.668,-73.944],
+ ["bk-bed-stuy","Bed-Stuy","Brooklyn",40.687,-73.941],
+ ["bk-sunset-park","Sunset Park","Brooklyn",40.645,-74.012],
+ ["bk-bushwick","Bushwick","Brooklyn",40.694,-73.921],
+ ["bk-greenpoint","Greenpoint","Brooklyn",40.730,-73.951],
+ ["bk-williamsburg","Williamsburg","Brooklyn",40.714,-73.957],
+ ["bk-park-slope","Park Slope","Brooklyn",40.671,-73.978],
+ ["bk-prospect-heights","Prospect Heights","Brooklyn",40.677,-73.968],
+ ["bk-carroll-gardens","Carroll Gardens","Brooklyn",40.679,-73.999],
+ ["bk-bay-ridge","Bay Ridge","Brooklyn",40.626,-74.030],
+ ["qn-astoria","Astoria","Queens",40.764,-73.923],
+ ["qn-ridgewood","Ridgewood","Queens",40.708,-73.897],
+ ["qn-long-island-city","Long Island City","Queens",40.745,-73.949],
+ ["qn-sunnyside","Sunnyside","Queens",40.743,-73.920],
+ ["qn-jackson-heights","Jackson Heights","Queens",40.755,-73.883],
+ ["qn-flushing","Flushing","Queens",40.768,-73.833],
+ ["mn-harlem","Harlem","Manhattan",40.811,-73.946],
+ ["mn-washington-heights","Washington Heights","Manhattan",40.840,-73.940],
+ ["mn-upper-west-side","Upper West Side","Manhattan",40.787,-73.975],
+ ["mn-east-village","East Village","Manhattan",40.727,-73.982],
+ ["mn-west-village","West Village","Manhattan",40.736,-74.003],
+ ["mn-lower-east-side","Lower East Side","Manhattan",40.715,-73.984],
+ ["bx-mott-haven","Mott Haven","The Bronx",40.809,-73.923],
+ ["bx-riverdale","Riverdale","The Bronx",40.890,-73.912],
+ ["si-st-george","St. George","Staten Island",40.644,-74.077],
+ /* Two miles from Manhattan and a different state, which is exactly why the
+    filter is a radius and not a city boundary. */
+ ["nj-jersey-city","Jersey City","New Jersey",40.728,-74.078],
+ ["nj-hoboken","Hoboken","New Jersey",40.744,-74.032],
+ /* Towns, where a neighbourhood is not a thing anybody would name. */
+ ["ny-beacon","Beacon","Fraunces",41.505,-73.970],
+ ["ny-hudson","Hudson","Fraunces",42.253,-73.791],
+ ["ny-new-paltz","New Paltz","Fraunces",41.747,-74.087]
+].map(([id,name,city,lat,lon])=>({id,name,city,centre:coarse({lat,lon})}));
+
+const placeById=id=>PLACES.find(p=>p.id===id);
+const placeLabel=p=>p?p.name+", "+p.city:"";
+/* Grouped for the picker, in the order the list first mentions each city. */
+const placeGroups=()=>{
+  const order=[],by={};
+  PLACES.forEach(p=>{ if(!by[p.city]){order.push(p.city); by[p.city]=[];} by[p.city].push(p); });
+  return order.map(c=>[c,by[c]]);
+};
+const placeSearch=t=>{
+  const n=(t||"").trim().toLowerCase();
+  return n?PLACES.filter(p=>placeLabel(p).toLowerCase().includes(n)):PLACES;
+};
+/* Great-circle miles. Never shown to anybody — Arch puts no distance on a profile
+   — it only decides whether somebody is inside your radius. */
+const milesBetween=(a,b)=>{
+  const R=3958.8, r=Math.PI/180;
+  const dLat=(b.lat-a.lat)*r, dLon=(b.lon-a.lon)*r;
+  const h=Math.sin(dLat/2)**2+Math.cos(a.lat*r)*Math.cos(b.lat*r)*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+};
+const nearestPlace=c=>PLACES.reduce((best,p)=>
+  milesBetween(p.centre,c)<milesBetween(best.centre,c)?p:best, PLACES[0]);
+/* The device fix wins when there is one; otherwise the centre of the place picked. */
+const matchPoint=p=>p.coord||(p.place?p.place.centre:null);
+
+/* Every height the picker offers, so nobody types "tall". */
+const HEIGHTS=(()=>{const out=[];for(let i=54;i<=80;i++){
+  const f=Math.floor(i/12), r=i%12; out.push(r===0?f+" ft":f+" ft "+r);} return out;})();
+
+const PEOPLE=[
+ P("nadia","Nadia",29,"bk-gowanus","5 ft 7","Structural engineer",[0,3,1,5],
+   [["The last thing I read twice","A field guide to bridges I found in my grandad's garage. Half of it is tables of load limits and I still went back to the beginning."],
+    ["Where I go when I need to think","The walkway on the Manhattan Bridge, heading the unpopular direction so nobody is walking at me."],
+    ["Something I am slower at than everyone else","Ordering. I will read the entire menu twice and then get whatever you got."]],
+   ["Bridge inspections","Long-distance walking","Brutalist car parks"],"woman","she/her"),
+ P("teo","Teo",33,"qn-ridgewood","6 ft","Pastry cook",[4,2,0,3],
+   [["A thing I have changed my mind about","That working nights was temporary. It has been four years and I have stopped apologising for being awake at three."],
+    ["The best argument I have lost","My sister spent an entire drive to Hudson convincing me that sourdough is mostly theatre. She is right. I have kept doing it anyway."],
+    ["Where I go when I need to think","The all-night laundromat on Fresh Pond. Warm, and loud in a way that is not people talking to you."]],
+   ["Night baking","Laundromats","Dulce de leche"],"man",""),
+ P("priya","Priya",27,"bk-crown-heights","5 ft 4","Restores film cameras",[2,5,1,4],
+   [["Something I am slower at than everyone else","Replying. It is not avoidance. I write the message, put the phone down, and find it three days later still sitting there."],
+    ["The last thing I read twice","The service manual for a Rolleiflex, in German, which I do not read. The exploded diagrams are enough."],
+    ["A thing I have changed my mind about","Digital. I was insufferable about it for about six years. Now I mostly want the picture."]],
+   ["Rolleiflex repair","Darkroom printing","German manuals"],"woman","she/her"),
+ P("marcus","Marcus",31,"bk-bed-stuy","5 ft 11","Nurse, emergency",[1,4,3,0],
+   [["Where I go when I need to think","Prospect Park at eight in the morning after a shift, when it is only dog people and me, all of us quiet."],
+    ["A thing I have changed my mind about","That I would get used to it. You do not. You get better at leaving it at the door, which is a different skill."],
+    ["The best argument I have lost","A patient's grandmother explained that I was holding a mop wrong. She had cleaned offices for forty years. I hold it her way now."]],
+   ["Dawn in Prospect Park","Mop technique","Sleeping through noise"],"man","he/him"),
+ P("ines","Ines",32,"bk-sunset-park","5 ft 5","Bookbinder",[1,4,0,2],
+   [["The last thing I made with my hands","A slipcase for a book that did not deserve one. Nine hours, and I would do it again."],
+    ["Something I do that takes far too long","Choosing paper. I have stood in the same aisle for forty minutes and left with nothing."],
+    ["A thing I am probably wrong about","That anything worth keeping should be physical. I say it constantly and my phone is always in my hand."]],
+   ["Japanese paper","Cloth spines","Repairs that take months"],"woman","she/they"),
+ P("dev","Dev",29,"qn-astoria","6 ft 1","Bus mechanic",[3,5,2,1],
+   [["What I would happily explain for an hour","Why the articulated buses bend where they do, and why almost everyone guesses it wrong."],
+    ["Where I go when I need to think","The depot at four in the morning, before anyone is in. Sixty buses and no noise at all."],
+    ["A risk that worked out","Turning down the desk job my parents wanted for me. It took about six years to stop being an argument."]],
+   ["Articulated buses","Four in the morning","Engine noise"],"nonBinary","they/them"),
+ P("yusuf","Yusuf",34,"mn-harlem","5 ft 8","Piano tuner",[5,1,3,0],
+   [["Something I notice that other people do not","Which rooms are in tune with themselves. Some rooms make everything sound slightly sour and nobody can say why."],
+    ["A detail I get unreasonably interested in","The felt on a hammer. You can read someone\u2019s whole playing history off eighty-eight pieces of felt."],
+    ["What I miss about where I grew up","Being able to hear the sea from a room with no window facing it."]],
+   ["Hammer felt","Rooms with good sound","Walking at night"],"man",""),
+ P("lena","Lena",30,"bk-bushwick","5 ft 9","Translator",[5,0,2,1],
+   [["Something I am slower at than everyone else","Jokes in English. I get there, about four seconds after the table has moved on to something else."],
+    ["The last thing I read twice","A translation of a poem I already knew in Portuguese, to see what the translator gave up. Quite a lot, it turns out."],
+    ["Where I go when I need to think","The Q platform at Kings Highway. It is above ground, so you can watch weather arrive from a long way off."]],
+   ["Untranslatable tenses","Above-ground platforms","Portuguese poetry"],"woman","she/her")];
+
+const YOU=P("you","Sam",30,"bk-fort-greene","5 ft 10","Sound engineer",[3,1,4,0,2,5],
+  [["Where I go when I need to think","The bench at the top of the hill in Fort Greene Park, early, before the tennis courts start up."],
+   ["Something I am slower at than everyone else","Leaving. I will say goodbye at the door and still be there twenty minutes later, coat on."],
+   ["The best argument I have lost","A drummer once explained why the click track was not the problem. It was me. It was me for about a year."]],
+  ["Room tone","Click tracks","Fort Greene Park"],"woman","she/her");
+
+const byId=id=>PEOPLE.find(p=>p.id===id);
+const isRequest=c=>c.state==="request";
+const hasEnded=c=>c.state==="ended";
+const openConvos=()=>S.convos.filter(c=>!isRequest(c)&&!hasEnded(c));
+const requests=()=>S.convos.filter(isRequest);
+/* The quoted block belongs to whoever was written to: you picked something out of
+   their profile, and somebody writing to you picked something out of yours. */
+const quotedOf=c=>(isRequest(c)?S.you:c.person).prompts[c.open[1]];
+
+/* Premium widens both limits, so "your five" stops being true the moment somebody
+   subscribes. Every sentence that names the count reads the word from here. */
+const CAP=()=>S.set.sub?7:5;
+const LIMIT=()=>S.set.sub?15:10;
+const WARN=()=>LIMIT()-2;
+const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"roster");
+const rosterName=()=>"your "+rosterWord();
+const rosterTitle=()=>"Your "+rosterWord();
+/* The top of the range stops being a number: somebody in a small town needs no
+   ceiling at all, and they are the people a radius starves first. */
+const distanceText=()=>S.set.distance>=100?"Anywhere":"Within "+S.set.distance+" miles";
+
+/* Subscribing adds slots; cancelling takes them away. Empty slots go first, so
+   cancelling never drops somebody who is still in your roster. */
+function setSubscribed(v){
+  if(S.set.sub===v) return;
+  S.set.sub=v;
+  while(S.slots.length<CAP())
+    S.slots.push({person:null,when:"A new person arrives tomorrow.",left:"Nine in the morning"});
+  while(S.slots.length>CAP()){
+    let i=-1;
+    S.slots.forEach((sl,j)=>{ if(!sl.person) i=j; });
+    S.slots.splice(i>=0?i:S.slots.length-1,1);
+  }
+  render();
+}
+const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2],
+  [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
+  ["Street trees","Drainage","Chairs outdoors"],"woman","she/her");
+
+/* Three benefits, and all three exist. The earlier list sold a sixth slot, a
+   same-day refill, six prompts and finer preferences, none of which the app did
+   anything about. A paywall is the easiest place to ship a lie. */
+const BENEFITS=[["Seven people instead of five","Two more slots. The same care choosing them \u2014 a longer queue is not the point."],
+ ["Fifteen conversations instead of ten","More room before Arch holds your roster and asks you to answer someone."],
+ ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."]];
+
+/* What people picked out of your profile when they wrote to you. Not likes \u2014 Arch
+   has none. This is the photo or answer somebody quoted in the composer, which is a
+   signal the app genuinely has rather than one the review has to invent. */
+const WRITTEN={"prompt-2":4,"photo-1":3,"prompt-0":2,"photo-0":1};
+/* A camera roll: portraits, squares, a couple of landscapes, one panorama. The
+   shapes are the point — a library that was already 4:5 would make the crop step
+   look like ceremony. */
+const LIBRARY=[[3,3/4],[1,1],[5,4/3],[0,3/4],[2,9/16],[4,1],[0,16/9],[3,3/4],[5,1],
+               [2,3/4],[1,4/3],[4,3/4],[0,1],[3,9/16],[2,4/3],[5,3/4],[1,3/4],[4,21/9]];
+/* Arch writes small numbers out. "Add 2 photos" is a receipt; "Add two photos" is
+   a sentence. */
+const NUM=["zero","one","two","three","four","five","six","seven"];
+const numWord=n=>NUM[n]||String(n);
+const capWord=n=>{const w=numWord(n); return w[0].toUpperCase()+w.slice(1);};
+
+const PLANS=[["One month","$24.99","$24.99 a month",0],["Three months","$53.97","$17.99 a month",1],
+ ["Twelve months","$143.88","$11.99 a month",0]];
+const SETTINGS=[["Account",[["Phone number","+1 (917) 555 0142"],["Email","sam@example.com"],["Arch Premium","Not subscribed"]]],
+ ["Notifications",[["Your daily five","9:00"],["New people","On"],["Messages","On"]]],
+ ["Discovery",[["Distance","Within 10 miles"],["Age range","26 to 36"],["Looking for","Something serious"],["Pause my profile",null]]],
+ ["Privacy",[["Who can see me",null],["Blocked people","None"],["Download your data",null]]],
+ ["Help",[["How Arch works",null],["Safety",null],["Contact us",null]]]];
+const QUESTIONS=[
+ ["Someone cancels plans an hour before. What is your honest first reaction?",
+  ["Relief","Irritation","Neither, genuinely"]],
+ ["What does a good Saturday look like?",
+  ["Nothing in the diary","One good thing","Booked from the morning"]],
+ ["How do you get your energy back?",
+  ["On my own and quiet","With one or two people","In a room full of people"]],
+ ["What are you like first thing in the morning?",
+  ["Up early and useful","Slow but fine","Do not talk to me"]],
+ ["How much of your week is planned in advance?",
+  ["Most of it","Some of it","Almost none of it"]],
+ ["When something is bothering you, do you want to talk it through or sit with it first?",
+  ["Talk it through","Sit with it first","Genuinely depends"]],
+ ["How direct are you when something is wrong?",
+  ["I say it straight away","I wait until I know what I think","I tend to let small things go"]],
+ ["After an argument, what do you need?",
+  ["To finish it before sleeping","Some time apart first","To know we are fine, details later"]],
+ ["How much reassurance do you want from someone?",
+  ["A lot, and I will say so","Some, at the right moments","Not much, I assume things are fine"]],
+ ["Where does drinking sit in your life?",
+  ["It is part of how I socialise","Occasionally","I do not drink"]],
+ ["How close are you to your family?",
+  ["Very, we talk constantly","Close, but not in each other\u2019s days","It is complicated","Not close"]],
+ ["What is money for?",
+  ["Spending on things worth doing","Building something steady","I try not to think about it much"]],
+ ["How much does your work matter to you?",
+  ["It is a large part of who I am","It pays for the rest of my life","Somewhere in between"]],
+ ["Do you want children?",
+  ["Yes","No","Open to it","Still working it out"]],
+ ["Do you see yourself with one person at a time?",
+  ["Yes, one at a time","No, that is not how I do relationships","Still working it out"]],
+ ["Do you want to be living in this city in five years?",
+  ["Yes","No","It depends who I am with"]]];
+
+const PROMPT_LIBRARY=[
+ ["How you spend your time",[
+   "Where I go when I need to think",
+   "Something I am slower at than everyone else",
+   "The last thing I made with my hands",
+   "What my week actually looks like",
+   "A place in this city I keep going back to",
+   "Something I do that takes far too long"]],
+ ["What you think",[
+   "A thing I have changed my mind about",
+   "The best argument I have lost",
+   "Something everyone likes that I do not",
+   "A thing I am probably wrong about",
+   "Something I will defend that I should not",
+   "The last strong opinion I formed"]],
+ ["What you notice",[
+   "The last thing I read twice",
+   "A detail I get unreasonably interested in",
+   "The last thing that genuinely surprised me",
+   "What I would happily explain for an hour",
+   "Something I looked up recently and fell into",
+   "Something I notice that other people do not"]],
+ ["Where you are headed",[
+   "Something I inherited that is not money",
+   "What I miss about where I grew up",
+   "A risk that worked out",
+   "What I am slowly getting better at",
+   "The best decision I made on impulse",
+   "Something I want to be doing in five years"]]];
+
+/* Questions already used by your other answers stay visible and inert rather than
+   hidden — hiding them makes the library look shorter and leaves you hunting for
+   one you already have. */
+function promptPicker(currentText,taken,act){
+  act=act||"pickQuestion";
+  let h='<div class="v gap-xl">';
+  PROMPT_LIBRARY.forEach(function(g){
+    h+='<div class="v gap-xs"><div class="prompt mortar">'+g[0]+'</div><div class="v gap-xs">';
+    g[1].forEach(function(q){
+      const isCur=q===currentText, isTaken=taken.indexOf(q)>=0 && !isCur;
+      h+='<button '+(isTaken?'':'data-a="'+act+'" data-q="'+esc(q)+'"')
+        +' style="display:block;width:100%">'
+        +'<div class="opt '+(isCur?"sel":"")+'" style="display:flex; gap:12px; align-items:center'
+        +(isTaken?'; color:var(--mortar)':'')+'">'
+        +'<span style="flex:1">'+esc(q)+'</span>'
+        +(isTaken?'<span class="footnote mortar">In use</span>'
+                 :(isCur?'<span class="footnote">&#10003;</span>':''))
+        +'</div></button>';
+    });
+    h+='</div></div>';
+  });
+  return h+'</div>';
+}
+
+/* ============================ state ============================ */
+const S={
+  tab:"daily",
+  stacks:{premium:[],daily:[],messages:[],you:[]},
+  /* Nobody here is somebody you have written to — writing is what takes them out
+     of your five. Hana is the exception that shows the rule: she wrote first, so
+     your slot is untouched. */
+  slots:["priya","marcus","ines","dev"].map(id=>({person:PEOPLE.find(p=>p.id===id)}))
+        .concat([{person:HANA}]),
+  selected:null,
+  convos:[
+    {id:"yusuf",person:byId("yusuf"),state:"request",open:["prompt",2],unread:1,when:"Yesterday",
+      msgs:[["in","I have had that argument from the other side \u2014 a pianist who was certain the metronome was broken. It was not the metronome. What did the drummer finally say that landed?","Yesterday"]]},
+    {id:"nadia",person:byId("nadia"),open:["prompt",0],unread:1,when:"9:14",msgs:[
+      ["out","The load limit tables. That is the part that got you back to the start?","Tuesday"],
+      ["in","It is the only honest writing in the whole book. Everything else is a photograph of a bridge with a paragraph telling you it is beautiful.","Tuesday"],
+      ["out","Fair. Do you have a favourite one in the city or is that like asking about children","Tuesday"],
+      ["in","Hell Gate. Nobody walks it, nobody photographs it, it just quietly holds up trains. I will take you to look at it from underneath if you want, which is a sentence I hear as I type it.","9:14"]]},
+    {id:"teo",person:byId("teo"),open:["prompt",2],unread:0,when:"Monday",msgs:[
+      ["out","A laundromat is a genuinely good answer and I am annoyed I did not think of it","Monday"],
+      ["in","It is the last indoor place you can sit for an hour without buying anything.","Monday"],
+      ["out","Well now I want to know your second-best one","Monday"],
+      ["out","Second best is the bit of the Botanic Garden nobody walks to","Just now","failed"]]},
+    /* Ended from Lena's side. One state for three different things — she left, she
+       blocked you, or she deleted her account — because if they looked different
+       from here the difference would say which, and "they are not told" would stop
+       being true the moment somebody compared two screens. */
+    {id:"lena",person:byId("lena"),state:"ended",open:["prompt",1],unread:0,when:"Sunday",msgs:[
+      ["out","What did the translator give up","Sunday"],
+      ["in","The tense. Portuguese has one that means something happened and is still happening to you. English makes you pick.","Sunday"],
+      ["out","That is going to bother me all week","Sunday"],["in","Good.","Sunday"]]},
+    {id:"hana",person:HANA,open:["prompt",0],unread:0,when:"Last week",msgs:[
+      ["in","Thursday still good?","Last week"],
+      ["out","Thursday is good. I will find somewhere with chairs outside.","Last week"]]}],
+  you:JSON.parse(JSON.stringify(YOU)),
+  plan:1,
+  set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
+       msgAlert:true,
+       distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
+       locationPermission:"notAsked",
+       seeking:["man","woman","nonBinary"],notifsAllowed:true,
+       visibility:"Anyone Arch picks me for",blocked:[],
+       theme:"Match my phone"},
+  edit:null,
+  report:{reason:null,block:true,sent:false},
+  number:null,
+  /* A design build has no network to lose. A real one watches the system and
+     writes here; everything else reads it. */
+  offline:false,
+  /* null, or {kind, until, reason, appeal}. kind is "removed" | "paused" |
+     "device"; appeal is "notSent" | "sent" | "answered". */
+  removal:null,
+  onboarding:null,
+  /* null, or {target, left, ids, step, zoom, ox, oy}. step -1 is the library grid. */
+  picker:null,
+  /* One batch of three shows the failed upload once, so the state is discoverable
+     without becoming a nuisance. A real build has no such arrangement. */
+  failOnce:true,
+  /* Nobody has ever been in the roster, which is a different thing from everybody
+     having left — and the two want different words. */
+  firstMorning:false
+};
+/* Parallel to photos: null, or {id, state}. Its own array so that adding and
+   removing splice both together and an upload can never end up attached to the
+   wrong photograph. */
+S.you.up=S.you.photos.map(()=>null);
+let UID=0;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const stack=()=>S.stacks[S.tab];
+const current=()=>stack()[stack().length-1]||null;   // not `top` — window.top exists
+const push=v=>{stack().push(v); render();};
+const pop=()=>{stack().pop(); render();};
+
+/* ============================ the arch ============================ */
+function archSVG(filled,total,w,dropIndex){
+  const joint=1.3, thick=18, allow=1, step=180/total;
+  const H=w/2+allow, cx=w/2, cy=H, base=Math.min(w/2,H)-allow;
+  const pt=(r,d)=>{const a=d*Math.PI/180; return [cx+r*Math.cos(a),cy+r*Math.sin(a)];};
+  let paths="";
+  for(let i=0;i<total;i++){
+    const a0=180+i*step+joint, a1=180+(i+1)*step-joint;
+    const o0=pt(base,a0),o1=pt(base,a1),i1=pt(base-thick,a1),i0=pt(base-thick,a0);
+    const d=`M${o0} A${base},${base} 0 0 1 ${o1} L${i1} A${base-thick},${base-thick} 0 0 0 ${i0} Z`;
+    const on=i<filled;
+    const drop=(i===dropIndex)?' class="stone-drop"':'';
+    paths+=on
+      ? `<path${drop} d="${d}" fill="var(--lamp)"/>`
+      : `<path d="${d}" fill="none" stroke="var(--quiet)" stroke-width="1"/>`;
+  }
+  return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" aria-hidden="true">${paths}</svg>`;
+}
+/* The mark: a letter A whose apex has flattened into a bridge deck. Same
+   fractions as ArchMark.swift — piers at .33 splaying to .19, deck bowed .07. */
+function markSVG(size,stroke,color){
+  const W=size-stroke, A=.64, f=(x)=>x*W;
+  const d=`M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
+        +` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+        +` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
+  return `<svg width="${size}" height="${size*A+stroke}" viewBox="0 0 ${size} ${size*A+stroke}" aria-hidden="true">
+    <path d="${d}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-linecap="round" stroke-linejoin="round"
+      transform="translate(${stroke/2},${stroke/2})"/></svg>`;
+}
+
+/* ============================ tab glyphs ============================ */
+/* Premium's keystone lights amber, every other tab terracotta: the palette's two
+   accents, split between the thing you can buy and the things you do. */
+function glyph(kind,active){
+  const c=active?(kind==="premium"?"var(--ember)":"var(--lamp)"):"var(--mortar)", sw=active?2.25:1.75;
+  if(kind==="daily") return markSVG(26,sw,c);
+  if(kind==="premium"){
+    const w=20,h=24,ox=3,oy=1,i=sw/2,t=w*.16;
+    return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path
+      d="M${ox+i},${oy+i} L${ox+w-i},${oy+i} L${ox+w-t},${oy+h-i} L${ox+t},${oy+h-i} Z"
+      fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`;}
+  if(kind==="messages"){
+    const i=sw/2,w=24-sw,h=24-sw,ox=1+i,oy=1+i,bb=oy+h*.76,k=w*.22;
+    return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="
+      M${ox},${oy+k} Q${ox},${oy} ${ox+k},${oy} L${ox+w-k},${oy} Q${ox+w},${oy} ${ox+w},${oy+k}
+      L${ox+w},${bb-k} Q${ox+w},${bb} ${ox+w-k},${bb} L${ox+w*.44},${bb}
+      L${ox+w*.18},${oy+h} L${ox+w*.28},${bb} L${ox+k},${bb} Q${ox},${bb} ${ox},${bb-k} Z"
+      fill="none" stroke="${c}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
+  const i=sw/2,w=24-sw,h=24-sw,ox=1+i,oy=1+i;
+  const hr=w*.17,hcx=ox+w/2,hcy=oy+hr,sr=w*.46,scy=oy+h*.52+sr;
+  const p=(d)=>{const a=d*Math.PI/180; return [hcx+sr*Math.cos(a),scy+sr*Math.sin(a)];};
+  const A=p(190),B=p(350);
+  return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
+    <circle cx="${hcx}" cy="${hcy}" r="${hr}" fill="none" stroke="${c}" stroke-width="${sw}"/>
+    <path d="M${A} A${sr},${sr} 0 0 1 ${B}" fill="none" stroke="${c}" stroke-width="${sw}"
+      stroke-linecap="round"/></svg>`;
+}
+
+/* ============================ shared bits ============================ */
+/* Gender and pronouns drop out when unset rather than leaving a blank chip. */
+const vitals=p=>`<div class="chips">
+  <div class="chip">${p.age}</div>
+  ${p.gender?`<div class="chip">${esc(gLabel(p.gender))}</div>`:""}
+  ${p.pronouns?`<div class="chip">${esc(p.pronouns)}</div>`:""}
+  ${p.place?`<div class="chip">${esc(placeLabel(p.place))}</div>`:""}
+  <div class="chip">${esc(p.h)}</div><div class="chip">${esc(p.work)}</div></div>`;
+
+const photoBox=(t,ar,extra="")=>`<div class="photo ${extra}" style="${tone(t)}; aspect-ratio:${ar}"></div>`;
+
+function interestsBlock(p,own){
+  const chips=p.interests.map(t=>`<div class="interest">${esc(t)}</div>`).join("")
+    +(own&&p.interests.length<3?`<div class="interest add">+ Add an interest</div>`:"");
+  return `<div class="v gap-s"><div class="spread"><div class="prompt mortar">Interests</div>
+    ${own?`<button class="iconbtn round" data-a="editInterests">✎</button>`:""}</div>
+    <div class="chips">${chips}</div></div>`;
+}
+
+/* profile scroll order: photos and answers alternate, interests after photo 2 */
+function rows(p){
+  const out=[]; let i=0,j=0;
+  while(i<p.photos.length||j<p.prompts.length){
+    if(i<p.photos.length) out.push(["photo",i++]);
+    if(j<p.prompts.length) out.push(["prompt",j++]);
+  }
+  let seen=0,at=out.length;
+  for(let k=0;k<out.length;k++){ if(out[k][0]==="photo"){seen++; if(seen===2){at=k+1;break;}} }
+  out.splice(at,0,["interests",0]);
+  return out.slice(1); // the lead photo is drawn separately
+}
+
+function navbar(title,right){
+  return `<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
+    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>
+    <div class="hairline"></div>`;
+}
+
+/* ============================ screens ============================ */
+function dailyRoot(){
+  const people=S.slots.filter(s=>s.person).map(s=>s.person);
+  const open=S.slots.filter(s=>!s.person);
+  const title=rosterTitle();
+  const open10=openConvos().length;
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
+      <div class="titleL">${title}</div>
+      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div>
+      <div class="hairline"></div></div>`;
+  if(open10>=LIMIT()){
+    /* Not an error and not a telling-off. The people are still yours; the rule is
+       stated once and the way out is a button rather than a lecture. */
+    return h+`<div class="v gap-s pb-xxxl">
+      <div class="titleM">${title} are waiting</div>
+      <div class="body mortar">You have ${open10} conversations open. Arch holds the people
+        in your roster until you are back under ${LIMIT()} &mdash; leave a conversation you are
+        not going to answer and they come straight back.</div>
+      <div class="btn btn-quiet mt-m" data-a="goMessages">Open your messages</div>
+    </div></div></div>`;
+  }
+  if(open10>=WARN()){
+    const left=LIMIT()-open10;
+    h+=`<div class="footnote mortar" style="padding-bottom:24px">${left===1
+      ?"One more conversation and your roster will wait until you leave one."
+      :left+" more conversations and your roster will wait until you leave one."}</div>`;
+  }
+  h+=`<div class="v gap-xxl">`;
+  people.forEach(p=>{
+    h+=`<div class="v gap-s" data-card="${p.id}">
+      <button data-a="open" data-id="${p.id}" style="display:block;width:100%">
+        ${photoBox(p.photos[0],"3/4")}</button>
+      <div class="spread" style="align-items:baseline">
+        <button class="titleM" data-a="open" data-id="${p.id}">${esc(p.name)}</button>
+        <button class="iconbtn" data-a="dismiss" data-id="${p.id}"
+          style="margin-right:-12px" aria-label="Dismiss ${esc(p.name)}">✕</button></div>
+      ${vitals(p)}</div>`;
+  });
+  h+=`</div>`;
+  if(S.set.paused){
+    /* The roster above is untouched — the people already in it are still yours,
+       and a pause that threw them away would punish you for taking a break. Only
+       the part that refills is replaced, and nothing is greyed out: greying is
+       what an error looks like, and this is a thing you chose. */
+    h+=`${people.length?`<div class="hairline mt-xxxl"></div>`:""}
+      <div class="v gap-s ${people.length?"mt-m":""}">
+        <div class="titleM">Your profile is paused</div>
+        <div class="body mortar">Nobody new will arrive, and you are not in anyone
+          else&rsquo;s roster. Your conversations are not affected.</div>
+        <div class="btn quiet mt-m" data-a="unpause">Unpause</div></div>`;
+  } else if(!people.length){
+    /* Five identical open-slot cards stacked up reads as five separate pieces of
+       bad news. One sentence is the whole state. */
+    h+=`<div class="v gap-s">
+      <div class="titleM">${S.offline
+        ? "Arch could not load your roster"
+        : S.firstMorning
+          ? "Your first five arrive in the morning"
+          : "All "+numWord(S.slots.length)+" slots are open"}</div>
+      <div class="body mortar">${S.offline
+        ? "This is a connection, not your roster. Whoever is in it is still in it."
+        : S.firstMorning
+          ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
+          : "People arrive at nine, wherever you are. Nothing here needs fixing."}</div></div>`;
+  } else if(open.length){
+    h+=`<div class="hairline mt-xxxl"></div>
+      <div class="footnote mortar mt-m">New people arrive in these slots.</div>
+      <div class="v gap-m mt-m">`;
+    open.forEach(sl=>{
+      /* Said when they went, never who and never why. Writing to you and dismissing
+         you both land here, so it cannot be read backwards into a rejection. */
+      h+=`<div class="slotcard">${sl.theirs
+        ? `<div class="body">Someone left ${rosterName()}.</div>
+           <div class="footnote mortar">${sl.when}</div>`
+        : `<div class="body">${sl.when}</div>
+           <div class="footnote mortar">${sl.left}</div>`}</div>`;
+    });
+    h+=`</div>`;
+  }
+  return h+`</div></div>`;
+}
+
+function profile(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  const sel=S.selected;
+  let h=`<div class="screen"><div class="pb-xxxl">
+    <div style="position:relative">${photoBox(p.photos[0],"4/5")}
+      <button class="iconbtn round" data-a="back"
+        style="position:absolute; left:12px; top:calc(12px + env(safe-area-inset-top,0px))">‹</button></div>
+    <div class="pad v gap-s mt-l"><div class="titleL">${esc(p.name)}</div>${vitals(p)}</div>
+    <div class="pad footnote mortar mt-l">Tap a photo or answer to write about it.</div>
+    <div class="pad v gap-xxl mt-xl">`;
+  rows(p).forEach(([kind,i])=>{
+    if(kind==="photo"){
+      const k=`photo-${i}`;
+      h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
+        ${photoBox(p.photos[i],"4/5",sel===k?"sel":"")}</button>`;
+    } else if(kind==="prompt"){
+      const k=`prompt-${i}`, q=p.prompts[i];
+      h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
+        <div class="card ${sel===k?"sel":""}"><div class="prompt mortar">${esc(q[0])}</div>
+        <div class="bodyL mt-s">${esc(q[1])}</div></div></button>`;
+    } else { h+=interestsBlock(p,false); }
+  });
+  h+=`</div></div></div>
+    <div class="bottombar"><button class="btn primary" data-a="compose" data-id="${p.id}">
+      ${sel?"Write about this":"Send a message"}</button>
+      <button class="btntext" data-a="dismiss" data-id="${p.id}">Dismiss</button></div>`;
+  return h;
+}
+
+function messagesRoot(){
+  if(!S.convos.length){
+    return `<div class="screen"><div class="pad v gap-s"
+      style="height:100%; justify-content:center; padding-bottom:80px">
+      <div class="titleM">No conversations yet</div>
+      <div class="body mortar">When you write to someone in your roster, the conversation appears here.</div>
+      <button class="btn quiet mt-m" data-a="goDaily">Open your roster</button></div></div>`;
+  }
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="titleL" style="padding:16px 0 20px">Messages</div>`;
+  const reqs=requests();
+  if(reqs.length){
+    /* Somebody you have not answered is a different kind of thing from somebody you
+       are talking to. Blending them makes both harder to read. */
+    h+=`<button data-a="openRequests" style="display:block;width:100%; margin-bottom:20px">
+      <div class="srow" style="background:var(--stone); border-radius:20px">
+        <div class="t">Requests</div>
+        <div class="badge" style="position:static">${reqs.length}</div>
+        <div class="caption mortar" style="margin-left:12px">&rsaquo;</div></div></button>`;
+  }
+  const listed=S.convos.filter(c=>!isRequest(c));
+  listed.forEach((c,i)=>{
+    const last=c.msgs[c.msgs.length-1];
+    h+=`<button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
+      <div class="row"><div class="avatar" style="${tone(c.person.photos[0])}"></div>
+      <div class="rowbody"><div class="rowline"><div class="subhead">${esc(c.person.name)}</div>
+        <div style="flex:1"></div><div class="footnote mortar">${esc(c.when)}</div></div>
+      <div style="display:flex; gap:8px; margin-top:4px">
+        <div class="footnote ${c.unread?"limestone":"mortar"}" style="flex:1">${esc(last[1])}</div>
+        ${c.unread?'<div class="dot"></div>':""}</div></div></div></button>`;
+    if(i<listed.length-1) h+=`<div class="rowrule"></div>`;
+  });
+  return h+`</div></div>`;
+}
+
+function requestsRoot(){
+  const reqs=requests();
+  let h=navbar("Requests");
+  if(!reqs.length){
+    return h+`<div class="screen"><div class="pad v gap-s" style="height:100%;
+      justify-content:center; padding-bottom:80px">
+      <div class="titleM">Nothing waiting</div>
+      <div class="body mortar">When somebody in your roster writes to you first, their
+        message waits here until you answer it.</div></div></div>`;
+  }
+  h+=`<div class="screen"><div class="pad v gap-m mt-l pb-xxxl">`;
+  reqs.forEach(c=>{
+    const q=quotedOf(c);
+    /* The whole message, not a preview — you are deciding about this person, and
+       deciding from forty truncated characters is how you decline someone who
+       wrote something worth reading. */
+    h+=`<div style="background:var(--stone); border-radius:20px; padding:16px">
+      <button data-a="thread" data-id="${c.id}" style="display:block;width:100%">
+        <div style="display:flex; gap:12px; align-items:center">
+          <div class="avatar" style="width:44px;height:44px;border-radius:22px;${tone(c.person.photos[0])}"></div>
+          <div><div class="subhead">${esc(c.person.name)}</div>
+            <div class="footnote mortar">${esc(placeLabel(c.person.place))}</div></div>
+          <div style="flex:1"></div>
+          <div class="footnote mortar">${esc(c.when)}</div></div>
+        <div class="quoted mt-s"><div class="footnote mortar">${esc(q[0])}</div>
+          <div class="callout" style="margin-top:4px">${esc(q[1])}</div></div>
+        <div class="callout mt-s">${esc(c.msgs[0][1])}</div></button>
+      <div style="display:flex; gap:8px; margin-top:12px">
+        <div class="btn btn-quiet" style="flex:1" data-a="declineReq" data-id="${c.id}">Decline</div>
+        <div class="btn btn-primary" style="flex:1" data-a="acceptReq" data-id="${c.id}">Answer</div>
+      </div></div>`;
+  });
+  return h+`</div></div>`;
+}
+
+function thread(id){
+  const c=S.convos.find(x=>x.id===id); c.unread=0;
+  const q=quotedOf(c);
+  let h=`<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
+    <div class="avatar" style="width:32px;height:32px;border-radius:16px;${tone(c.person.photos[0])}"></div>
+    <div class="subhead">${esc(c.person.name)}</div>
+    <div style="flex:1"></div>
+    <button class="iconbtn" data-a="convoMenu" data-id="${c.id}"
+      style="color:var(--mortar)" aria-label="Report, block, or leave">&#8943;</button>
+    </div><div class="hairline"></div>
+    <div class="screen"><div class="pad" style="padding-top:20px; padding-bottom:20px">
+      <div class="quoted" style="margin-bottom:16px">
+        <div class="footnote mortar">${esc(q[0])}</div>
+        <div class="callout mt-xxs" style="margin-top:4px">${esc(q[1])}</div></div>`;
+  /* Only the last thing you wrote is still in question. A column of "Sent" down
+     the whole thread is clutter answering something nobody is still asking. */
+  let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
+  c.msgs.forEach((m,i)=>{
+    /* No read receipts and no "delivered" — what the other person has done with
+       your message is between them and their phone. A message that did not leave
+       *yours* is not information about them, and leaving it looking sent would be
+       the app lying about its own end of the wire. */
+    const state=m[3]||"sent";
+    const shows=i===lastOut;
+    const foot=state==="failed"
+      ? `<button class="footnote mortar" data-a="retrySend" data-i="${i}">Not sent. Tap to try again.</button>`
+      : `<div class="footnote mortar">${shows&&state==="sending"?"Sending"
+          :shows&&state==="sent"?"Sent":esc(m[2])}</div>`;
+    h+=`<div class="msg ${m[0]==="out"?"out":""}" ${state==="sent"?"":'style="opacity:.55"'}>
+      <div class="bubble ${m[0]==="out"?"out":"in"}">${esc(m[1])}</div>
+      ${foot}</div>`;
+  });
+  if(hasEnded(c)){
+    /* It says what you can do rather than what happened, and ties itself to the
+       rule the reader knows from the roster — an unexplained ending with nothing
+       attached is an invitation to assume the worst one. */
+    return h+`</div></div>
+      <div class="bottombar">
+        <div class="subhead">This conversation has ended</div>
+        <div class="footnote mortar" style="margin-top:4px">You can read it, but not reply.
+          Arch does not say why a conversation ends, the same way it never says who left
+          your roster.</div></div>`;
+  }
+  if(isRequest(c)){
+    return h+`</div></div>
+      <div class="bottombar">
+        <div class="footnote mortar" style="margin-bottom:8px">${esc(c.person.name)} wrote to
+          you. Answering moves this into your messages.</div>
+        <div style="display:flex; gap:8px">
+          <div class="btn btn-quiet" style="flex:1" data-a="declineReq" data-id="${c.id}">Decline</div>
+          <div class="btn btn-primary" style="flex:1" data-a="acceptReq" data-id="${c.id}">Answer</div>
+        </div></div>`;
+  }
+  return h+`</div></div>
+    <div class="bottombar" style="display:flex; gap:8px; align-items:center">
+      <div class="field onNight" style="flex:1"><input placeholder="Message" id="threadInput"></div>
+      <button class="iconbtn" data-a="threadSend"
+        style="background:var(--lamp); color:var(--onLamp); border-radius:18px; width:36px; height:36px">↑</button></div>`;
+}
+
+function premiumRoot(){
+  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+    <div class="v gap-s" style="padding-top:16px">
+      <div class="titleL">Arch Premium</div>
+      <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
+    <div class="mt-xxxl">`;
+  BENEFITS.forEach(([t,d],i)=>{
+    h+=`<div class="v gap-xxs" style="padding:16px 0">
+      <div class="subhead">${esc(t)}</div><div class="footnote mortar">${esc(d)}</div></div>`;
+    if(i<BENEFITS.length-1) h+=`<div class="hairline"></div>`;
+  });
+  h+=`</div><div class="v gap-s mt-xxxl">`;
+  PLANS.forEach(([d,total,per,rec],i)=>{
+    h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
+      <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
+        border-radius:var(--r-control); ${S.plan===i?"box-shadow:inset 0 0 0 1px var(--selected)":""}">
+        <div><div class="subhead">${d}</div><div class="footnote mortar">${per}</div></div>
+        <div style="flex:1"></div>
+        <div style="text-align:right"><div class="subhead">${total}</div>
+          ${rec?'<div class="footnote mortar">Recommended</div>':""}</div></div></button>`;
+  });
+  h+=`</div>${S.set.sub
+    ?`<button class="btn quiet mt-l">You have Arch Premium</button>`
+    :`<button class="btn primary mt-l" data-a="subscribe">Subscribe for ${PLANS[S.plan][1]}</button>`}
+    <div class="footnote mortar center mt-s">Payment is charged to your Apple account.
+      Renews until you cancel, which you can do in Settings.</div>
+    <div class="btntext">Restore purchases</div>`;
+  return h+`</div></div>`;
+}
+
+function youRoot(){
+  const p=S.you;
+  const missing=[];
+  if(p.photos.length<4) missing.push(p.photos.length===3?"one more photo":`${4-p.photos.length} more photos`);
+  if(p.interests.length<3) missing.push(p.interests.length===2?"one more interest":"more interests");
+  let h=`<div class="navbar" style="padding-left:20px">
+      <div class="titleL">You</div><div style="flex:1"></div>
+      <button class="footnote mortar" data-a="arrange" style="padding:8px">Arrange</button>
+      <button class="iconbtn" data-a="settings" style="color:var(--mortar)">⚙</button></div>
+    <div class="screen"><div class="pb-xxxl">
+      ${photoBox(p.photos[0],"4/5")}
+      <div class="pad v gap-s mt-l"><div class="spread">
+        <div class="titleL">${esc(p.name)}</div>
+        <button class="iconbtn round" data-a="editDetails">✎</button></div>
+        ${vitals(p)}</div>`;
+  if(missing.length) h+=`<div class="pad footnote mortar mt-m">Add ${missing.join(" and ")} to finish your profile.</div>`;
+  h+=`<div class="pad v gap-xxl mt-xl">`;
+  rows(p).forEach(([kind,i])=>{
+    if(kind==="photo") h+=`<button data-a="arrange" style="display:block;width:100%">${photoBox(p.photos[i],"4/5")}</button>`;
+    else if(kind==="prompt") h+=`<div class="card"><div class="prompt mortar">${esc(p.prompts[i][0])}</div>
+      <div class="bodyL mt-s">${esc(p.prompts[i][1])}</div>
+      <button class="iconbtn round" data-a="editAnswer" data-i="${i}"
+        style="position:absolute; right:12px; bottom:12px">✎</button></div>`;
+    else h+=interestsBlock(p,true);
+  });
+  h+=`</div>`;
+  /* At the bottom, not the top. At the top, "how am I doing" would be the first
+     thing you meet on your own profile, which is the beginning of a scoreboard.
+     Down here you have already read your profile the way other people read it. */
+  h+=`<div class="pad" style="padding-top:48px">
+    <div class="hairline"></div>
+    <button data-a="review" style="display:block;width:100%">
+      <div class="srow" style="padding:16px 0">
+        <div><div class="body">Review your profile</div>
+          <div class="footnote mortar" style="margin-top:4px">${S.set.sub
+            ?"Which of your photos and answers people write about."
+            :"Part of Arch Premium. Which of your photos and answers people write about, and notes on what to change."}</div></div>
+        <div style="flex:1"></div>
+        <div class="caption mortar" style="margin-left:12px">&rsaquo;</div></div></button></div>`;
+  return h+`</div></div>`;
+}
+
+/* The review. Two halves, and only one of them needs an AI.
+
+   "What people write about" is arithmetic: when somebody writes to you the
+   composer carries the photo or answer they picked, so the app already knows
+   which parts of your profile give people something to say. Deliberately not
+   likes, views or a score \u2014 "four people wrote about this" is a fact about your
+   writing, where "your profile scores 72" would be a claim about your worth. */
+function reviewRoot(){
+  const p=S.you;
+  const items=p.photos.map((t,i)=>["photo",i])
+    .concat(p.prompts.map((q,i)=>["prompt",i]))
+    .map(([k,i])=>({k,i,n:WRITTEN[k+"-"+i]||0}))
+    .sort((a,b)=>b.n-a.n);
+  const row=it=>{
+    /* nowrap on the count, and the body is the flexible half: "4 people" breaking
+       across two lines next to a long answer looked like a scoreboard fighting the
+       text for room. */
+    const count=it.n?`<div class="footnote mortar" style="margin-left:12px; white-space:nowrap">${
+      it.n===1?"1 person":it.n+" people"}</div>`:"";
+    const body=it.k==="photo"
+      ? `<div style="display:flex; gap:12px; align-items:center; flex:1; min-width:0">
+           <div style="width:44px;height:55px;border-radius:8px;flex:none;${tone(p.photos[it.i])}"></div>
+           <div class="body">Photo ${it.i+1}</div></div>`
+      : `<div style="flex:1; min-width:0"><div class="footnote mortar">${esc(p.prompts[it.i][0])}</div>
+           <div class="callout" style="margin-top:4px">${esc(p.prompts[it.i][1])}</div></div>`;
+    return `<div class="srow" style="background:var(--stone); border-radius:var(--r-control);
+      padding:16px; align-items:flex-start">${body}${count}</div>`;
+  };
+  const written=items.filter(x=>x.n), quiet=items.filter(x=>!x.n);
+  let h=navbar("Profile review")+`<div class="screen"><div class="pad v gap-xxxl mt-l pb-xxxl">`;
+  if(!written.length){
+    h+=`<div class="v gap-s"><div class="titleM">Nothing to go on yet</div>
+      <div class="body mortar">When somebody writes to you, this shows which of your photos
+        and answers they picked out. Come back once a few people have.</div></div>`;
+  } else {
+    h+=`<div class="v gap-s"><div class="v gap-xxs">
+      <div class="prompt mortar">What people write about</div>
+      <div class="footnote mortar">When somebody writes to you they pick something to write
+        about. This is what they pick.</div></div>
+      <div class="v gap-xs">${written.map(row).join("")}</div></div>`;
+    if(quiet.length) h+=`<div class="v gap-s"><div class="v gap-xxs">
+      <div class="prompt mortar">Nobody has written about these</div>
+      <div class="footnote mortar">Not a verdict &mdash; often it just means there is nothing
+        in them to answer.</div></div>
+      <div class="v gap-xs">${quiet.map(row).join("")}</div></div>`;
+  }
+  /* The half that needs a model, and does not have one. It says so. */
+  h+=`<div class="v gap-s"><div class="prompt mortar">Notes on your profile</div>
+    <div style="background:var(--stone); border-radius:20px; padding:16px">
+      <div class="body">Not running yet</div>
+      <div class="footnote mortar mt-s">This is where specific notes on your photos and
+        answers will go &mdash; what is vague, what to say instead. It is not built yet, and
+        until it is, the half above is the honest part.</div></div></div>`;
+  return h+`</div></div>`;
+}
+
+/* One photo grid, used by arrange mode and by onboarding, so the two cannot drift
+   apart. Four is the floor everywhere, which is why the ✕ disappears at exactly
+   four rather than letting you walk off it. */
+function photoSlots(target,acts){
+  const ps=target.photos, up=target.up||[], canRemove=ps.length>4;
+  let h="";
+  ps.forEach((t,i)=>{
+    const u=up[i], failed=u&&u.state==="failed", loading=u&&u.state==="uploading";
+    const x=(canRemove&&!loading)?`<button class="x" data-a="${acts.rm}" data-i="${i}">✕</button>`:"";
+    if(failed){
+      h+=`<div class="slot" style="background:var(--stone)">
+        <button class="failface" data-a="${acts.retry}" data-i="${i}"
+          aria-label="This photo did not upload. Try again.">↻<span>Again</span></button>
+        ${x}</div>`;
+      return;
+    }
+    h+=`<div class="slot" style="${tone(t)}${loading?"; opacity:.55":""}">${x}
+      ${loading?`<div class="upbar"><i></i></div>`:""}</div>`;
+  });
+  if(ps.length<6) h+=`<button class="slot add" data-a="${acts.add}">+</button>`;
+  return h;
+}
+
+/* ============================ the photo picker ============================ */
+function openPicker(target){
+  const t=target==="ob"?S.onboarding:S.you;
+  S.picker={target, left:6-t.photos.length, ids:[], step:-1, zoom:100, ox:0, oy:0};
+  render();
+}
+function pickerTarget(){ return S.picker.target==="ob"?S.onboarding:S.you; }
+
+/* The mark on a chosen tile is a number, not a tick: the order you tap is the
+   order they land in your profile, and slot one is the photo people see in their
+   five. Unchosen tiles carry no empty ring — a ring on every tile is a control on
+   every tile, and one sentence explains the mechanic instead. */
+function pickerRoot(){
+  const pk=S.picker, left=pk.left-pk.ids.length;
+  const line=pk.ids.length===0
+    ? "Tap to choose. "+(pk.left===1?"One slot left.":capWord(pk.left)+" slots left.")
+    : left===0
+      ? "They are added in the order you tap them. "+(pk.ids.length===1
+          ?"That is your last slot.":"That is every slot you have left.")
+      : "They are added in the order you tap them. "+(left===1
+          ?"One slot left.":capWord(left)+" slots left.");
+  const label=pk.ids.length===0?"Add photos"
+    :pk.ids.length===1?"Add one photo":"Add "+numWord(pk.ids.length)+" photos";
+  let h=`<div class="navbar" style="padding-left:8px">
+      <button class="iconbtn" data-a="pickClose" aria-label="Close without adding anything">✕</button>
+      <div class="titleM">Add photos</div></div><div class="hairline"></div>
+    <div class="pad footnote mortar" style="padding-top:16px; padding-bottom:12px">${line}</div>
+    <div class="screen"><div class="pad pb-xxxl"><div class="grid3" style="gap:4px">`;
+  LIBRARY.forEach((ph,i)=>{
+    const order=pk.ids.indexOf(i), full=order<0&&pk.ids.length>=pk.left;
+    h+=`<button class="slot" data-a="pickTile" data-i="${i}" ${full?"disabled":""}
+      style="${tone(ph[0])}; border-radius:8px; opacity:${full?".3":"1"}">
+      ${order>=0?`<div class="picknum">${order+1}</div>`:""}</button>`;
+  });
+  return h+`</div></div></div>
+    <div class="bottombar"><button class="btn primary" data-a="pickNext"
+      ${pk.ids.length?"":"disabled"}>${label}</button></div>`;
+}
+
+/* One frame and one zoom. No rotate, no flip, no thirds grid — the only thing that
+   matters is which part of the photograph ends up in the shape the rest of the app
+   draws photos in. What falls outside is dimmed rather than cut away, so you can
+   see what you are leaving out. */
+function cropRoot(){
+  const pk=S.picker, last=pk.step+1>=pk.ids.length;
+  const cta=!last?"Next":(pk.ids.length>1?"Add "+numWord(pk.ids.length)+" photos":"Add photo");
+  return `<div class="navbar" style="padding-left:8px">
+      <button class="iconbtn" data-a="cropBack">&lsaquo;</button>
+      <div class="titleM">Position</div><div style="flex:1"></div>
+      ${pk.ids.length>1?`<div class="footnote mortar">${pk.step+1} of ${pk.ids.length}</div>`:""}
+      </div><div class="hairline"></div>
+    <div class="screen"><div class="pad" style="height:100%; display:flex;
+      flex-direction:column; justify-content:center">
+      <div class="cropstage" id="cropStage">
+        <div id="cropImg" style="position:absolute; left:50%; top:50%;
+          box-shadow:inset 0 0 0 1px var(--hairline);
+          ${tone(LIBRARY[pk.ids[pk.step]][0])}"></div>
+        <div class="cropframe" id="cropFrame"></div>
+      </div>
+      <div class="footnote mortar mt-m">Drag to move it. The slider zooms.</div>
+      <input class="slider mt-s" id="cropZoom" type="range" min="100" max="250"
+        value="${pk.zoom}" aria-label="Zoom">
+    </div></div>
+    <div class="bottombar"><button class="btn primary" data-a="cropNext">${cta}</button></div>`;
+}
+
+function mountCrop(){
+  const stage=document.getElementById("cropStage"); if(!stage) return;
+  const frame=document.getElementById("cropFrame"), img=document.getElementById("cropImg");
+  const pk=S.picker, aspect=LIBRARY[pk.ids[pk.step]][1];
+  const paint=()=>{
+    const fw=frame.clientWidth, fh=frame.clientHeight;
+    const factor=Math.max(fw/aspect,fh), sc=pk.zoom/100;
+    const iw=aspect*factor*sc, ih=factor*sc;
+    const lx=Math.max(0,(iw-fw)/2), ly=Math.max(0,(ih-fh)/2);
+    pk.ox=Math.min(Math.max(pk.ox,-lx),lx);
+    pk.oy=Math.min(Math.max(pk.oy,-ly),ly);
+    img.style.width=iw+"px"; img.style.height=ih+"px";
+    img.style.transform=`translate(-50%,-50%) translate(${pk.ox}px,${pk.oy}px)`;
+  };
+  stage.addEventListener("pointerdown",ev=>{
+    ev.preventDefault();
+    const sx=ev.clientX, sy=ev.clientY, ox=pk.ox, oy=pk.oy;
+    const move=e=>{ pk.ox=ox+(e.clientX-sx); pk.oy=oy+(e.clientY-sy); paint(); };
+    const up=()=>{document.removeEventListener("pointermove",move);
+                  document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);
+    document.addEventListener("pointerup",up);
+  });
+  const z=document.getElementById("cropZoom");
+  if(z) z.addEventListener("input",()=>{ pk.zoom=+z.value; paint(); });
+  paint();
+}
+
+/* They appear in the grid straight away and upload behind you. Holding the grid
+   hostage behind a progress bar is how people end up wondering whether the app has
+   frozen, and there is nothing here they need to wait for. */
+function commitPicked(){
+  const pk=S.picker, t=pickerTarget();
+  pk.ids.forEach((i,n)=>{
+    t.photos.push(LIBRARY[i][0]);
+    const id="u"+(++UID);
+    t.up.push({id,state:"uploading"});
+    const fails=S.failOnce&&pk.ids.length>=3&&n===pk.ids.length-1;
+    if(fails) S.failOnce=false;
+    setTimeout(()=>settleUpload(t,id,fails?"failed":null),1400);
+  });
+  S.picker=null; render();
+}
+function settleUpload(t,id,state){
+  const i=t.up.findIndex(u=>u&&u.id===id);
+  if(i<0) return;                      // removed while it was going up
+  t.up[i]=state?{id,state}:null;
+  render();
+}
+function retryUpload(t,i){
+  const u=t.up[i]; if(!u) return;
+  t.up[i]={id:u.id,state:"uploading"};
+  setTimeout(()=>settleUpload(t,u.id,null),1400);
+  render();
+}
+
+function arrange(){
+  const p=S.you;
+  const slots=photoSlots(p,{rm:"rmPhoto",add:"addPhoto",retry:"retryPhoto"});
+  const failed=(p.up||[]).filter(u=>u&&u.state==="failed").length;
+  const caption=failed
+    ? (failed===1
+        ? "One photo did not upload. It is not on your profile until it does."
+        : capWord(failed)+" photos did not upload. They are not on your profile until they do.")
+    : p.photos.length<=4
+      ? "The first photo is what people see in their five. You need at least 4 photos, so add one before removing another."
+      : "The first photo is what people see in their five. Drag to reorder.";
+  let h=navbar("Arrange",`<button class="subhead mortar" data-a="back" style="padding:8px">Done</button>`);
+  h+=`<div class="screen"><div class="pad pb-xxxl mt-l">
+    <div class="prompt mortar">Photos</div>
+    <div class="grid3 mt-s">${slots}</div>
+    <div class="footnote mortar mt-m">${caption}</div>
+    <div class="prompt mortar mt-xxl">Answers</div><div class="v gap-xs mt-s">`;
+  p.prompts.forEach((q,i)=>{h+=`<div class="srow" style="border-radius:var(--r-control);
+    background:var(--stone); padding:12px"><div class="mortar">☰</div>
+    <div class="footnote" style="flex:1; overflow:hidden; text-overflow:ellipsis;
+      white-space:nowrap">${esc(q[0])}</div></div>`;});
+  return h+`</div></div></div>`;
+}
+
+function settingsSections(){
+  const x=S.set;
+  /* Three switches that cannot do anything are worse than one row that says why.
+     This is the only place a row stands in for a group, and it is because iOS has
+     taken the group away. */
+  let notif;
+  if(x.notifsAllowed){
+    /* One, not three. Two of the old three fired at the same moment for the same
+       reason, and both were the app telling you to come back. */
+    notif=[["n-msg","Messages",null,"toggle"]];
+  } else {
+    notif=[["n-blocked","Notifications are off","In your iPhone settings","push"]];
+  }
+  return [
+    ["Account",[["a-phone","Phone number",x.phone,"push"],["a-email","Email",x.email,"push"],
+      ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"],
+      ["a-delete","Delete your account",null,"push"]]],
+    ["Notifications",notif],
+    ["Appearance",[["x-theme","Light and dark",x.theme,"push"]]],
+    ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
+      ["d-distance","Distance",distanceText(),"push"],
+      ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
+      ["d-intent","Looking for",x.intent,"push"],
+      ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
+    ["Privacy",[["p-visible","Who can see me",x.visibility,"push"],
+      ["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
+      ["p-data","Download your data",null,"push"]]],
+    ["Help",[["h-how","How Arch works",null,"push"],["h-safety","Safety",null,"push"],
+      ["h-contact","Contact us",null,"push"]]]];
+}
+const TOGGLES={"n-msg":"msgAlert","d-pause":"paused"};
+
+function settings(){
+  let h=navbar("Settings");
+  h+='<div class="screen"><div class="pad pb-xxxl mt-l"><div class="v gap-xl">';
+  settingsSections().forEach(function(sec){
+    var title=sec[0], rws=sec[1];
+    h+='<div class="v gap-xs"><div class="footnote mortar" style="padding-left:4px">'+title+'</div><div class="group">';
+    rws.forEach(function(r,i){
+      var id=r[0],t=r[1],d=r[2],kind=r[3];
+      if(kind==="toggle"){
+        var on=S.set[TOGGLES[id]];
+        h+='<button data-a="toggleSetting" data-id="'+id+'" style="display:block;width:100%">'
+          +'<div class="srow"><div class="t">'+esc(t)+'</div>'
+          +'<div class="switch '+(on?"on":"")+'"><div class="knob"></div></div></div></button>';
+      } else {
+        h+='<button data-a="setting" data-id="'+id+'" style="display:block;width:100%">'
+          +'<div class="srow"><div class="t">'+esc(t)+'</div>'
+          +(d?'<div class="footnote mortar">'+esc(d)+'</div>':"")
+          +'<div class="caption mortar">&rsaquo;</div></div></button>';
+      }
+      if(i<rws.length-1) h+='<div class="srule"></div>';
+    });
+    h+='</div></div>';
+  });
+  h+='<button class="group" data-a="replayOnboarding" style="display:block;width:100%">'
+    +'<div class="srow"><div class="t">Replay onboarding</div>'
+    +'<div class="caption mortar">&rsaquo;</div></div></button>'
+    +'<button class="group" data-a="signOutOpen" style="display:block;width:100%">'
+    +'<div class="srow"><div class="t mortar">Sign out</div></div></button>'
+    +'<div class="footnote mortar center">Arch 1.0</div>'
+    +'<button class="footnote mortar center" data-a="toggleOffline" style="width:100%">'
+    +'Prototype only: '+(S.offline?"restore the connection":"simulate no connection")
+    +'</button>'
+    +'<button class="footnote mortar center" data-a="showRemoved" style="width:100%">'
+    +'Prototype only: the removed-account screen</button>'
+    +'<button class="footnote mortar center" data-a="showDeviceBlocked" style="width:100%">'
+    +'Prototype only: blocked at signup</button></div></div></div>';
+  return h;
+}
+
+function NOTE(t){return '<div class="footnote mortar">'+t+'</div>';}
+function HEADING(t){return '<div class="titleL">'+esc(t)+'</div>';}
+/* The multi-select sibling of `opts`: same rows, but membership of a list rather
+   than one value, and it refuses to empty itself. */
+function multiOpts(pairs,chosen,act){
+  return '<div class="v gap-xs">'+pairs.map(function(p){
+    return '<button data-a="'+act+'" data-o="'+esc(p[0])+'" style="display:block;width:100%">'
+      +'<div class="opt '+(chosen.indexOf(p[0])>=0?"sel":"")+'">'+esc(p[1])+'</div></button>';
+  }).join("")+'</div>';
+}
+/* ---- appearance ----
+   "Match my phone" is resolved here rather than in CSS, so the stylesheet only
+   ever has to know about light and dark. Mirrors ArchTheme in the app. */
+const THEMES=["Match my phone","Light","Dark"];
+const THEME_NOTES={
+  "Match my phone":"Follows your device's appearance setting.",
+  "Light":"Candlelight. Paper, warm ink, terracotta.",
+  "Dark":"Rich charcoal. The same palette after dark."};
+const prefersDark=window.matchMedia("(prefers-color-scheme: dark)");
+function resolvedTheme(){
+  const t=S.set.theme;
+  if(t==="Light") return "light";
+  if(t==="Dark") return "dark";
+  return prefersDark.matches?"dark":"light";
+}
+function applyTheme(){
+  document.documentElement.dataset.theme=resolvedTheme();
+  try{localStorage.setItem("arch.appearance",S.set.theme);}catch(e){}
+}
+/* A display preference belongs to the device, so it survives a reload here the
+   same way it survives a launch in the app. */
+try{const saved=localStorage.getItem("arch.appearance");
+  if(THEMES.indexOf(saved)>=0) S.set.theme=saved;}catch(e){}
+prefersDark.addEventListener("change",()=>{if(S.set.theme==="Match my phone") applyTheme();});
+
+/* The app's own surfaces, type and accent, so the choice can be seen before it is
+   made rather than one screen later. */
+function themeSpecimen(){
+  return `<div class="card" style="padding:var(--s-m)">
+    <div style="display:flex; align-items:center; gap:var(--s-s)">
+      ${markSVG(30,3.4,"var(--lamp)")}<div class="titleM">arch</div></div>
+    <div class="prompt mortar mt-m">The last thing I read twice</div>
+    <div class="callout">A field guide to bridges I found in my grandad's garage.</div>
+    <div class="btn primary mt-m" style="height:44px">Send a message</div></div>`;
+}
+
+function opts(list,chosen,act){
+  return '<div class="v gap-xs">'+list.map(function(o){
+    return '<button data-a="'+act+'" data-o="'+esc(o)+'" style="display:block;width:100%">'
+      +'<div class="opt '+(chosen===o?"sel":"")+'">'+esc(o)+'</div></button>';}).join("")+'</div>';
+}
+function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div>'
+  +'<div class="body mortar">'+b+'</div></div>';}
+
+const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
+  "a-delete":"Delete your account","n-blocked":"Notifications are off",
+  "d-seeking":"Who you want to meet","x-theme":"Light and dark",
+  "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
+  "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
+  "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
+
+function settingDetail(id){
+  const x=S.set; let b="";
+  if(id==="d-distance"){
+    b='<div class="v gap-s">'+HEADING(distanceText())
+     +'<input class="slider" type="range" min="5" max="100" value="'+x.distance+'" data-s="distance">'
+     +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
+     +'<span>5 miles</span><span>Anywhere</span></div></div>'
+     +NOTE("Everyone in "+rosterName()+" is inside this. Widening it gives Arch more people to choose from &mdash; it does not give you more slots.")
+     +NOTE("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.");
+  } else if(id==="d-age"){
+    b='<div class="v gap-s">'+HEADING(x.minAge+" to "+x.maxAge)
+     +'<div id="rangeTrack" class="rangetrack"><div class="rangefill"></div>'
+     +'<div class="knobR" data-k="min"></div><div class="knobR" data-k="max"></div></div>'
+     +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
+     +'<span>18</span><span>70</span></div></div>'
+     +NOTE("Arch will not put anyone outside this in "+rosterName()+", and will not put you in theirs.");
+  } else if(id==="d-seeking"){
+    b=multiOpts(GENDERS.map(g=>[g[0],g[2]]),x.seeking,"setSeeking")
+     +NOTE("Arch will not put anyone outside this in "+rosterName()+", whatever else lines up. It is not shown on your profile, and nobody is told what you picked.");
+  } else if(id==="a-delete"){
+    /* Three consequences, named. "This cannot be undone" on its own says nothing;
+       the one that matters is the one nobody expects. No red anywhere — dressing
+       this up as a hazard would discourage something you are entitled to do. */
+    b='<div class="v gap-m">'
+     +'<div class="body">Your profile, photos and answers are deleted.</div>'
+     +'<div class="body">The people you are talking to can still read what was said, and cannot reply. They are not told why.</div>'
+     +'<div class="body">You cannot undo this, and the same number can start again from scratch.</div></div>'
+     +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s roster, but your conversations keep working.")
+     +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
+  } else if(id==="n-blocked"){
+    b='<div class="titleM">Arch cannot send you anything</div>'
+     +NOTE("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that &mdash; turn them back on there and your choices come back exactly as you left them.")
+     +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>'
+     +NOTE("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.");
+  } else if(id==="x-theme"){
+    b=themeSpecimen()
+     +opts(THEMES,x.theme,"setTheme")
+     +NOTE(THEME_NOTES[x.theme]);
+  } else if(id==="d-intent"){
+    b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
+     +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
+  } else if(id==="p-visible"){
+    b=opts(["Anyone Arch picks me for","Nobody new while I have unread messages"],x.visibility,"setVisibility")
+     +NOTE("Either way you keep the people already in "+rosterName()+", and they keep you. To come off Arch entirely, pause your profile.");
+  } else if(id==="p-blocked"){
+    b='<div class="titleM">Nobody blocked</div>'
+     +NOTE("Blocking someone takes them out of "+rosterName()+", stops them appearing again, and stops you appearing in theirs. They are not told.");
+  } else if(id==="p-data"){
+    b='<div class="titleM">Everything Arch holds about you</div><div class="v gap-s">'
+     +'<div class="body">Your profile, including photos and answers.</div>'
+     +'<div class="body">Your questionnaire answers.</div>'
+     +'<div class="body">Every message you have sent and received.</div>'
+     +'<div class="body">Who has been in '+rosterName()+', and when.</div></div>'
+     +NOTE("Sent as a file to "+esc(x.email)+". It usually takes a few minutes and never more than 30 days.")
+     +'<button class="btn quiet">Request my data</button>';
+  } else if(id==="a-phone"){
+    b=HEADING(x.phone)
+     +NOTE("This is how Arch knows you are a person. It is never shown to anyone and never appears on your profile.")
+     +'<button class="btn quiet" data-a="numberOpen">Change number</button>'
+     +NOTE("You will have to verify the new number before it takes effect.");
+  } else if(id==="a-email"){
+    b='<div class="field onNight"><input value="'+esc(x.email)+'" data-s="email"></div>'
+     +NOTE("Used for signing in and account notices. Never shown to anyone, and Arch does not send anything else here.");
+  } else if(id==="a-premium"){
+    b=HEADING(x.sub?"Subscribed":"Not subscribed")
+     +NOTE("Premium changes what you can do with your slots and how much you can say about yourself. It does not change who sees you.")
+     +'<button class="btn primary" data-a="goPremium">See what premium changes</button>'
+     +'<div class="btntext">Restore purchases</div>';
+  } else if(id==="h-how"){
+    b=sect("Five people, held","You have five slots. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear &mdash; if you do nothing, they stay.")
+     +sect("Dismissing costs you a slot","If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe.")
+     +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them.")
+     +sect("You are never told who dismissed whom","People leave your roster. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
+     +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
+     +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
+  } else if(id==="h-safety"){
+    b=sect("Every account is tied to an Apple ID and a device","It is not a guarantee that somebody is who they say. It does mean that starting again after being removed costs a new Apple ID and usually a new phone, rather than thirty seconds &mdash; and making throwaway accounts expensive is most of the problem.")
+     +sect("Blocking is silent and complete","A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told.")
+     +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
+     +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
+  } else if(id==="h-contact"){
+    b=sect("Write to a person","help@arch.app reaches a small team, usually within a day. There is no chatbot in front of it.")
+     +sect("Something is broken","Tell us what you were doing and what happened instead. Screenshots help more than descriptions.")
+     +sect("Something is wrong with someone","Report them from the conversation rather than emailing &mdash; it comes through with the context attached.")
+     +'<button class="btn quiet">Email help@arch.app</button>';
+  }
+  return navbar(SET_TITLES[id]||"Setting")
+    +'<div class="screen"><div class="pad v gap-xl mt-xl pb-xxxl">'+b+'</div></div>';
+}
+
+/* ============================ onboarding ============================ */
+/* Phone verification, on or off. Off while there is no backend to verify against
+   and no SMS to receive, so the flow can be walked end to end without inventing a
+   code. Nothing is deleted — the two screens are still below, and flipping this
+   back to true puts them back at the front. */
+const VERIFY_ON=false;
+const ALL_STEPS=["verify","identity","about","seeking","photos","answers","interests","questions","notifications"];
+const STEPS=VERIFY_ON?ALL_STEPS:ALL_STEPS.filter(x=>x!=="verify");
+function onboarding(){
+  const o=S.onboarding;
+  if(o.welcome){
+    return `<div class="screen"><div class="pad v" style="height:100%; padding:48px 20px">
+      <div style="flex:1"></div>${markSVG(84,11,"var(--lamp)")}
+      <div class="display mt-s">arch</div><div style="flex:1"></div>
+      <div class="titleL">Five people a day</div>
+      <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
+        actually like. You read them properly, you decide, and then you are done until tomorrow.</div>
+      <div style="flex:1"></div>
+      <button class="applebtn" data-a="obStart">Continue with Apple</button>
+      <div class="footnote mortar center mt-s">Arch does not post anything, and never sees
+        your Apple password. Your email stays hidden if you want it to.</div></div></div>`;
+  }
+  const step=STEPS[o.step];
+  const inQ=o.q!==null&&o.q!==undefined;
+  const total=inQ?QUESTIONS.length:STEPS.length, cur=inQ?o.q+1:o.step+1;
+  let segs=""; for(let i=0;i<total;i++) segs+=`<div class="seg ${i<cur?"on":""}"></div>`;
+  let body="",foot="",cta="Continue",enabled=true;
+
+  if(step==="verify"&&!o.sent){
+    body=`<div class="titleL">Your number</div>
+      <div class="body mortar mt-s">Arch verifies every number. It is the main thing keeping this
+        from filling up with accounts that are not people.</div>
+      <div style="display:flex; gap:8px" class="mt-xl">
+        <div class="field onNight" style="flex:none"><span class="mortar">+1</span></div>
+        <div class="field onNight" style="flex:1"><input id="obPhone" inputmode="tel"
+          placeholder="917 555 0142" value="${esc(o.phone)}"></div></div>
+      <div class="footnote mortar mt-xl">Your number is never shown to anyone and never appears
+        on your profile.</div>`;
+    cta="Send a code"; enabled=o.phone.replace(/\D/g,"").length>=7;
+  } else if(step==="verify"){
+    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field onNight center"
+      style="flex:1; justify-content:center; height:56px"><span class="titleM">${o.code[i]||""}</span></div>`;
+    body=`<div class="titleL">Check your messages</div>
+      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(o.phone)}.</div>
+      <div style="display:flex; gap:8px" class="mt-xl">${boxes}</div>
+      <input id="obCode" inputmode="numeric" maxlength="6" value="${esc(o.code)}"
+        style="position:absolute; opacity:.001; width:1px; height:1px">
+      <button class="footnote mortar mt-xl" data-a="obResend">Send it again</button>`;
+    cta="Verify"; enabled=o.code.length===6;
+  } else if(step==="identity"){
+    body=`<div class="titleL">Your name</div>
+      <div class="body mortar mt-s">This is what people see. Apple gave us the one on your
+        account &mdash; change it if it is not what you go by.</div>
+      <div class="v gap-xs mt-xl">
+        <div class="field onNight"><div class="lbl">Name</div><input id="obName" value="${esc(o.name)}" placeholder="Sam"></div></div>
+      <div class="footnote mortar mt-m">Your Apple email is never shown to anyone, and Arch
+        only uses it for account notices.</div>`;
+    enabled=!!o.name.trim();
+  } else if(step==="about"){
+    const loc=placeLabel(o.place);
+    body=`<div class="titleL">About you</div>
+      <div class="body mortar mt-s">The facts that sit under your name. Nothing else is asked.</div>
+      <div class="v gap-xs mt-xl">
+        <div class="field onNight"><div class="lbl">Age</div><input id="obAge" inputmode="numeric" value="${esc(o.age)}" placeholder="30"></div>
+        <button class="field onNight" data-a="obPlace" style="display:flex; width:100%">
+          <div class="lbl">Where you live</div>
+          <div class="callout ${o.place?"":"mortar"}" style="flex:1">${o.place?esc(loc):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
+        <button class="field onNight" data-a="obHeight" style="display:flex; width:100%">
+          <div class="lbl">Height</div>
+          <div class="callout ${o.height?"":"mortar"}" style="flex:1">${o.height?esc(o.height):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
+        <div class="field onNight"><div class="lbl">Work</div><input id="obWork" value="${esc(o.work)}" placeholder="Sound engineer"></div></div>
+      <div class="v gap-xs mt-xl"><div class="footnote mortar">Gender</div>
+        ${GENDERS.map(g=>`<button data-a="obGender" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${o.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
+      <div class="field onNight mt-m"><div class="lbl">Pronouns</div>
+        <input id="obPronouns" maxlength="20" value="${esc(o.pronouns)}" placeholder="Optional"></div>
+      ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
+        <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
+    enabled=o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender;
+  } else if(step==="seeking"){
+    /* Its own step rather than another row on "About you": it is not a fact about
+       you, it is a requirement, and it belongs with the questionnaire's three hard
+       ones rather than with your height. */
+    body=`<div class="titleL">Who you want to meet</div>
+      <div class="body mortar mt-s">Pick as many as apply. Arch will not put anyone
+        outside this in your five.</div>
+      <div class="v gap-xs mt-xl">
+        ${GENDERS.map(g=>`<button data-a="obSeeking" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${o.seeking.indexOf(g[0])>=0?"sel":""}">${g[2]}</div></button>`).join("")}</div>
+      <div class="footnote mortar mt-xl">This is not shown on your profile, and nobody
+        is told what you picked. You can change it in Settings.</div>`;
+    enabled=o.seeking.length>0;
+  } else if(step==="photos"){
+    const slots=photoSlots(o,{rm:"obRmPhoto",add:"obAddPhoto",retry:"obRetryPhoto"});
+    /* A photo that did not upload is not a photo yet. Letting it count would walk
+       somebody out of onboarding with three photographs and a fourth that never
+       arrived. */
+    const bad=o.up.filter(u=>u&&u.state==="failed").length;
+    const short=Math.max(0,4-(o.photos.length-bad));
+    body=`<div class="titleL">Photos</div>
+      <div class="body mortar mt-s">At least 4, up to 6. The first one is what people see in their five.</div>
+      <div class="grid3 mt-xl">${slots}</div>
+      <div class="footnote mortar mt-s">${bad>0
+        ?(bad===1?"One photo did not upload. Tap it to try again."
+                 :capWord(bad)+" photos did not upload. Tap them to try again.")
+        :short>0
+          ?(short===1?"One more photo.":capWord(short)+" more photos.")
+          :o.photos.length===4
+            ?"You can add two more. Four is the minimum, so add one before removing another."
+            :`You can add ${numWord(6-o.photos.length)} more.`}</div>`;
+    enabled=short===0;
+  } else if(step==="answers"){
+    /* The slots start empty and each one opens the library. They used to arrive
+       pre-filled with three suggestions, which is a quieter way of choosing for
+       somebody: a default is what most people keep, so three of the twenty-four
+       were doing all the work and the rest were scenery. */
+    body=`<div class="titleL">Three answers</div>
+      <div class="body mortar mt-s">Pick three from the list and answer them. This is the
+        part people actually read, and the specific version always beats the general one.</div>
+      <div class="v gap-m mt-xl">`;
+    o.answers.forEach((a,i)=>{
+      const q=o.questions[i];
+      body+=`<div class="v gap-xs">
+        <button data-a="obPickQuestion" data-i="${i}" style="display:block;width:100%">
+          <div style="display:flex; gap:12px; align-items:baseline">
+            <div class="prompt mortar" style="flex:1">${q?esc(q):"Choose a question"}</div>
+            <div class="${q?"footnote":"caption"} mortar">${q?"Change":"&rsaquo;"}</div></div></button>
+        ${q?`<div class="field onNight"><textarea rows="3" data-ob="answer" data-i="${i}"
+          placeholder="Answer it properly.">${esc(a)}</textarea></div>`:""}</div>`;
+    });
+    body+=`</div>`;
+    /* An answer to no question is not an answer. */
+    enabled=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
+  } else if(step==="interests"){
+    const ex=["Night baking","Rolleiflex repair","Above-ground platforms"];
+    body=`<div class="titleL">Three interests</div>
+      <div class="body mortar mt-s">Short and specific. "Bridge inspections" tells someone more
+        than "travel" ever will.</div><div class="v gap-xs mt-xl">`;
+    o.interests.forEach((t,i)=>{body+=`<div class="field onNight"><input maxlength="24"
+      data-ob="interest" data-i="${i}" value="${esc(t)}" placeholder="${ex[i]}"></div>`;});
+    body+=`</div>`;
+    enabled=o.interests.filter(t=>t.trim()).length>=3;
+  } else if(step==="questions"&&!inQ){
+    body=`<div class="titleL">A few questions</div>
+      <div class="body mortar mt-s">These are how Arch decides who reaches your five.</div>
+      <div class="v gap-m mt-xl">
+        <div class="body">Your answers are not on your profile.</div>
+        <div class="body">Nobody else sees them.</div>
+        <div class="body">They do not add up to a score, and Arch will never show you a percentage.</div></div>
+      <div class="footnote mortar mt-xl">${QUESTIONS.length} questions. There is no wrong answer.</div>`;
+    cta="Start";
+  } else if(step==="questions"){
+    const [q,opts]=QUESTIONS[o.q];
+    body=`<div class="titleM">${esc(q)}</div><div class="v gap-xs mt-xl">`;
+    opts.forEach(opt=>{body+=`<button data-a="obAnswer" data-o="${esc(opt)}" style="display:block;width:100%">
+      <div class="opt ${o.qa[o.q]===opt?"sel":""}">${esc(opt)}</div></button>`;});
+    body+=`</div>`;
+  } else {
+    body=`<div class="titleL">Notifications</div>
+      <div class="body mortar mt-s">One kind, and nothing else.</div>
+      <div class="v gap-m mt-xl">
+        <div class="body">When somebody writes to you. That is the whole list.</div></div>
+      <div class="footnote mortar mt-xl">Your five are waiting whenever you open Arch, and it
+        will not tell you they are there &mdash; that is a reason to open an app, not a reason
+        to interrupt your day. No reminders to come back, and nothing at all in the evening.</div>`;
+    cta="Allow notifications";
+  }
+
+  if(!inQ){
+    foot=`<div class="bottombar"><button class="btn primary" data-a="obNext" ${enabled?"":"disabled"}>${cta}</button>
+      ${step==="notifications"?`<button class="btntext" data-a="obFinish">Not now</button>`:""}</div>`;
+  }
+  return `<div class="v" style="flex:none; padding-bottom:12px"><div class="safetop"></div>
+      <div style="display:flex; padding-left:8px">
+        ${o.step>0||o.sent||inQ?`<button class="iconbtn" data-a="obBack">‹</button>`
+          :`<div style="width:44px;height:44px"></div>`}</div>
+      <div class="rule pad">${segs}</div></div>
+    <div class="screen"><div class="pad pb-xxxl" style="padding-top:24px; position:relative">${body}</div></div>${foot}`;
+}
+
+/* The screen for somebody who is no longer a user. It replaces the whole app —
+   no tabs, nothing to go back to — because there is nothing left to navigate.
+
+   How much to say is the whole design problem. Too little is a blank wall, badly
+   off-voice for an app that explains everything it does. Too much teaches an
+   evader which signal tripped and edges toward naming who reported them. So it
+   names the category and never the evidence, and never says how many or when.
+
+   No red, no icon, no alarm: bad news delivered plainly, the same register as
+   deleting your own account. */
+const REMOVAL_REASONS={
+  abuse:"reports of abusive messages",
+  photos:"reports that the photos were not of you",
+  underage:"reports that you are under eighteen",
+  selling:"reports of selling or promotion",
+  other:"reports from other people"
+};
+
+function removedRoot(){
+  const r=S.removal, why=REMOVAL_REASONS[r.reason]||REMOVAL_REASONS.other;
+  let title,opening,lines;
+  if(r.kind==="paused"){
+    title="Your account is paused until "+esc(r.until);
+    opening="Arch paused it after "+why+". Nothing is deleted.";
+    lines=["Your profile is hidden until then. Nothing is deleted.",
+           "Your conversations are waiting where you left them.",
+           "It comes back on its own. There is nothing to do."];
+  } else if(r.kind==="device"){
+    title="Arch cannot make an account on this device";
+    opening="An account made on this device was removed for breaking the rules. "
+      +"That decision covers the device, not only the account.";
+    lines=["Nothing of yours was deleted, because nothing of yours was made."];
+  } else {
+    title="Your account has been removed";
+    opening="Arch removed it after "+why+".";
+    lines=["Your profile, photos and answers are deleted.",
+           "The conversations you were in have ended. The people in them are not told why.",
+           "You cannot make another account."];
+  }
+
+  let foot;
+  if(r.appeal==="sent"){
+    foot=`<div class="v gap-xs"><div class="subhead">Your appeal is with us</div>
+      <div class="footnote mortar">A person will read it, usually within a couple of days,
+        and you will hear back at ${esc(S.set.email)}. Nothing changes until then.</div></div>`;
+  } else if(r.appeal==="answered"){
+    foot=`<div class="v gap-xs"><div class="subhead">A person read your appeal</div>
+      <div class="footnote mortar">The decision stands, and there is no second appeal. If
+        something has changed since, help@arch.app still reaches a person.</div></div>`;
+  } else {
+    /* On the device screen this is the line the screen exists for. Phones change
+       hands, and whoever is holding this one may have had nothing to do with it. */
+    foot=`<div class="v gap-s">
+      ${r.kind==="device"?`<div class="body">If this device was not yours then, say so.
+        A person will read it.</div>`:""}
+      <div class="btn quiet" data-a="appealOpen">Appeal this</div>
+      <div class="footnote mortar">One person reads every appeal. Nothing about this
+        changes while they do.</div></div>`;
+  }
+
+  return `<div class="screen"><div class="pad v" style="height:100%; padding-top:48px;
+      padding-bottom:24px">
+    <div class="titleL">${title}</div>
+    <div class="body mortar mt-s">${opening}</div>
+    <div class="v gap-s mt-xl">${lines.map(l=>`<div class="body">${l}</div>`).join("")}</div>
+    <div style="flex:1; min-height:24px"></div>
+    ${foot}
+    <button class="footnote mortar center mt-m" data-a="leaveRemoved" style="width:100%">
+      Prototype only: back to the app</button></div></div>`;
+}
+
+/* One field and a person, not a form of dropdowns — the app already promises that
+   reports go to a person rather than a filter, and an appeal that went to a filter
+   would make that promise look like a slogan. It refuses to imply the account is
+   coming back. */
+function appealSheet(){
+  openSheet(`<div class="titleM" style="padding-top:8px">Tell us what we got wrong</div>
+    <div class="body mortar mt-s">One person reads every appeal, usually within a couple
+      of days.</div>
+    <div class="field mt-m" style="align-items:flex-start"><textarea id="appealText" rows="6"
+      maxlength="1000" placeholder="What do you think we missed?"></textarea></div>
+    <button class="btn primary mt-m" data-a="appealSend">Send</button>
+    <div class="footnote mortar mt-s">Your account stays as it is while this is read.
+      Appealing does not undo it, and most appeals are not overturned.</div>
+    <button class="btntext" data-a="closeSheet">Cancel</button>`);
+  setTimeout(()=>document.getElementById("appealText")?.focus(),320);
+}
+
+/* ============================ render ============================ */
+function render(){
+  const r=document.getElementById("root");
+  /* Above onboarding, because the picker is opened from inside it too. */
+  const offlineBar=S.offline?`<div class="offline">
+      <div class="subhead">No connection</div>
+      <div class="footnote mortar" style="margin-top:4px">You can read what is already here.
+        Anything you write waits until Arch is back.</div></div>`:"";
+  if(S.removal){ r.innerHTML=removedRoot(); return; }
+  if(S.picker){ r.innerHTML=offlineBar+(S.picker.step<0?pickerRoot():cropRoot()); return; }
+  if(S.onboarding){ r.innerHTML=offlineBar+onboarding(); return; }
+  const t=current();
+  let screen;
+  if(!t){
+    screen={premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
+  } else if(t.name==="profile") screen=profile(t.id);
+  else if(t.name==="thread") screen=thread(t.id);
+  else if(t.name==="requests") screen=requestsRoot();
+  else if(t.name==="arrange") screen=arrange();
+  else if(t.name==="settings") screen=settings();
+  else if(t.name==="review") screen=reviewRoot();
+  else if(t.name==="settingDetail") screen=settingDetail(t.id);
+
+  const hideTabs=t&&(t.name==="thread");
+  const unread=S.convos.reduce((a,c)=>a+c.unread,0);
+  const tabs=["premium","daily","messages","you"].map(k=>{
+    const label={premium:"Premium",daily:"Daily 5",messages:"Messages",you:"You"}[k];
+    const badge=(k==="messages"&&unread)?`<div class="badge">${unread}</div>`:"";
+    return `<button class="tab" data-a="tab" data-k="${k}" aria-selected="${S.tab===k}">
+      <div class="glyph">${glyph(k,S.tab===k)}${badge}</div>
+      <div class="lbl"${S.tab===k&&k==="premium"?' style="color:var(--ember)"':""}>${label}</div></button>`;
+  }).join("");
+  r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
+}
+
+/* ============================ sheets ============================ */
+function openSheet(html){
+  const s=document.getElementById("sheet"), sc=document.getElementById("scrim");
+  s.innerHTML=`<div class="grabber"></div>`+html;
+  requestAnimationFrame(()=>{s.classList.add("on"); sc.classList.add("on");});
+}
+function closeSheet(){
+  document.getElementById("sheet").classList.remove("on");
+  document.getElementById("scrim").classList.remove("on");
+}
+function dismissSheet(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  openSheet(`<div class="v gap-s" style="padding-top:8px">
+    <div class="titleM">Dismiss ${esc(p.name)}?</div>
+    <div class="body mortar">${esc(p.name)} leaves ${rosterName()}. The slot fills with someone new
+      tomorrow. You cannot undo this.</div></div>
+    <button class="btn quiet mt-xxl" data-a="confirmDismiss" data-id="${id}">Dismiss ${esc(p.name)}</button>
+    <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
+/* Sending has a price, and hiding it until afterwards would be a trick. Spending a
+   slot on somebody you want to talk to is what a slot is for. */
+function COST(p){
+  let t="Sending takes "+esc(p.name)+" out of "+rosterName()+". That slot fills with someone new tomorrow morning.";
+  if(openConvos().length+1>=LIMIT())
+    t+=" It also takes you to "+LIMIT()+" conversations, so your roster will wait until you leave one.";
+  return '<div class="footnote mortar mt-m">'+t+'</div>';
+}
+
+function composerSheet(id){
+  const p=[...PEOPLE,HANA].find(x=>x.id===id);
+  let q="";
+  if(S.selected){
+    const [kind,i]=S.selected.split("-");
+    q=kind==="prompt"
+      ? `<div class="quoted mt-m"><div class="footnote mortar">${esc(p.prompts[+i][0])}</div>
+         <div class="callout" style="margin-top:4px; display:-webkit-box; -webkit-line-clamp:2;
+           -webkit-box-orient:vertical; overflow:hidden">${esc(p.prompts[+i][1])}</div></div>`
+      : `<div class="quoted mt-m" style="display:flex; gap:12px; align-items:center">
+         <div style="width:40px; height:50px; border-radius:8px; ${tone(p.photos[+i])}"></div>
+         <div class="footnote mortar">About this photo</div></div>`;
+  }
+  openSheet(`<div style="display:flex; gap:12px; align-items:center; padding-top:8px">
+      <div style="width:44px; height:44px; border-radius:12px; ${tone(p.photos[0])}"></div>
+      <div><div class="subhead">${esc(p.name)}</div>
+        <div class="footnote mortar">${esc(placeLabel(p.place))}</div></div></div>
+    ${q}
+    <div class="field mt-m" style="align-items:flex-start"><textarea id="composeText" rows="5"
+      placeholder="${S.selected?"Say something about it.":"Start a conversation."}"></textarea></div>
+    ${COST(p)}
+    <button class="btn primary mt-m" data-a="send" data-id="${id}">Send</button>`);
+  setTimeout(()=>document.getElementById("composeText")?.focus(),320);
+}
+
+
+/* Question and answer are one decision, so they live in one sheet. Changing the
+   question clears the answer — an answer written for a different question is a non
+   sequitur — but nothing commits until Save. */
+/* Height was a text field, which accepted "tall" and "1.8m" and every other way
+   people write this, none of which two profiles can be compared on. Not a system
+   wheel either — the same option rows the questionnaire uses cost nothing extra
+   and look like the app. */
+function openDetails(){
+  openSheet(`<div class="titleM" style="padding-top:8px">Your details</div>
+      <div class="v gap-xs mt-m">
+        ${[["Name",S.you.name],["Age",S.you.age]]
+          .map(([l,v])=>`<div class="field"><div class="lbl">${l}</div><input value="${esc(v)}"></div>`).join("")}
+        <button class="field" data-a="youPlace" style="display:flex; width:100%">
+          <div class="lbl">Where you live</div>
+          <div class="callout ${S.you.place?"":"mortar"}" style="flex:1">${
+            S.you.place?esc(placeLabel(S.you.place)):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
+        <button class="field" data-a="youHeight" style="display:flex; width:100%">
+          <div class="lbl">Height</div>
+          <div class="callout ${S.you.h?"":"mortar"}" style="flex:1">${S.you.h?esc(S.you.h):"Choose"}</div>
+          <div class="caption mortar">&rsaquo;</div></button>
+        <div class="field"><div class="lbl">Work</div><input value="${esc(S.you.work)}"></div></div>
+      <div class="v gap-xs mt-m"><div class="footnote mortar">Gender</div>
+        ${GENDERS.map(g=>`<button data-a="youGender" data-o="${g[0]}" style="display:block;width:100%">
+          <div class="opt ${S.you.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
+      <div class="field mt-m"><div class="lbl">Pronouns</div>
+        <input maxlength="20" value="${esc(S.you.pronouns)}" placeholder="Optional"></div>`
+    +`<button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
+
+/* The picker is the mechanism; the device is a convenience. Asking first and
+   falling back to a list would be two paths, and the fallback is always the one
+   that gets less care — so the list is the path, and a location, when there is
+   one, fills it in.
+
+   A list rather than a map for a reason that is not effort: Arch never shows a
+   distance, so precision here buys nothing visible, and a dropped pin would store
+   roughly where somebody sleeps. A neighbourhood name is already the public chip. */
+function placeSheet(target,query){
+  const cur=target==="ob"?S.onboarding.place:S.you.place;
+  const q=query||"";
+  const searching=!!q.trim();
+  const found=placeSearch(q);
+  const row=p=>`<button data-a="setPlace" data-o="${p.id}" data-t="${target}"
+      style="display:block;width:100%">
+      <div class="opt ${cur&&cur.id===p.id?"sel":""}" style="display:flex; gap:12px; align-items:center">
+        <span style="flex:1">${esc(p.name)}${searching
+          ?`<span class="footnote mortar"> ${esc(p.city)}</span>`:""}</span>
+        ${cur&&cur.id===p.id?'<span class="footnote">&#10003;</span>':""}</div></button>`;
+  let body="";
+  if(!found.length){
+    body=`<div class="v gap-xs"><div class="body">Nothing by that name</div>
+      <div class="footnote mortar">Try the borough or the town instead &mdash; Arch is only
+        in Fraunces so far.</div></div>`;
+  } else if(searching){
+    body=`<div class="v gap-xs">${found.map(row).join("")}</div>`;
+  } else {
+    body=placeGroups().map(([city,list])=>
+      `<div class="v gap-xs"><div class="prompt mortar">${esc(city)}</div>
+        <div class="v gap-xs">${list.map(row).join("")}</div></div>`).join("");
+  }
+  const offer=S.set.locationPermission!=="denied"&&!searching
+    ? `<button data-a="useLocation" data-t="${target}" style="display:block;width:100%">
+        <div class="srow" style="background:var(--stoneRaised); border-radius:var(--r-control)">
+          <div><div class="body">Use my location</div>
+            <div class="footnote mortar" style="margin-top:4px">Fills this in, and places you to
+              about a kilometre. Arch keeps nothing finer than that.</div></div></div></button>`
+    : "";
+  openSheet(`<div class="titleM" style="padding-top:8px">Where you live</div>
+    <div class="field mt-m"><input id="placeSearch" data-t="${target}"
+      placeholder="Search" value="${esc(q)}"></div>
+    <div class="v gap-xl mt-m" style="max-height:420px; overflow-y:auto">${offer}${body}</div>
+    <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
+}
+
+/* The number *is* the sign-in — there is no password to fall back on — so changing
+   it is the verification flow again rather than a field you edit. The number
+   already being taken is a real ending, not an error: two accounts cannot share
+   one, so the screen says what to do instead of blinking and leaving you to it. */
+function numberSheet(){
+  const n=S.number;
+  let body="",cta="",back="";
+  if(n.step==="number"){
+    body=`<div class="titleM" style="padding-top:8px">A new number</div>
+      <div class="body mortar mt-s">Arch verifies every number, so you will get a code before
+        anything changes. Until then ${esc(S.set.phone)} still signs you in.</div>
+      <div style="display:flex; gap:8px" class="mt-m">
+        <div class="field" style="flex:none"><span class="mortar">+1</span></div>
+        <div class="field" style="flex:1"><input id="numberInput" inputmode="tel"
+          placeholder="917 555 0142" value="${esc(n.value)}"></div></div>`;
+    cta="Send a code"; back="Cancel";
+  } else if(n.step==="code"){
+    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field center"
+      style="flex:1; justify-content:center; height:56px"><span class="titleM">${n.code[i]||""}</span></div>`;
+    body=`<div class="titleM" style="padding-top:8px">Check your messages</div>
+      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(n.value)}.</div>
+      <div style="display:flex; gap:8px" class="mt-m">${boxes}</div>
+      <input id="numberCode" inputmode="numeric" maxlength="6" value="${esc(n.code)}"
+        style="position:absolute; opacity:.001; width:1px; height:1px">`;
+    cta="Verify"; back="Use a different number";
+  } else if(n.step==="taken"){
+    body=`<div class="titleM" style="padding-top:8px">That number already has an account</div>
+      <div class="body mortar mt-s">Two accounts cannot share a number. If that one is yours,
+        sign out and sign in with it instead &mdash; this account stays exactly as it is
+        until you do.</div>`;
+    cta=""; back="Try another number";
+  } else {
+    body=`<div class="titleM" style="padding-top:8px">Your number has changed</div>
+      <div class="body mortar mt-s">+1 ${esc(n.value)} signs you in from now on. The old one
+        does not reach this account any more, and nothing else about your profile moved.</div>`;
+    cta="Done"; back="";
+  }
+  openSheet(body
+    +(cta?`<button class="btn primary mt-xxl" data-a="numberNext">${cta}</button>`:"")
+    +(back?`<button class="btntext ${cta?"":"mt-xxl"}" data-a="${
+        n.step==="number"?"closeSheet":"numberBack"}">${back}</button>`:""));
+  if(n.step==="code") setTimeout(()=>document.getElementById("numberCode")?.focus(),320);
+}
+
+function heightSheet(target){
+  openSheet(`<div class="titleM" style="padding-top:8px">Height</div>
+    <div class="v gap-xs mt-m" style="max-height:360px; overflow-y:auto">
+      ${HEIGHTS.map(v=>`<button data-a="setHeight" data-o="${esc(v)}" data-t="${target}"
+        style="display:block;width:100%"><div class="opt ${
+        (target==="ob"?S.onboarding.height:S.you.h)===v?"sel":""}">${esc(v)}</div></button>`).join("")}
+    </div>
+    <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
+}
+
+function answerSheet(){
+  const e=S.edit;
+  if(e.choosing){
+    openSheet('<div class="v gap-s" style="padding-top:4px">'
+      +'<div style="display:flex; align-items:center; gap:8px">'
+      +'<button class="iconbtn" data-a="pickCancel" style="margin-left:-12px">&lsaquo;</button>'
+      +'<div class="titleM">Choose a question</div></div></div>'
+      +'<div class="mt-m">'+promptPicker(e.question,e.taken)+'</div>');
+    return;
+  }
+  openSheet('<button data-a="pickOpen" style="display:block;width:100%">'
+    +'<div style="display:flex; gap:12px; align-items:baseline; padding-top:4px">'
+    +'<div class="prompt mortar" style="flex:1">'+esc(e.question)+'</div>'
+    +'<div class="footnote mortar">Change</div></div></button>'
+    +'<div class="field mt-m" style="align-items:flex-start">'
+    +'<textarea id="answerText" rows="6" placeholder="Answer it properly.">'+esc(e.answer)+'</textarea></div>'
+    +'<button class="btn primary mt-m" data-a="saveAnswer">Save</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+
+/* Report, block, leave.
+   A sheet rather than a native menu: all three are consequential enough to need a
+   line saying what they do, and a menu row cannot carry one. */
+const REPORT_REASONS=["They were abusive or harassing","Their photos are not them",
+  "They are underage","They are trying to sell something","Something else"];
+
+function inRoster(personId){ return S.slots.some(s=>s.person&&s.person.id===personId); }
+
+function convoMenuSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  const row=(act,title,detail)=>
+    '<button data-a="'+act+'" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="opt" style="background:var(--stoneRaised)">'
+    +'<div class="body">'+title+'</div>'
+    +'<div class="footnote mortar" style="margin-top:4px">'+detail+'</div></div></button>';
+  openSheet('<div class="v gap-xs" style="padding-top:4px">'
+    +row("reportOpen","Report "+n,"Reports go to a person, not a filter.")
+    +row("blockOpen","Block "+n,"They stop seeing you and stop appearing again. They are not told.")
+    +row("leaveOpen","Leave this conversation",
+         held?("Removes the conversation, and takes "+n+" out of your roster.")
+             :"Removes the conversation.")
+    +'</div>');
+}
+
+function blockSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  openSheet('<div class="titleM" style="padding-top:8px">Block '+n+'?</div>'
+    +'<div class="body mortar mt-s">'
+    +(held?(n+" leaves your roster, and "):"")
+    +"the conversation is removed. "+n+" will not appear again and will not see you. "
+    +n+" is not told. You can undo this in Settings.</div>"
+    +'<button class="btn quiet mt-xxl" data-a="blockDo" data-id="'+id+'">Block '+n+'</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+function leaveSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
+  openSheet('<div class="titleM" style="padding-top:8px">Leave this conversation?</div>'
+    +'<div class="body mortar mt-s">'
+    +(held?("The conversation is removed and "+n+" leaves your roster. That slot fills with someone new tomorrow. You cannot undo this.")
+          :"The conversation is removed. You cannot undo this.")
+    +'</div>'
+    +'<button class="btn quiet mt-xxl" data-a="leaveDo" data-id="'+id+'">Leave</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+function reportSheet(id){
+  const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), r=S.report;
+  if(r.sent){
+    openSheet('<div class="titleM" style="padding-top:8px">Report sent</div>'
+      +'<div class="body mortar mt-s">A person will read it within a day, with the conversation '
+      +'attached. '+(r.block?(n+" has been blocked and is not told about either.")
+                            :(n+" is not told."))+'</div>'
+      +'<button class="btn primary mt-xxl" data-a="reportDone" data-id="'+id+'">Done</button>');
+    return;
+  }
+  const opts=REPORT_REASONS.map(o=>
+    '<button data-a="reportReason" data-o="'+esc(o)+'" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="opt '+(r.reason===o?"sel":"")+'">'+esc(o)+'</div></button>').join("");
+  openSheet('<div class="titleM" style="padding-top:8px">Report '+n+'</div>'
+    +'<div class="footnote mortar mt-s">A person reads every report, with this conversation '
+    +'attached. You do not need to explain twice.</div>'
+    +'<div class="v gap-xs mt-m">'+opts+'</div>'
+    +'<button data-a="reportToggle" data-id="'+id+'" style="display:block;width:100%">'
+    +'<div class="srow" style="padding:16px 0"><div class="t">Block '+n+' as well</div>'
+    +'<div class="switch '+(r.block?"on":"")+'"><div class="knob"></div></div></div></button>'
+    +'<button class="btn primary'+(r.reason?"":" btn-off")+'" data-a="reportSend" data-id="'+id+'">Send report</button>'
+    +'<button class="btntext" data-a="closeSheet">Cancel</button>');
+}
+
+/* Leaving takes the person out of your five as well. Anything else makes it
+   weightless — they would still hold a slot and could write straight back. */
+function removePerson(personId,alsoConversation,theirs){
+  if(alsoConversation) S.convos=S.convos.filter(c=>c.person.id!==personId);
+  const i=S.slots.findIndex(s=>s.person&&s.person.id===personId);
+  if(i>=0) S.slots[i]={person:null,when:"A new person arrives tomorrow.",
+                       left:"Nine in the morning",theirs:!!theirs};
+}
+
+/* ============================ the dismissal ============================ */
+function performDismiss(id){
+  closeSheet();
+  const idx=S.slots.findIndex(s=>s.person&&s.person.id===id);
+  if(idx<0) return;
+  // Come back to the roster first, so nothing vanishes under the cursor.
+  S.stacks.daily=[]; S.tab="daily"; render();
+
+  const filled=S.slots.filter(s=>s.person).length;
+  const card=document.querySelector(`[data-card="${id}"]`);
+  const stones=document.querySelectorAll("#arch path");
+  const stone=stones[filled-1];
+  const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const finish=()=>{
+    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:"Nine in the morning"};
+    S.selected=null; render();
+  };
+  if(!card||reduce){ setTimeout(finish,120); return; }
+
+  if(stone) stone.classList.add("stone-drop");
+  card.style.height=card.offsetHeight+"px";
+  card.classList.add("leaving");
+  requestAnimationFrame(()=>{
+    card.style.transition="height .26s ease-in, opacity .26s ease-in, margin .26s ease-in";
+    card.style.height="0px"; card.style.opacity="0"; card.style.marginBottom="-32px";
+  });
+  setTimeout(finish,320);
+}
+
+/* ============================ events ============================ */
+document.addEventListener("click",e=>{
+  const el=e.target.closest("[data-a]"); if(!el) return;
+  const a=el.dataset.a, id=el.dataset.id, o=S.onboarding;
+
+  const acts={
+    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();},
+    open:()=>{S.selected=null; push({name:"profile",id});},
+    back:()=>pop(),
+    select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
+    dismiss:()=>dismissSheet(id),
+    closeSheet:()=>closeSheet(),
+    confirmDismiss:()=>performDismiss(id),
+    compose:()=>composerSheet(id),
+    thread:()=>push({name:"thread",id}),
+    openRequests:()=>push({name:"requests"}),
+    acceptReq:()=>{
+      const c=S.convos.find(x=>x.id===id); c.state="open"; c.unread=0;
+      S.stacks.messages=[{name:"thread",id:c.id}]; S.tab="messages"; render();
+    },
+    declineReq:()=>{
+      // They are not told, the same as everything else here.
+      S.convos=S.convos.filter(x=>x.id!==id);
+      S.stacks.messages=[]; render();
+    },
+    goDaily:()=>{S.tab="daily"; render();},
+    goMessages:()=>{S.tab="messages"; render();},
+    plan:()=>{S.plan=+el.dataset.i; render();},
+    arrange:()=>push({name:"arrange"}),
+    settings:()=>push({name:"settings"}),
+    setting:()=>push({name:"settingDetail",id:el.dataset.id}),
+    toggleSetting:()=>{const k=TOGGLES[el.dataset.id]; S.set[k]=!S.set[k]; render();},
+    setIntent:()=>{S.set.intent=el.dataset.o; render();},
+    setTheme:()=>{S.set.theme=el.dataset.o; applyTheme(); render();},
+    /* Never empties. A preference for nobody is not a preference, and the row would
+       silently stop matching anyone with nothing on screen saying why. */
+    setSeeking:()=>{
+      const g=el.dataset.o, at=S.set.seeking.indexOf(g);
+      if(at>=0){ if(S.set.seeking.length>1) S.set.seeking.splice(at,1); }
+      else S.set.seeking.push(g);
+      render();
+    },
+    unpause:()=>{S.set.paused=false; render();},
+    /* Not part of the design — there is no network here to lose, and a real build
+       watches the system instead. It is the only way to see the state on a phone. */
+    toggleOffline:()=>{S.offline=!S.offline; render();},
+    appealOpen:()=>appealSheet(),
+    appealSend:()=>{
+      const t=document.getElementById("appealText");
+      if(!t||!t.value.trim()) return;
+      S.removal.appeal="sent"; closeSheet(); render();
+    },
+    leaveRemoved:()=>{S.removal=null; render();},
+    /* Not part of the design either — the screen is deliberately a dead end, so a
+       prototype needs both a way in and a way back out. */
+    showRemoved:()=>{
+      S.removal={kind:"removed",reason:"abuse",appeal:"notSent"};
+      closeSheet(); render();
+    },
+    showDeviceBlocked:()=>{
+      S.removal={kind:"device",reason:"abuse",appeal:"notSent"};
+      closeSheet(); render();
+    },
+    allowNotifs:()=>{S.set.notifsAllowed=true; S.stacks.you=[{name:"settings"}]; render();},
+    deleteOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Delete your account?</div>
+      <div class="body mortar mt-s">Your profile goes now, and every conversation you are
+        in stops. There is no undo and no grace period.</div>
+      <button class="btn quiet mt-xxl" data-a="deleteDo">Delete my account</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    /* Not the same thing as deleting, even though both land in the same place:
+       with no password, signing in *is* entering your number, so the way back in
+       is the screen a new account starts on. */
+    signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
+      <div class="body mortar mt-s">Your profile, your conversations and the people in your
+        roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple
+        brings you straight back to it.</div>
+      <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    signOutDo:()=>{ closeSheet(); startOnboarding(); },
+    numberOpen:()=>{ S.number={step:"number",value:"",code:""}; numberSheet(); },
+    numberNext:()=>{
+      const n=S.number, digits=n.value.replace(/\D/g,"");
+      if(n.step==="number"){
+        if(digits.length<7) return;
+        /* A design build has no carrier, so one number stands in for one already in
+           use. A real build asks the server. */
+        n.step=digits.endsWith("0000")?"taken":"code";
+      } else if(n.step==="code"){
+        if(n.code.length!==6) return;
+        S.set.phone="+1 "+n.value; n.step="done";
+      } else if(n.step==="done"){ closeSheet(); render(); return; }
+      numberSheet();
+    },
+    numberBack:()=>{ S.number.step="number"; S.number.code=""; numberSheet(); },
+    setHeight:()=>{
+      const v=el.dataset.o;
+      if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
+      closeSheet(); render();
+    },
+    obHeight:()=>heightSheet("ob"),
+    obPlace:()=>placeSheet("ob"),
+    youPlace:()=>placeSheet("you"),
+    setPlace:()=>{
+      const p=placeById(el.dataset.o);
+      if(el.dataset.t==="ob") S.onboarding.place=p; else S.you.place=p;
+      closeSheet(); render();
+    },
+    /* A location, taken once and immediately rounded. The nearest place fills the
+       chip, because a geocoder saying "Bedford-Stuyvesant" is not what somebody who
+       writes "Bed-Stuy" wants under their name — the picker corrects it. */
+    useLocation:()=>{
+      const fix={lat:40.6913,lon:-73.9742};      // stands in for a device fix
+      S.set.locationPermission="granted";
+      const t=el.dataset.t, target=t==="ob"?S.onboarding:S.you;
+      target.coord=coarse(fix);
+      if(!target.place) target.place=nearestPlace(fix);
+      placeSheet(t);
+    },
+    youHeight:()=>heightSheet("you"),
+    obGender:()=>{S.onboarding.gender=el.dataset.o; render();},
+    obSeeking:()=>{
+      const g=el.dataset.o, at=S.onboarding.seeking.indexOf(g);
+      if(at>=0){ if(S.onboarding.seeking.length>1) S.onboarding.seeking.splice(at,1); }
+      else S.onboarding.seeking.push(g);
+      render();
+    },
+    youGender:()=>{S.you.gender=el.dataset.o; render(); openDetails();},
+    retrySend:()=>{
+      const c=S.convos.find(x=>x.id===current().id), m=c.msgs[+el.dataset.i];
+      m[3]="sending"; render();
+      setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; m[2]="Just now"; render(); },1400);
+    },
+    setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
+    goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
+    subscribe:()=>setSubscribed(true),
+    review:()=>{ if(S.set.sub) push({name:"review"}); else acts.goPremium(); },
+    addPhoto:()=>openPicker("you"),
+    rmPhoto:()=>{const i=+el.dataset.i;
+      S.you.photos.splice(i,1); S.you.up.splice(i,1); render();},
+    retryPhoto:()=>retryUpload(S.you,+el.dataset.i),
+    pickClose:()=>{S.picker=null; render();},
+    pickTile:()=>{
+      const i=+el.dataset.i, pk=S.picker, at=pk.ids.indexOf(i);
+      if(at>=0) pk.ids.splice(at,1);
+      else if(pk.ids.length<pk.left) pk.ids.push(i);
+      render();
+    },
+    pickNext:()=>{const pk=S.picker; pk.step=0; pk.zoom=100; pk.ox=0; pk.oy=0; render();},
+    cropBack:()=>{const pk=S.picker; pk.step--; pk.zoom=100; pk.ox=0; pk.oy=0; render();},
+    cropNext:()=>{
+      const pk=S.picker;
+      if(pk.step+1<pk.ids.length){ pk.step++; pk.zoom=100; pk.ox=0; pk.oy=0; render(); }
+      else commitPicked();
+    },
+    editInterests:()=>openSheet(`<div class="titleM" style="padding-top:8px">Interests</div>
+      <div class="footnote mortar mt-s">Three things you are actually into.</div>
+      <div class="v gap-xs mt-m">${S.you.interests.map(t=>
+        `<div class="field"><input value="${esc(t)}" maxlength="24"></div>`).join("")}</div>
+      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    editDetails:()=>openDetails(),
+    convoMenu:()=>convoMenuSheet(id),
+    blockOpen:()=>{ closeSheet(); setTimeout(()=>blockSheet(id),220); },
+    leaveOpen:()=>{ closeSheet(); setTimeout(()=>leaveSheet(id),220); },
+    reportOpen:()=>{ S.report={reason:null,block:true,sent:false};
+      closeSheet(); setTimeout(()=>reportSheet(id),220); },
+    reportReason:()=>{ S.report.reason=el.dataset.o; reportSheet(id); },
+    reportToggle:()=>{ S.report.block=!S.report.block; reportSheet(id); },
+    reportSend:()=>{ if(!S.report.reason) return; S.report.sent=true; reportSheet(id); },
+    reportDone:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      // Reporting on its own removes nothing — you reported them, you did not ask
+      // to lose the conversation.
+      if(S.report.block) removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
+    blockDo:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
+    leaveDo:()=>{
+      const c=S.convos.find(x=>x.id===id);
+      removePerson(c.person.id,true);
+      closeSheet(); S.stacks.messages=[]; S.stacks.daily=[]; render();
+    },
+    editAnswer:()=>{
+      const i=+el.dataset.i;
+      S.edit={i:i, question:S.you.prompts[i][0], answer:S.you.prompts[i][1], choosing:false,
+              taken:S.you.prompts.filter((_,j)=>j!==i).map(p=>p[0])};
+      answerSheet();
+    },
+    pickOpen:()=>{
+      const t=document.getElementById("answerText");
+      if(t) S.edit.answer=t.value;
+      S.edit.choosing=true; answerSheet();
+    },
+    pickCancel:()=>{ S.edit.choosing=false; answerSheet(); },
+    pickQuestion:()=>{
+      const q=el.dataset.q;
+      if(q!==S.edit.question){ S.edit.question=q; S.edit.answer=""; }
+      S.edit.choosing=false; answerSheet();
+    },
+    saveAnswer:()=>{
+      const t=document.getElementById("answerText");
+      const text=(t&&t.value.trim())||"";
+      if(!text) return;
+      S.you.prompts[S.edit.i]=[S.edit.question,text];
+      S.edit=null; closeSheet(); render();
+    },
+    replayOnboarding:()=>{startOnboarding(); },
+    threadSend:()=>{
+      const i=document.getElementById("threadInput"); if(!i||!i.value.trim()) return;
+      const c=S.convos.find(x=>x.id===current().id);
+      c.msgs.push(["out",i.value.trim(),"Just now","sending"]); c.when="Just now"; render();
+      const sc=document.querySelector(".screen"); if(sc) sc.scrollTop=sc.scrollHeight;
+      const m=c.msgs[c.msgs.length-1];
+      setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; render(); },900);
+    },
+    send:()=>{
+      const t=document.getElementById("composeText");
+      const text=(t&&t.value.trim())||"";
+      if(!text) return;
+      const p=[...PEOPLE,HANA].find(x=>x.id===id);
+      let c=S.convos.find(x=>x.id===id);
+      const openRef=S.selected&&S.selected.startsWith("prompt")
+        ? ["prompt",+S.selected.split("-")[1]] : ["prompt",0];
+      if(!c){ c={id,person:p,open:openRef,unread:0,when:"Just now",msgs:[]}; S.convos.unshift(c); }
+      c.msgs.push(["out",text,"Just now"]); c.when="Just now";
+      // Writing to them spends the slot.
+      removePerson(id,false);
+      closeSheet(); S.selected=null;
+      S.tab="messages"; S.stacks.messages=[{name:"thread",id}]; render();
+    },
+    /* onboarding */
+    /* Apple hands over a name and a relay email on the first authorization only.
+       A real build persists them then or loses them for good. */
+    obStart:()=>{
+      o.appleUserID="001234.abcdef";
+      if(!o.name.trim()) o.name="Sam";
+      if(!o.email) o.email="sam@privaterelay.appleid.com";
+      o.welcome=false; render();
+    },
+    obBack:()=>{
+      if(o.q!==null&&o.q!==undefined){ o.q=o.q===0?null:o.q-1; render(); return; }
+      if(o.step===0&&o.sent){ o.sent=false; o.code=""; render(); return; }
+      if(o.step>0){ o.step--; render(); }
+    },
+    obResend:()=>{el.textContent="Code sent again";},
+    obAddPhoto:()=>openPicker("ob"),
+    obRmPhoto:()=>{const i=+el.dataset.i;
+      o.photos.splice(i,1); o.up.splice(i,1); render();},
+    obRetryPhoto:()=>retryUpload(o,+el.dataset.i),
+    obPickQuestion:()=>{
+      const i=+el.dataset.i;
+      S.obPicking=i;
+      openSheet('<div class="v gap-s" style="padding-top:4px">'
+        +'<div class="titleM">Choose a question</div></div>'
+        +'<div class="mt-m">'+promptPicker(o.questions[i],
+            o.questions.filter((_,j)=>j!==i).filter(Boolean),"obChooseQuestion")+'</div>');
+    },
+    obChooseQuestion:()=>{
+      const i=S.obPicking, q=el.dataset.q;
+      // Changing the question clears the answer: an answer written for a different
+      // question is a non sequitur.
+      if(q!==o.questions[i]){ o.questions[i]=q; o.answers[i]=""; }
+      closeSheet(); render();
+    },
+    obAnswer:()=>{
+      o.qa[o.q]=el.dataset.o; render();
+      setTimeout(()=>{
+        if(o.q+1<QUESTIONS.length) o.q++;
+        else { o.q=null; o.step=STEPS.indexOf("notifications"); }
+        render();
+      },260);
+    },
+    obNext:()=>{
+      const step=STEPS[o.step];
+      if(step==="verify"&&!o.sent){ o.sent=true; render(); return; }
+      if(step==="questions"&&(o.q===null||o.q===undefined)){ o.q=0; render(); return; }
+      if(step==="notifications"){ finishOnboarding(); return; }
+      o.step++; render();
+    },
+    obFinish:()=>finishOnboarding()
+  };
+  if(acts[a]){ e.preventDefault(); acts[a](); }
+});
+
+/* live input */
+document.addEventListener("input",e=>{
+  const t=e.target, o=S.onboarding;
+  if(t.dataset.s==="distance"){ S.set.distance=+t.value;
+    const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
+  if(t.dataset.s==="email"){ S.set.email=t.value; return; }
+  if(t.id==="numberInput"){ S.number.value=t.value; return; }
+  if(t.id==="numberCode"){
+    S.number.code=t.value.replace(/\D/g,"").slice(0,6); numberSheet();
+    document.getElementById("numberCode")?.focus(); return;
+  }
+  if(t.id==="placeSearch"){
+    const at=t.selectionStart;
+    placeSheet(t.dataset.t,t.value);
+    const f=document.getElementById("placeSearch");
+    if(f){ f.focus(); f.setSelectionRange(at,at); }
+    return;
+  }
+  if(o){
+    const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
+               obWork:"work",obPronouns:"pronouns"};
+    if(map[t.id]){
+      o[map[t.id]]=t.id==="obCode"?t.value.replace(/\D/g,"").slice(0,6):t.value;
+      const btn=document.querySelector('[data-a="obNext"]');
+      if(t.id==="obCode"){ render(); document.getElementById("obCode")?.focus(); return; }
+      if(btn) refreshCTA();
+      return;
+    }
+    if(t.dataset.ob==="answer"){ o.answers[+t.dataset.i]=t.value; refreshCTA(); return; }
+    if(t.dataset.ob==="interest"){ o.interests[+t.dataset.i]=t.value; refreshCTA(); return; }
+  }
+});
+function refreshCTA(){
+  const o=S.onboarding, step=STEPS[o.step];
+  let ok=true;
+  if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
+  else if(step==="verify") ok=o.code.length===6;
+  else if(step==="identity") ok=!!o.name.trim();
+  else if(step==="about") ok=!!(o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender);
+  else if(step==="seeking") ok=o.seeking.length>0;
+  else if(step==="answers") ok=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
+  else if(step==="interests") ok=o.interests.filter(t=>t.trim()).length>=3;
+  const btn=document.querySelector('[data-a="obNext"]');
+  if(btn) btn.disabled=!ok;
+}
+
+function startOnboarding(){
+  S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
+    appleUserID:"",age:"",place:null,coord:null,height:"",work:"",gender:null,pronouns:"",seeking:[],
+    photos:[],up:[],questions:["","",""],answers:["","",""],
+    interests:["","",""],q:null,qa:{}};
+  render();
+}
+function finishOnboarding(){
+  const o=S.onboarding;
+  if(o.name.trim()){
+    S.you.name=o.name.trim(); S.you.age=o.age||S.you.age;
+    S.you.place=o.place||S.you.place; S.you.coord=o.coord||S.you.coord;
+    S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
+    S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
+    if(o.seeking.length) S.set.seeking=o.seeking.slice();
+    if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
+    o.answers.forEach((a,i)=>{
+      if(a.trim()&&o.questions[i]) S.you.prompts[i]=[o.questions[i],a.trim()];
+    });
+    const ints=o.interests.filter(t=>t.trim());
+    if(ints.length) S.you.interests=ints;
+  }
+  S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],you:[]};
+  render();
+}
+
+
+/* The age range: two handles on one track. Pointer events so it works on a phone. */
+function mountRange(){
+  const track=document.getElementById("rangeTrack"); if(!track) return;
+  const fill=track.querySelector(".rangefill");
+  const knobs={min:track.querySelector('[data-k="min"]'),max:track.querySelector('[data-k="max"]')};
+  const LO=18, HI=70, KNOB=26;
+  const paint=()=>{
+    const w=track.clientWidth-KNOB, span=HI-LO;
+    const xl=(S.set.minAge-LO)/span*w, xh=(S.set.maxAge-LO)/span*w;
+    knobs.min.style.left=xl+"px"; knobs.max.style.left=xh+"px";
+    fill.style.left=(xl+KNOB/2)+"px"; fill.style.width=Math.max(0,xh-xl)+"px";
+    const h=document.querySelector(".titleL");
+    if(h) h.textContent=S.set.minAge+" to "+S.set.maxAge;
+  };
+  const drag=(which)=>(ev)=>{
+    ev.preventDefault();
+    const move=(e)=>{
+      const p=(e.touches?e.touches[0].clientX:e.clientX);
+      const r=track.getBoundingClientRect(), w=r.width-KNOB;
+      const v=Math.round(Math.min(Math.max(0,p-r.left-KNOB/2),w)/w*(HI-LO))+LO;
+      if(which==="min") S.set.minAge=Math.min(v,S.set.maxAge-2);
+      else S.set.maxAge=Math.max(v,S.set.minAge+2);
+      paint();
+    };
+    const up=()=>{document.removeEventListener("pointermove",move);
+      document.removeEventListener("pointerup",up);};
+    document.addEventListener("pointermove",move);
+    document.addEventListener("pointerup",up);
+  };
+  knobs.min.addEventListener("pointerdown",drag("min"));
+  knobs.max.addEventListener("pointerdown",drag("max"));
+  paint();
+}
+const _render=render;
+render=function(){ _render(); mountRange(); mountCrop(); };
+
+applyTheme();
+render();
+</script>

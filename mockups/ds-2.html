@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Arch — design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+  :root{
+    --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+    --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D; --verdigris:#7FA98F;
+    --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+    --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
+  
+  .phone{width:393px; height:852px; background:var(--night); overflow:hidden; position:relative;}
+  .screen{padding:0 20px 24px; height:100%; overflow:hidden;}
+  .panel-name{position:absolute; bottom:8px; left:20px; font-size:11px; color:#4a515b;}
+  .sec{padding-top:32px;}
+  .sec-title{font-family:var(--sans); font-size:13px; line-height:18px; color:var(--mortar); margin-bottom:16px;}
+  .rule{height:.5px; background:var(--hairline); margin-top:8px;}
+
+  /* type */
+  .t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500; letter-spacing:.5px;}
+  .t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+  .t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+  .t-prompt{font-family:var(--serif); font-size:19px; line-height:26px; font-weight:400;}
+  .t-bodyL{font-size:20px; line-height:28px;}
+  .t-body{font-size:17px; line-height:24px;}
+  .t-callout{font-size:16px; line-height:22px;}
+  .t-subhead{font-size:15px; line-height:20px; font-weight:600;}
+  .t-footnote{font-size:13px; line-height:18px;}
+  .t-caption{font-size:12px; line-height:16px; font-weight:500;}
+  .spec{margin-bottom:20px;}
+  .spec .meta{font-size:12px; line-height:16px; color:var(--mortar); margin-bottom:4px;}
+
+  /* palette */
+  .sw{display:flex; align-items:center; gap:16px; padding:8px 0;}
+  .chip{width:56px; height:40px; border-radius:6px; flex:none; box-shadow:inset 0 0 0 .5px rgba(154,143,134,.22);}
+  .sw .n{font-size:15px; font-weight:600;}
+  .sw .u{font-size:13px; color:var(--mortar);}
+  .sw .h{margin-left:auto; font-size:12px; color:var(--mortar); font-variant-numeric:tabular-nums;}
+
+  /* arch grid */
+  .arches{display:grid; grid-template-columns:1fr 1fr; gap:20px 12px;}
+  .arch-cell{display:flex; flex-direction:column; align-items:center; gap:8px;}
+  .arch-cell .lbl{font-size:12px; line-height:16px; color:var(--mortar);}
+
+  /* cards */
+  .photo{border-radius:24px; aspect-ratio:4/5; position:relative; overflow:visible;}
+  .photo .inner{position:absolute; inset:0; border-radius:24px;}
+  .prompt-card{background:var(--stone); border-radius:20px; padding:24px; position:relative;}
+  .prompt-card .q{color:var(--mortar); margin-bottom:12px;}
+  .like{position:absolute; right:8px; bottom:8px; width:44px; height:44px; display:flex; align-items:center; justify-content:center;}
+  .vitals{display:flex; flex-wrap:wrap; gap:8px;}
+  .vital{background:var(--stone); border-radius:12px; padding:8px 12px; font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+
+  /* buttons */
+  .btn{height:52px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+       font-size:15px; font-weight:600; margin-bottom:16px;}
+  .btn-primary{background:var(--lamp); color:var(--night);}
+  .btn-quiet{border:1px solid var(--quiet); color:var(--mortar);}
+
+  /* tab bar */
+  .tabbar{background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+          display:flex; padding:8px 0 4px; position:absolute; left:0; right:0; bottom:0;}
+  .tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+  .tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+  .tab.on .lbl{color:var(--lamp);}
+  .glyphwrap{width:26px; height:26px; position:relative;}
+  .badge{position:absolute; top:-5px; right:-9px; min-width:16px; height:16px; border-radius:8px;
+         background:var(--lamp); color:var(--night); font-size:11px; font-weight:600;
+         display:flex; align-items:center; justify-content:center;}
+</style>
+</head>
+<body>
+<div class="phone"><div class="screen">
+  <div class="sec" style="padding-top:40px">
+    <div class="sec-title">The Daily Arch &mdash; five stones, keystone proud of the band</div>
+    <div class="arches" id="arches"></div>
+  </div>
+
+  <div class="sec">
+    <div class="sec-title">Buttons and the like affordance</div>
+    <div class="btn btn-primary">Send a message</div>
+    <div class="btn btn-quiet">Not for me</div>
+    <div style="display:flex; gap:28px; align-items:center; padding-top:8px;">
+      <svg width="34" height="38" viewBox="0 0 34 38" id="k-off"></svg>
+      <svg width="34" height="38" viewBox="0 0 34 38" id="k-on"></svg>
+      <div class="t-footnote" style="color:var(--mortar)">Unset &nbsp;/&nbsp; set</div>
+    </div>
+  </div>
+
+  </div></div>
+<script>
+const $ = (id)=>document.getElementById(id);
+const C = {night:'#191715', stone:'#232120', stoneRaised:'#2E2B29', limestone:'#F5EFE6',
+           mortar:'#9A8F86', lamp:'#E5714D', verdigris:'#7FA98F'};
+
+/* ---------- palette ---------- */
+const tokens = [
+  ['night','#191715','App background'],
+  ['stone','#232120','Cards, sheets, incoming bubbles'],
+  ['stoneRaised','#2E2B29','Elevated, tab bar, outgoing'],
+  ['limestone','#F5EFE6','Primary text'],
+  ['mortar','#9A8F86','Secondary text, dividers'],
+  ['lamp','#E5714D','Action, active tab, premium'],
+  ['verdigris','#7FA98F','Connection only'],
+];
+if($('palette')) $('palette').innerHTML = tokens.map(([n,h,u]) =>
+  `<div class="sw"><div class="chip" style="background:${h}"></div>
+   <div><div class="n">${n}</div><div class="u">${u}</div></div>
+   <div class="h">${h}</div></div>`).join('');
+
+/* ---------- arch mark (identical proportions to ArchMark.swift) ---------- */
+function archMarkPath(W, sw){
+  const f = (n) => n*W;
+  return `M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
+       + ` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+       + ` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
+}
+function drawMark(el, W, sw, color){
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d', archMarkPath(W, sw));
+  p.setAttribute('fill','none'); p.setAttribute('stroke', color);
+  p.setAttribute('stroke-width', sw); p.setAttribute('stroke-linecap','round');
+  p.setAttribute('stroke-linejoin','round');
+  p.setAttribute('transform', `translate(${sw/2},${sw/2})`);
+  el.appendChild(p);
+}
+if($('mark')) drawMark($('mark'), 48, 3.4, C.lamp);
+
+/* ---------- daily arch (identical maths to ArchBand.swift) ---------- */
+function pt(cx,cy,r,deg){const a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
+function segPath(cx,cy,a0,a1,ro,ri){
+  const [x0,y0]=pt(cx,cy,ro,a0), [x1,y1]=pt(cx,cy,ro,a1);
+  const [x2,y2]=pt(cx,cy,ri,a1), [x3,y3]=pt(cx,cy,ri,a0);
+  return `M${x0},${y0} A${ro},${ro} 0 0 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 0 0 ${x3},${y3} Z`;
+}
+function drawArch(el, W, completed, current, opts){
+  opts = opts || {};
+  const count=5, joint=1.3, thickness=24, outerProud=5, innerProud=4, step=180/count;
+  const H = W/2 + outerProud;
+  const cx = W/2, cy = H;
+  const base = Math.min(W/2, H) - outerProud;
+  el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  el.setAttribute('width', W); el.setAttribute('height', H);
+  const key = Math.floor(count/2);
+  for(let i=0;i<count;i++){
+    const proud = (i===key);
+    const a0 = 180 + i*step + joint, a1 = 180 + (i+1)*step - joint;
+    const ro = base + (proud?outerProud:0), ri = base - thickness - (proud?innerProud:0);
+    const path = document.createElementNS('http://www.w3.org/2000/svg','path');
+    path.setAttribute('d', segPath(cx,cy,a0,a1,ro,ri));
+    const done = i < completed;
+    path.setAttribute('fill', done ? (opts.connected ? C.verdigris : C.lamp) : C.stoneRaised);
+    if(i===current){ path.setAttribute('stroke', 'rgba(229,113,77,.45)'); path.setAttribute('stroke-width','1'); }
+    if(proud && completed>=count){ path.setAttribute('stroke','rgba(245,239,230,.15)'); path.setAttribute('stroke-width','1'); }
+    el.appendChild(path);
+  }
+}
+const archStates = [
+  [0,0,'Nothing set yet',{}],
+  [2,2,'Two set, one open',{}],
+  [4,4,'Four set, last one open',{}],
+  [5,null,'Complete',{}],
+  [5,null,'Connected — keystone locked',{connected:true}],
+];
+if($('arches')){
+  $('arches').innerHTML = archStates.map((s,i)=>
+    `<div class="arch-cell"><svg id="arch${i}"></svg><div class="lbl">${s[2]}</div></div>`).join('');
+  archStates.forEach((s,i)=> drawArch($('arch'+i), 150, s[0], s[1], s[3]));
+}
+
+/* ---------- keystone ---------- */
+function keystonePath(w,h,taper,inset){
+  const t = w*taper;
+  return `M${inset},${inset} L${w-inset},${inset} L${w-t-inset},${h-inset} L${t+inset},${h-inset} Z`;
+}
+function drawKeystone(el, on){
+  const w=34,h=38;
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d', keystonePath(w,h,0.16, on?0:0.75));
+  p.setAttribute('stroke-linejoin','round');
+  if(on){ p.setAttribute('fill', C.lamp); }
+  else { p.setAttribute('fill', C.stone); p.setAttribute('stroke', C.lamp); p.setAttribute('stroke-width','1.5'); }
+  el.appendChild(p);
+}
+if($('k-off')) drawKeystone($('k-off'), false);
+if($('k-on')) drawKeystone($('k-on'), true);
+document.querySelectorAll('.k-off-c').forEach(e=>drawKeystone(e,false));
+document.querySelectorAll('.k-on-c').forEach(e=>drawKeystone(e,true));
+
+/* ---------- tab glyphs ---------- */
+function svgPath(el, d, color, sw, fill){
+  const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',d); p.setAttribute('fill', fill||'none');
+  if(sw){p.setAttribute('stroke',color); p.setAttribute('stroke-width',sw);
+         p.setAttribute('stroke-linecap','round'); p.setAttribute('stroke-linejoin','round');}
+  el.appendChild(p); return p;
+}
+// premium: keystone outline, 20x24 centred in 26
+(function(){
+  const el=$('g-prem'); if(!el) return; const _x=el, w=20,h=24, ox=3, oy=1, sw=1.75, i=sw/2;
+  const t=w*0.16;
+  const d=`M${ox+i},${oy+i} L${ox+w-i},${oy+i} L${ox+w-t},${oy+h-i} L${ox+t},${oy+h-i} Z`;
+  svgPath(el,d,C.mortar,sw);
+})();
+// daily: the mark, active
+(function(){
+  const el=$('g-daily'); if(!el) return; const _x=el, sw=2.25, W=26-sw;
+  const p=svgPath(el, archMarkPath(W,sw), C.lamp, sw);
+  p.setAttribute('transform',`translate(${sw/2},${(26-W*0.9-sw)/2 + sw/2})`);
+})();
+// messages
+(function(){
+  const el=$('g-msg'); if(!el) return; const _x=el, sw=1.75, i=sw/2, w=24-sw, h=24-sw, ox=1+i, oy=1+i;
+  const bb=oy+h*0.76, c=w*0.22;
+  const d=`M${ox},${oy+c} Q${ox},${oy} ${ox+c},${oy} L${ox+w-c},${oy} Q${ox+w},${oy} ${ox+w},${oy+c}
+           L${ox+w},${bb-c} Q${ox+w},${bb} ${ox+w-c},${bb} L${ox+w*0.44},${bb}
+           L${ox+w*0.18},${oy+h} L${ox+w*0.28},${bb} L${ox+c},${bb} Q${ox},${bb} ${ox},${bb-c} Z`;
+  svgPath(el,d,C.mortar,sw);
+})();
+// you
+(function(){
+  const el=$('g-you'); if(!el) return; const _x=el, sw=1.75, i=sw/2, w=24-sw, h=24-sw, ox=1+i, oy=1+i;
+  const hr=w*0.17, hcx=ox+w/2, hcy=oy+hr;
+  const sr=w*0.46, scy=oy+h*0.52+sr;
+  const cc=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  cc.setAttribute('cx',hcx); cc.setAttribute('cy',hcy); cc.setAttribute('r',hr);
+  cc.setAttribute('fill','none'); cc.setAttribute('stroke',C.mortar); cc.setAttribute('stroke-width',sw);
+  el.appendChild(cc);
+  const [ax,ay]=pt(hcx,scy,sr,190), [bx,by]=pt(hcx,scy,sr,350);
+  svgPath(el,`M${ax},${ay} A${sr},${sr} 0 0 1 ${bx},${by}`,C.mortar,sw);
+})();
+</script>
+</body>
+</html>
