@@ -25,12 +25,22 @@ struct PhotoPlaceholder: View {
 /// it, and the selection is carried into the message composer as quoted context —
 /// the card is the control, so no per-item buttons exist anywhere in the app.
 struct PhotoCard: View {
+    /// The shape every profile photograph is drawn in, and the shape the crop step
+    /// cuts to. One number, so the two cannot disagree.
+    ///
+    /// Square. The 4:5 it replaced was a fifth taller, and at a phone's width a
+    /// lead photo at 4:5 is most of the screen before a name appears; a profile
+    /// should show a face and whose it is in one glance. Square also makes the
+    /// thumbnails in the arrange grid an honest preview of the photo rather than a
+    /// crop of it.
+    static let aspect: CGFloat = 1
+
     let photo: Photo
     /// Editing, on your own profile. Never a like.
     var affordance: CardAffordance = .none
     /// Where this photo sits in the profile, for VoiceOver.
     var position: Int = 1
-    var aspectRatio: CGFloat = 4.0 / 5.0
+    var aspectRatio: CGFloat = PhotoCard.aspect
     /// Selected as the thing the first message will be about.
     var isSelected: Bool = false
     var onTap: (() -> Void)?

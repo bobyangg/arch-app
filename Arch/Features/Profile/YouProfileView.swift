@@ -48,6 +48,7 @@ struct YouProfileView: View {
                 scroll
             }
             .background(ArchColor.night)
+            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -144,8 +145,10 @@ struct YouProfileView: View {
     private var leadPhoto: some View {
         if let photo = person.mainPhoto {
             PhotoPlaceholder(toneIndex: photo.toneIndex)
-                .aspectRatio(4.0 / 5.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .aspectRatio(PhotoCard.aspect, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
+                .padding(.horizontal, ArchSpacing.screenMargin)
+                .padding(.top, ArchSpacing.xs)
                 .accessibilityLabel("Your main photo")
         }
     }

@@ -33,6 +33,7 @@
   --r-photo:24px; --r-card:20px; --r-control:12px; --r-sheet:28px; --r-detail:8px;
   --s-xxs:4px; --s-xs:8px; --s-s:12px; --s-m:16px; --s-l:20px;
   --s-xl:24px; --s-xxl:32px; --s-xxxl:48px;
+  color-scheme:light;
 }
 
 /* Rich Charcoal. `system` is resolved to one of these two in script, so this is
@@ -54,6 +55,7 @@ html[data-theme="dark"]{
   --tone3a:#383A3E; --tone3b:#303236;
   --tone4a:#46332A; --tone4b:#3D2C24;
   --tone5a:#4A4640; --tone5b:#413E38;
+  color-scheme:dark;
 }
 *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -108,6 +110,16 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .iconbtn{width:44px; height:44px; display:flex; align-items:center; justify-content:center;
          font-size:17px; color:var(--limestone); flex:none;}
 .iconbtn.round{width:36px; height:36px; border-radius:18px; background:var(--stone);}
+
+/* The tab bar's twin: same surface, same hairline, the lock-up at the left and
+   nothing else. Root screens only — a thread or a profile has somebody else's
+   name at the top, and the brand has no business above that. */
+.topbar{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
+        display:flex; align-items:center; gap:8px; padding:env(safe-area-inset-top,0px) 20px 0;
+        height:calc(52px + env(safe-area-inset-top,0px));}
+.topbar .word{font-family:var(--serif); font-optical-sizing:auto;
+        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:25px; line-height:30px; font-weight:600;}
+.topbar svg{display:block;}
 
 .tabbar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
         display:flex; padding:8px 0 calc(4px + env(safe-area-inset-bottom,0px));}
@@ -248,7 +260,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
           align-items:center; justify-content:center; color:var(--mortar); font-size:15px;}
 .failface span{font-size:11px; line-height:14px; font-weight:600;}
 .cropstage{position:relative; padding:28px; overflow:hidden; touch-action:none;}
-.cropframe{position:relative; width:100%; aspect-ratio:4/5; border-radius:var(--r-photo);
+.cropframe{position:relative; width:100%; aspect-ratio:1; border-radius:var(--r-photo);
            border:1px solid var(--quiet); box-shadow:0 0 0 9999px rgba(15,19,25,.55);}
 .slot.add{background:var(--stone); display:flex; align-items:center; justify-content:center;
           color:var(--mortar); font-size:20px;}
@@ -480,7 +492,7 @@ const BENEFITS=[["Seven people instead of five","Two more slots. The same care c
    signal the app genuinely has rather than one the review has to invent. */
 const WRITTEN={"prompt-2":4,"photo-1":3,"prompt-0":2,"photo-0":1};
 /* A camera roll: portraits, squares, a couple of landscapes, one panorama. The
-   shapes are the point — a library that was already 4:5 would make the crop step
+   shapes are the point — a library that was already square would make the crop step
    look like ceremony. */
 const LIBRARY=[[3,3/4],[1,1],[5,4/3],[0,3/4],[2,9/16],[4,1],[0,16/9],[3,3/4],[5,1],
                [2,3/4],[1,4/3],[4,3/4],[0,1],[3,9/16],[2,4/3],[5,3/4],[1,3/4],[4,21/9]];
@@ -690,16 +702,20 @@ function markSVG(size,stroke,color){
 }
 
 /* ============================ tab glyphs ============================ */
-/* Premium's keystone lights amber, every other tab terracotta: the palette's two
+/* Premium's star lights amber, every other tab terracotta: the palette's two
    accents, split between the thing you can buy and the things you do. */
 function glyph(kind,active){
   const c=active?(kind==="premium"?"var(--ember)":"var(--lamp)"):"var(--mortar)", sw=active?2.25:1.75;
   if(kind==="daily") return markSVG(26,sw,c);
   if(kind==="premium"){
-    const w=20,h=24,ox=3,oy=1,i=sw/2,t=w*.16;
+    /* Same construction as StarGlyph.swift: five points, inner radius .46 of the
+       outer, which with round joins keeps the points from reading as spikes. */
+    const cx=13,cy=13,ro=12-sw/2,ri=ro*.46;
+    const pts=[]; for(let k=0;k<10;k++){const r=k%2?ri:ro,a=(-90+k*36)*Math.PI/180;
+      pts.push(`${(cx+r*Math.cos(a)).toFixed(2)},${(cy+r*Math.sin(a)).toFixed(2)}`);}
     return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path
-      d="M${ox+i},${oy+i} L${ox+w-i},${oy+i} L${ox+w-t},${oy+h-i} L${ox+t},${oy+h-i} Z"
-      fill="none" stroke="${c}" stroke-width="${sw}" stroke-linejoin="round"/></svg>`;}
+      d="M${pts.join(" L")} Z" fill="none" stroke="${c}" stroke-width="${sw}"
+      stroke-linecap="round" stroke-linejoin="round"/></svg>`;}
   if(kind==="messages"){
     const i=sw/2,w=24-sw,h=24-sw,ox=1+i,oy=1+i,bb=oy+h*.76,k=w*.22;
     return `<svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><path d="
@@ -749,6 +765,11 @@ function rows(p){
   return out.slice(1); // the lead photo is drawn separately
 }
 
+/* Same fractions as TopBar.swift: a 30pt mark at its wordmark stroke, beside the word. */
+function topbar(){
+  return `<div class="topbar">${markSVG(30,3.9,"var(--lamp)")}<div class="word">arch</div></div>`;
+}
+
 function navbar(title,right){
   return `<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
     <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>
@@ -761,7 +782,7 @@ function dailyRoot(){
   const open=S.slots.filter(s=>!s.person);
   const title=rosterTitle();
   const open10=openConvos().length;
-  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+  let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
       <div class="titleL">${title}</div>
       <div id="arch">${archSVG(people.length,S.slots.length,132)}</div>
@@ -787,7 +808,7 @@ function dailyRoot(){
   people.forEach(p=>{
     h+=`<div class="v gap-s" data-card="${p.id}">
       <button data-a="open" data-id="${p.id}" style="display:block;width:100%">
-        ${photoBox(p.photos[0],"3/4")}</button>
+        ${photoBox(p.photos[0],"1")}</button>
       <div class="spread" style="align-items:baseline">
         <button class="titleM" data-a="open" data-id="${p.id}">${esc(p.name)}</button>
         <button class="iconbtn" data-a="dismiss" data-id="${p.id}"
@@ -842,9 +863,8 @@ function profile(id){
   const p=[...PEOPLE,HANA].find(x=>x.id===id);
   const sel=S.selected;
   let h=`<div class="screen"><div class="pb-xxxl">
-    <div style="position:relative">${photoBox(p.photos[0],"4/5")}
-      <button class="iconbtn round" data-a="back"
-        style="position:absolute; left:12px; top:calc(12px + env(safe-area-inset-top,0px))">‹</button></div>
+    <div class="navbar"><button class="iconbtn" data-a="back">‹</button></div>
+    <div class="pad">${photoBox(p.photos[0],"1")}</div>
     <div class="pad v gap-s mt-l"><div class="titleL">${esc(p.name)}</div>${vitals(p)}</div>
     <div class="pad footnote mortar mt-l">Tap a photo or answer to write about it.</div>
     <div class="pad v gap-xxl mt-xl">`;
@@ -852,7 +872,7 @@ function profile(id){
     if(kind==="photo"){
       const k=`photo-${i}`;
       h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
-        ${photoBox(p.photos[i],"4/5",sel===k?"sel":"")}</button>`;
+        ${photoBox(p.photos[i],"1",sel===k?"sel":"")}</button>`;
     } else if(kind==="prompt"){
       const k=`prompt-${i}`, q=p.prompts[i];
       h+=`<button data-a="select" data-k="${k}" style="display:block;width:100%">
@@ -875,7 +895,7 @@ function messagesRoot(){
       <div class="body mortar">When you write to someone in your roster, the conversation appears here.</div>
       <button class="btn quiet mt-m" data-a="goDaily">Open your roster</button></div></div>`;
   }
-  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+  let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="titleL" style="padding:16px 0 20px">Messages</div>`;
   const reqs=requests();
   if(reqs.length){
@@ -998,7 +1018,7 @@ function thread(id){
 }
 
 function premiumRoot(){
-  let h=`<div class="screen"><div class="pad pb-xxxl"><div class="safetop"></div>
+  let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-s" style="padding-top:16px">
       <div class="titleL">Arch Premium</div>
       <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
@@ -1037,7 +1057,7 @@ function youRoot(){
       <button class="footnote mortar" data-a="arrange" style="padding:8px">Arrange</button>
       <button class="iconbtn" data-a="settings" style="color:var(--mortar)">⚙</button></div>
     <div class="screen"><div class="pb-xxxl">
-      ${photoBox(p.photos[0],"4/5")}
+      <div class="pad" style="padding-top:8px">${photoBox(p.photos[0],"1")}</div>
       <div class="pad v gap-s mt-l"><div class="spread">
         <div class="titleL">${esc(p.name)}</div>
         <button class="iconbtn round" data-a="editDetails">✎</button></div>
@@ -1045,7 +1065,7 @@ function youRoot(){
   if(missing.length) h+=`<div class="pad footnote mortar mt-m">Add ${missing.join(" and ")} to finish your profile.</div>`;
   h+=`<div class="pad v gap-xxl mt-xl">`;
   rows(p).forEach(([kind,i])=>{
-    if(kind==="photo") h+=`<button data-a="arrange" style="display:block;width:100%">${photoBox(p.photos[i],"4/5")}</button>`;
+    if(kind==="photo") h+=`<button data-a="arrange" style="display:block;width:100%">${photoBox(p.photos[i],"1")}</button>`;
     else if(kind==="prompt") h+=`<div class="card"><div class="prompt mortar">${esc(p.prompts[i][0])}</div>
       <div class="bodyL mt-s">${esc(p.prompts[i][1])}</div>
       <button class="iconbtn round" data-a="editAnswer" data-i="${i}"
@@ -1800,7 +1820,7 @@ function render(){
   const t=current();
   let screen;
   if(!t){
-    screen={premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
+    screen=topbar()+{premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
   } else if(t.name==="profile") screen=profile(t.id);
   else if(t.name==="thread") screen=thread(t.id);
   else if(t.name==="requests") screen=requestsRoot();

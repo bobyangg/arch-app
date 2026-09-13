@@ -19,9 +19,10 @@ struct Photo: Identifiable, Hashable {
 
 /// One photo in the phone's library, as far as a design build can know about it.
 ///
-/// It carries a shape as well as a tone, because a library full of 4:5 photographs
-/// would make the crop step look pointless — and the whole reason the crop step
-/// exists is that almost nothing anybody has on their phone is already 4:5.
+/// It carries a shape as well as a tone, because a library full of square
+/// photographs would make the crop step look pointless — and the whole reason the
+/// crop step exists is that almost nothing anybody has on their phone is already
+/// square.
 struct LibraryPhoto: Identifiable, Hashable {
     let id: String
     /// Index into `ArchColor.materials`.

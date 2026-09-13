@@ -41,14 +41,16 @@ struct PremiumView: View {
         }
         .background(ArchColor.night)
         .scrollIndicators(.hidden)
+        .safeAreaInset(edge: .top) { TopBar() }
     }
 
     // MARK: Pieces
 
     private var masthead: some View {
-        // No mark here. The mark is drawn in `lamp`, and a paywall is exactly the
-        // screen where a second piece of accent would start competing with the one
-        // thing on it that is an action. The serif title carries the brand.
+        // No mark in the masthead. The bar above carries the one lock-up every tab
+        // gets; a second mark down here, in `lamp`, is exactly what a paywall cannot
+        // afford — it would compete with the one thing on the screen that is an
+        // action. The serif title carries the brand.
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Text("Arch Premium")
                 .archText(.titleL)

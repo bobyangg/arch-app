@@ -60,6 +60,7 @@ struct DailyFiveView: View {
             }
             .background(ArchColor.night)
             .scrollIndicators(.hidden)
+            .safeAreaInset(edge: .top) { TopBar() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
