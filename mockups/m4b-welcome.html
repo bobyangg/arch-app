@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Welcome</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+:root{
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D;
+  --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
+.phone{width:393px; height:640px; background:var(--night); overflow:hidden;
+       position:relative; display:flex; flex-direction:column;}
+.pad{padding:0 20px;}
+
+.t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:600;}
+.t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.t-prompt{font-family:var(--serif); font-size:19px; line-height:26px;}
+.t-body{font-size:17px; line-height:24px;}
+.t-callout{font-size:16px; line-height:22px;}
+.t-footnote{font-size:13px; line-height:18px;}
+.mortar{color:var(--mortar);}
+
+.topbar{padding:8px 20px 12px 8px;}
+.back{width:44px; height:44px; display:flex; align-items:center;
+      justify-content:center; font-size:15px;}
+.rule{display:flex; gap:4px; padding:0 20px;}
+.seg{flex:1; height:2px; border-radius:1px; background:rgba(154,143,134,.25);}
+.seg.on{background:var(--lamp);}
+
+.body{flex:1; padding:24px 20px 0;}
+.foot{padding:0 20px 8px;}
+.btn{height:52px; border-radius:12px; display:flex; align-items:center;
+     justify-content:center; font-size:15px; font-weight:600;}
+.btn-primary{background:var(--lamp); color:var(--night);}
+.btn-off{background:var(--stoneRaised); color:var(--mortar);}
+.btn-text{height:44px; display:flex; align-items:center; justify-content:center;
+          font-size:15px; font-weight:600; color:var(--mortar);}
+
+.grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px;}
+.slot{aspect-ratio:1; border-radius:12px; position:relative;}
+.slot .x{position:absolute; top:4px; right:4px; width:24px; height:24px;
+         border-radius:12px; background:rgba(15,19,25,.75); color:var(--limestone);
+         font-size:12px; display:flex; align-items:center; justify-content:center;}
+.slot-add{background:var(--stone); display:flex; align-items:center;
+          justify-content:center; color:var(--mortar); font-size:17px;}
+
+.opt{background:var(--stone); border-radius:12px; padding:16px; font-size:17px;
+     line-height:24px; margin-bottom:8px;}
+.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px rgba(245,239,230,.30);}
+</style></head><body>
+<div class="phone"><div class="pad" style="flex:1; display:flex; flex-direction:column; padding-top:40px; padding-bottom:24px;"><div style="flex:1"></div><svg id="mark" width="84" height="66"></svg><div class="t-display" style="margin-top:16px;">arch</div><div style="flex:1"></div><div class="t-titleL">Five people a day</div><div class="t-body mortar" style="margin-top:12px;">Every morning Arch picks five people it thinks you would actually like. You read them properly, you decide, and then you are done until tomorrow.</div><div style="flex:1"></div><div class="btn btn-primary">Get started</div></div></div>
+<script>
+(function(){
+  var el=document.getElementById('mark'); if(!el) return;
+  var sw=11, W=84-sw, f=function(n){return n*W;};
+  var d='M'+f(.33)+','+f(.05)+' Q'+f(.32)+','+f(.40)+' '+f(.19)+','+f(.64)
+       + ' M'+f(.67)+','+f(.05)+' Q'+f(.68)+','+f(.40)+' '+f(.81)+','+f(.64)
+       + ' M'+f(.03)+','+f(.07)+' Q'+f(.5)+','+f(-.07)+' '+f(.97)+','+f(.07);
+  var p=document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d',d); p.setAttribute('fill','none'); p.setAttribute('stroke','#E5714D');
+  p.setAttribute('stroke-width',sw); p.setAttribute('stroke-linecap','round');
+  p.setAttribute('stroke-linejoin','round');
+  p.setAttribute('transform','translate('+(sw/2)+','+(sw/2)+')');
+  el.appendChild(p);
+})();
+</script></body></html>

@@ -1,0 +1,228 @@
+
+==============================================================================
+Arch matcher -- do the 95 numbers work?
+==============================================================================
+Compatibility.swift at a609091
+
+  age_asymmetry=False     archetypes=6            block_rate=0.004        
+  cooldown=7              fill=off                n=600                   
+  nights=7                noise=0.3               p_accept=0.55           
+  p_dismiss=0.22          p_leave=0.06            p_message=0.14          
+  paused_rate=0.04        premium_rate=0.12       rand_frac=0.15          
+  seed=20260912           
+
+==============================================================================
+0. The tables themselves
+==============================================================================
+  parsed              13 tables, 3 requirement grids, 124 cells
+  hand-written        82 pair values + 13 weights = 95 numbers
+  consistency         square, symmetric, in range -- checked at import
+  weights sum to      13.000
+  attainable ceiling  12.870   <-- not 13.000.
+                      q6 has no 1.00 cell, so every pair loses 0.13.
+  attainable floor    5.345
+  working range       7.525 points
+
+  Anything reported as a percentage of 13 would squash that range into a
+  band around 77% and make good tables look like noise.
+
+==============================================================================
+1. Do the tables discriminate?
+==============================================================================
+
+1a. The spread of a pair score
+------------------------------------------------------------------------------
+  if everyone answered at random   mean 9.963  sd 0.812
+  in this population               mean 10.199  sd 0.939
+  percentiles   p1 7.98  p5 8.59  p25 9.54  p50 10.23  p75 10.88  p95 11.70  p99 12.19
+  distinct values seen             1044
+  sd as a share of the range       12.5%
+
+1b. Which questions actually move the number
+------------------------------------------------------------------------------
+  Weight and influence are not the same thing: a heavily weighted question
+  with a flat grid changes nothing. Share of variance, under random answers:
+
+      q     weight   share   
+      q9    1.4     18.6%  ###################
+      q3    1.2     16.5%  #################
+      q8    1.2     12.0%  ############
+      q2    1.0     11.5%  ###########
+      q10   1.0      8.8%  #########
+      q7    1.2      8.7%  #########
+      q6    1.3      7.5%  ########
+      q5    0.9      4.6%  #####
+      q12   0.9      4.0%  ####
+      q1    0.8      3.9%  ####
+      q13   0.8      2.1%  ##
+      q11   0.7      1.0%  #   <-- nearly flat
+      q4    0.6      0.7%  #   <-- nearly flat
+
+1c. Can the tables tell one person's own candidates apart?
+------------------------------------------------------------------------------
+  (the only pool that matters -- their shortlist after the hard filters)
+  candidate-score sd   min 0.408  p10 0.587  median 0.812  p90 1.074  max 1.459
+  median pool size     60 people
+  verdict              PASS  (good >= 0.60, bad < 0.35)
+
+1d. Is the fifth pick meaningfully above the pool?
+------------------------------------------------------------------------------
+  selection margin     1.41 sd above the candidate mean
+  verdict              weak  (good >= 1.5, bad < 0.8)
+  within 0.10 of the cutoff   3.7 people
+  within 0.25 of the cutoff   7.6 people (13% of the pool)
+  exact ties at the cutoff    1.20
+  1st pick beats 5th by       0.48 points (0.58 pool sd)
+
+1e. Against other tables of the same shape -- the decisive test
+------------------------------------------------------------------------------
+  How much of somebody's five survives replacing the tables with:
+
+    same values, shuffled cells   0.10   PASS  (good <= 0.25, bad >= 0.50)
+    a mechanical alignment rule   0.56   PASS  (good <= 0.65, bad >= 0.90)
+    a plain count of agreement    0.56
+
+  Spearman vs agreement count     0.64   PASS  (good <= 0.80, bad >= 0.95)
+  Roster kept after flipping one answer  0.72   PASS  (good 0.55-0.85)
+
+1f. Delivered -- the real matcher against the same matcher on noise
+------------------------------------------------------------------------------
+  real tables      4490 pairs, mean compatibility 10.715 (sd 0.858)
+  ranked by noise  4475 pairs, mean compatibility 10.203 (sd 0.929)
+  gain             +0.512 points = 0.63 pool sd   weak  (good >= 1.2, bad < 0.5)
+
+  For scale: picking everybody's unconstrained best five would average
+  11.408. The mutual cap and the cooldown eat the rest, so the matcher
+  captures 43% of the lift the tables actually offer.
+
+  This is the only line in the section that is not circular: the matcher
+  maximises score, so it would report good scores whatever the tables said.
+
+==============================================================================
+2. Who starves?
+==============================================================================
+  night   pairs   held   active   empty   full rosters
+    1     1379      0      580       7     466
+    2      576      0      580      23     463
+    3      524      0      580      32     422
+    4      543      0      580      41     415
+    5      504      2      578      51     418
+    6      489      9      571      70     392
+    7      475     22      558      86     372
+
+  unique people met across the week   p10 5   median 17   p90 22
+
+  Empty on 3 or more of 7 nights: 51 people
+
+  which single rule, relaxed on its own, would unstick them:
+      distance       29
+      requirements   12
+      orientation    8
+      age            2
+  by where they live:
+      New York       29
+      Brooklyn       9
+      The Bronx      5
+      Manhattan      4
+      Queens         2
+      Staten Island  2
+  by their distance setting:
+      10 miles       31
+      25 miles       15
+      50 miles       3
+      Anywhere       2
+
+  worst affected:
+      pid     nights  candidates  met  binding rule   would give  where
+      p015       7           0      0  distance            11    New York
+      p085       7           0      0  requirements        81    Manhattan
+      p091       7           0      0  distance            44    New York
+      p234       7           0      0  distance            13    New York
+      p288       7           0      0  orientation         25    The Bronx
+      p460       7           0      0  distance            35    New York
+      p575       7           0      0  distance            81    New York
+      p004       6           1      1  requirements        51    Brooklyn
+      p096       6           1      1  distance            56    New York
+      p185       6           1      1  distance            37    New York
+      p277       6           1      1  distance           121    New York
+      p290       6           1      1  distance            59    New York
+
+==============================================================================
+3. What the mutual cap costs
+==============================================================================
+  invariants   max slots filled 7   over capacity 0   duplicate pairs 0
+               (the cap holds by construction -- pairing spends both slots)
+
+  The real question is how much work it is doing. Shadow demand is how many
+  people would hold you in their top five with no constraints at all:
+
+      median 3   p90 11   p95 15   max 35   (capacity 5)
+      wanted by nobody: 85 people
+      p95 is 3.0x capacity   PASS  (good <= 3x)
+
+==============================================================================
+4. Do candidate sets survive the filters?
+==============================================================================
+  every possible pair                      179700   100.0%
+  after orientation                         77609    43.2%   (-56.8%)
+  after age                                 34280    19.1%   (-24.1%)
+  after distance                            26536    14.8%   (-4.3%)
+  after requirements                        15388     8.6%   (-6.2%)
+  after blocked                             15388     8.6%   (-0.0%)
+  after paused                              14313     8.0%   (-0.6%)
+
+  candidates per person   min 0   p10 5   p25 18   median 48   p90 97
+  below 5 (one roster)    52 people
+  below 35 (a full week)  228 people
+
+  Candidate sets scale with the size of the city. At n=600 this is a small
+  town; the shape of the funnel is the transferable finding, not the counts.
+
+  the three requirement questions, pass rate over random pairs:
+      q14   84.0%
+      q15   88.1%
+      q16   78.5%
+==============================================================================
+5. The control: does the headline survive noisier answers?
+==============================================================================
+  Crisp archetypes would make any scoring rule look good -- the pool would be
+  full of near clones. noise=1.00 is answers drawn at random, with no types
+  at all. The claim in section 1 only stands if it holds at noise >= 0.30.
+
+  noise   cand sd   margin   vs shuffled   vs alignment   spearman   gain(sd)
+   0.00     0.941     1.60          0.27           0.87       0.56       0.65
+   0.15     0.837     1.51          0.15           0.65       0.61       0.65
+   0.30     0.778     1.42          0.12           0.54       0.61       0.64
+   0.50     0.744     1.40          0.10           0.45       0.57       0.61
+   1.00     0.737     1.38          0.12           0.42       0.53       0.62
+
+  (mean of 3 seeds per row)
+==============================================================================
+6. The control: is the starving cohort the cooldown's fault?
+==============================================================================
+  "Never show the same person twice" is a guarantee that runs out of people.
+  Nights is 7, so a cooldown of 7 means nobody repeats all week.
+
+  cooldown   pairs/night   empty night 7   persistent zero   met (median)
+  none               798            2.7%              2.6%              7
+  3                  669            5.5%              5.5%             12
+  7                  626           13.5%              8.9%             16
+  never              626           13.5%              8.9%             16
+
+  The trade is real and it is the product decision, not a bug: the cooldown
+  is what stops the same faces recurring, and it is also what strands the
+  people whose candidate list is short. Compare the last two columns.
+==============================================================================
+7. The control: how much of this is just a small city?
+==============================================================================
+  Candidate sets scale with the population. A cohort that starves at n=400
+  and not at n=2400 is a launch problem, not a design problem.
+
+     n     median candidates   p10    empty night 7   persistent zero
+    300                  21     2           21.1%             14.7%
+    600                  45     6           12.6%              7.9%
+   1200                  91    13            7.2%              5.4%
+   2400                 180    26            4.3%              3.0%
+
+  Counts would have risen down this column and said the opposite. As a share
+  of the city, a bigger pool is the single most effective fix available.

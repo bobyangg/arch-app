@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Message composer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<style>
+:root{
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D; --verdigris:#7FA98F;
+  --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+  --lampQuiet:rgba(229,113,77,.45);
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
+}
+*{box-sizing:border-box; margin:0; padding:0;}
+body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
+.phone{width:393px; height:852px; background:var(--night); overflow:hidden; position:relative;}
+.scroll{padding:0 20px; height:100%; }
+.safetop{height:60px;}
+
+.t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
+.t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
+.t-prompt{font-family:var(--serif); font-size:19px; line-height:26px;}
+.t-bodyL{font-size:20px; line-height:28px;}
+.t-body{font-size:17px; line-height:24px;}
+.t-callout{font-size:16px; line-height:22px;}
+.t-subhead{font-size:15px; line-height:20px; font-weight:600;}
+.t-footnote{font-size:13px; line-height:18px;}
+.t-caption{font-size:12px; line-height:16px; font-weight:500;}
+
+.hairline{height:.5px; background:var(--hairline);}
+.archwrap{display:flex; justify-content:flex-start; margin:16px 0;}
+
+.card{margin-bottom:32px;}
+.photo3x4{width:100%; aspect-ratio:3/4; border-radius:24px;}
+.photo4x5{width:100%; aspect-ratio:4/5; border-radius:24px;}
+.namerow{display:flex; align-items:flex-start; margin-top:12px;}
+.namerow .x{margin-left:auto; color:var(--mortar); font-size:15px; font-weight:600;
+            width:44px; height:44px; display:flex; align-items:center; justify-content:center;
+            margin-right:-12px; margin-top:2px;}
+.vitals{display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;}
+.vital{background:var(--stone); border-radius:12px; padding:8px 12px;
+       font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
+
+.slotcard{height:112px; background:var(--stone); border:1px solid var(--hairline);
+          border-radius:24px; display:flex; flex-direction:column; align-items:center;
+          justify-content:center; gap:4px; margin-bottom:16px;}
+.slotcard .h{font-size:17px; line-height:24px; color:var(--limestone);}
+.slotcard .d{font-size:13px; line-height:18px; color:var(--mortar);}
+.slotintro{font-size:13px; line-height:18px; color:var(--mortar); margin:16px 0 16px;}
+
+.promptcard{background:var(--stone); border-radius:20px; padding:24px; margin-bottom:32px;}
+.promptcard.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+.promptcard .q{color:var(--mortar); margin-bottom:12px;}
+
+.btn{height:52px; border-radius:12px; display:flex; align-items:center; justify-content:center;
+     font-size:15px; font-weight:600;}
+.btn-primary{background:var(--lamp); color:var(--night);}
+.btn-quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btn-text{height:44px; display:flex; align-items:center; justify-content:center;
+          font-size:15px; font-weight:600; color:var(--mortar);}
+.btn-disabled{background:var(--stoneRaised); color:var(--mortar);}
+
+.bottombar{position:absolute; left:0; right:0; bottom:0; background:var(--stoneRaised);
+           border-top:.5px solid var(--hairline); padding:12px 20px 4px;}
+.backbtn{position:absolute; left:12px; top:14px; width:36px; height:36px; border-radius:18px;
+         background:var(--stone); display:flex; align-items:center; justify-content:center;
+         color:var(--limestone); font-size:15px; font-weight:600; z-index:5;}
+
+.sheet{position:absolute; left:0; right:0; bottom:0; background:var(--stone);
+       border-radius:28px 28px 0 0; padding:0 20px 16px;}
+.grabber{width:36px; height:5px; border-radius:3px; background:var(--mortar); opacity:.4;
+         margin:8px auto 12px;}
+.scrim{position:absolute; inset:0; background:rgba(15,19,25,.72);}
+.quoted{background:var(--stoneRaised); border-radius:12px; padding:12px; display:flex; gap:12px;}
+.quoted .qq{font-size:13px; line-height:18px; color:var(--mortar);}
+.quoted .qa{font-size:16px; line-height:22px; color:var(--limestone);
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
+.editor{background:var(--night); border-radius:12px; padding:8px 12px; min-height:132px;
+        font-size:16px; line-height:22px; color:var(--mortar);}
+.recipient{display:flex; gap:12px; align-items:center;}
+.recipient .av{width:44px; height:44px; border-radius:12px;}
+</style></head><body>
+
+<div class="phone">
+  <div class="photo4x5" style="background:linear-gradient(#2F3138,#282A30); border-radius:0;"></div>
+  <div class="scrim"></div>
+  <div class="sheet" style="height:520px;">
+    <div class="grabber"></div>
+    <div class="recipient" style="margin-top:8px;">
+      <div class="av" style="background:linear-gradient(#2F3138,#282A30);"></div>
+      <div><div class="t-subhead">Nadia</div>
+           <div class="t-footnote" style="color:var(--mortar)">Gowanus</div></div>
+    </div>
+    <div class="quoted" style="margin-top:16px;">
+      <div style="flex:1">
+        <div class="qq">The last thing I read twice</div>
+        <div class="qa">A field guide to bridges I found in my grandad&rsquo;s garage.
+          Half of it is tables of load limits and I still went back to the beginning.</div>
+      </div>
+      <div style="color:var(--mortar); font-size:13px; width:32px; height:32px;
+                  display:flex; align-items:center; justify-content:center;">&#10005;</div>
+    </div>
+    <div class="editor" style="margin-top:16px;">Say something about it.</div>
+    <div style="height:18px;"></div>
+    <div class="btn btn-primary btn-disabled" style="margin-top:8px;">Send</div>
+  </div>
+</div>
+
+<script>
+const C={limestone:'#F5EFE6', mortar:'#9A8F86', lamp:'#E5714D'};
+function pt(cx,cy,r,deg){const a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
+function segPath(cx,cy,a0,a1,ro,ri){
+  const [x0,y0]=pt(cx,cy,ro,a0), [x1,y1]=pt(cx,cy,ro,a1);
+  const [x2,y2]=pt(cx,cy,ri,a1), [x3,y3]=pt(cx,cy,ri,a0);
+  return `M${x0},${y0} A${ro},${ro} 0 0 1 ${x1},${y1} L${x2},${y2} A${ri},${ri} 0 0 0 ${x3},${y3} Z`;
+}
+// Mirrors ArchBand: five equal voussoirs, no proud keystone.
+function drawArch(el, W, filled, capacity){
+  const count=capacity||5, joint=1.3, thickness=18, allowance=1, step=180/count;
+  const H=W/2+allowance, cx=W/2, cy=H, base=Math.min(W/2,H)-allowance;
+  el.setAttribute('viewBox',`0 0 ${W} ${H}`); el.setAttribute('width',W); el.setAttribute('height',H);
+  for(let i=0;i<count;i++){
+    const a0=180+i*step+joint, a1=180+(i+1)*step-joint;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d', segPath(cx,cy,a0,a1,base,base-thickness));
+    if(i<filled){ p.setAttribute('fill', C.lamp); }
+    else { p.setAttribute('fill','none'); p.setAttribute('stroke','rgba(154,143,134,.30)');
+           p.setAttribute('stroke-width','1'); }
+    el.appendChild(p);
+  }
+}
+document.querySelectorAll('svg[data-arch]').forEach(el=>{
+  drawArch(el, 132, parseInt(el.dataset.arch,10), 5);
+});
+</script></body></html>
