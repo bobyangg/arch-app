@@ -6,6 +6,9 @@ struct ArchApp: App {
     /// handed down through the view tree — onboarding, the tabs and the removal
     /// screen are three different roots, and all three have to honour it.
     @AppStorage(ArchTheme.storageKey) private var theme: ArchTheme = .system
+    /// Only for `didRegisterForRemoteNotificationsWithDeviceToken`, which is still
+    /// a UIKit callback with no SwiftUI equivalent. No app state lives in it.
+    @UIApplicationDelegateAdaptor(ArchAppDelegate.self) private var appDelegate
     @State private var hasLaunched = false
 
     /// Which of the six things the app is doing, and the stores behind it.
@@ -34,6 +37,14 @@ struct ArchApp: App {
                 // Runs alongside the launch screen rather than after it, so the
                 // wordmark is covering real work instead of a timer.
                 await session.start()
+
+                // Registering is separate from asking. Onboarding already asked,
+                // and iOS answers from its own record after the first time -- so
+                // this re-registers on every launch, which is what keeps a token
+                // that iOS has rotated from going stale on the server.
+                if case .ready = session.state, session.allowsNotifications {
+                    await PushNotifications.shared.enable()
+                }
             }
         }
     }

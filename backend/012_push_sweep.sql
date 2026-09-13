@@ -1,0 +1,31 @@
+-- Arch: emptying the notification outbox.
+--
+-- pg_cron cannot call an edge function directly, so it calls one over HTTP with
+-- pg_net. What it sends is a **shared secret that authorises this one job** rather
+-- than the service key, which would authorise everything -- the URL is not a
+-- secret, and anything that leaks alongside it should be worth as little as
+-- possible.
+--
+-- Applied as migration `push_sweep`. Two details worth keeping in front of a
+-- reader:
+--
+-- **The sweep checks the outbox before making a request.** Nothing queued is the
+-- common case by a long way, and a minute-by-minute job that always makes an HTTP
+-- call is a minute-by-minute HTTP call.
+--
+-- **The two halves of the secret are set in different places.** SQL writes it into
+-- `private_settings`; somebody has to paste the same value into the function's
+-- `PUSH_CRON_SECRET`. Until they match, the sweep runs and the function refuses
+-- with a 401 -- which is the safe direction for them to disagree in, and visible
+-- in `net._http_response` rather than silent.
+--
+-- Verified end to end against the live database with the Apple keys still absent:
+-- a message insert fired the trigger, the outbox row carried the right title and
+-- body, the sweep fired, pg_net reached the function, and the function refused.
+-- Every link but the secret, which is the one that cannot be set from here.
+--
+-- Health:
+--
+--   select status_code, content from net._http_response order by id desc limit 5;
+--   select count(*) from push_outbox where sent_at is null;
+--   select * from push_outbox where attempts >= 5;   -- gave up; worth a look

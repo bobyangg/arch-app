@@ -95,3 +95,8 @@ UIGraphicsImageRenderer
 UIGraphicsImageRendererFormat
 CGColorSpaceCreateDeviceRGB
 CGContext
+
+# UserNotifications and the app delegate hook, added with push
+UNUserNotificationCenter
+UIApplication
+UIApplicationDelegateAdaptor

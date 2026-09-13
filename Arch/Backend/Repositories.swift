@@ -683,6 +683,30 @@ enum ArchBackend {
         )
     }
 
+    // MARK: Notifications
+
+    /// Where to send the one notification Arch sends.
+    ///
+    /// Upserted on the token, not the account: one person can have several phones,
+    /// and a token that moves between them should land on the right row rather
+    /// than making a second.
+    static func savePushToken(_ token: String, environment: String) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        struct TokenRow: Encodable {
+            let accountId: String
+            let token: String
+            let environment: String
+            let updatedAt: String
+        }
+        try await SupabaseClient.shared.upsert(
+            "push_tokens",
+            TokenRow(accountId: session.userID, token: token, environment: environment,
+                     updatedAt: ISO8601DateFormatter().string(from: Date()))
+        )
+    }
+
     // MARK: Settings
 
     static func discovery() async throws -> DiscoveryRow? {
