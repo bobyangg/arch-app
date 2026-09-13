@@ -166,7 +166,8 @@ struct ArchWordmark: View {
 // MARK: - The keystone
 
 /// A single voussoir seen face-on: wider at the extrados than at the intrados.
-/// This is the Premium tab glyph — never a crown, never a star.
+/// It was the Premium tab glyph; the tab carries a star now, and the stone stays
+/// for anything that wants one.
 struct KeystoneShape: InsettableShape {
     /// Fraction of the width taken off each bottom corner.
     var taper: CGFloat = 0.16
@@ -268,6 +269,36 @@ struct ArchSegment: Shape {
 }
 
 // MARK: - Tab glyphs
+
+/// Five points, drawn in the set's own stroke rather than borrowed from SF Symbols,
+/// so it sits beside the mark, the bubble and the person as the same hand. The
+/// Premium tab glyph.
+///
+/// The inner radius is held a little above a true pentagram's, which with round
+/// joins keeps the points from reading as spikes at 26pt.
+struct StarGlyph: Shape {
+    var lineWidth: CGFloat = ArchSpacing.glyphStroke
+    private static let innerFraction: CGFloat = 0.46
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+        guard r.width > 0, r.height > 0 else { return Path() }
+
+        let centre = CGPoint(x: r.midX, y: r.midY)
+        let outer = min(r.width, r.height) / 2
+        let inner = outer * Self.innerFraction
+
+        var path = Path()
+        for i in 0..<10 {
+            let radius = i.isMultiple(of: 2) ? outer : inner
+            let angle = Angle.degrees(-90 + Double(i) * 36)
+            let point = pointOnCircle(centre, radius, angle)
+            if i == 0 { path.move(to: point) } else { path.addLine(to: point) }
+        }
+        path.closeSubpath()
+        return path
+    }
+}
 
 /// A span with a single pier dropping from it. Reads as a message bubble, drawn in
 /// the same stroke language as the rest of the set.
@@ -382,8 +413,8 @@ struct PersonGlyph: Shape {
 
 #Preview("Glyphs") {
     HStack(spacing: ArchSpacing.xxl) {
-        KeystoneShape()
-            .stroke(ArchColor.mortar, style: StrokeStyle(lineWidth: ArchSpacing.glyphStroke, lineJoin: .round))
+        StarGlyph()
+            .stroke(ArchColor.ember, style: StrokeStyle(lineWidth: ArchSpacing.glyphStroke, lineCap: .round, lineJoin: .round))
         ArchMark()
             .stroke(ArchColor.lamp, style: StrokeStyle(lineWidth: ArchSpacing.glyphStroke, lineCap: .round, lineJoin: .round))
         MessageGlyph()

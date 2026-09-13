@@ -18,7 +18,7 @@ struct RosterCard: View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Button(action: onOpen) {
                 PhotoPlaceholder(toneIndex: person.avatarToneIndex)
-                    .aspectRatio(3.0 / 4.0, contentMode: .fit)
+                    .aspectRatio(PhotoCard.aspect, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
             }
             .buttonStyle(PressScaleStyle(scale: 0.99))
