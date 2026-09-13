@@ -5,6 +5,18 @@ import SwiftUI
 /// bottom, so it reads as a lit surface rather than as a coloured rectangle.
 struct PhotoPlaceholder: View {
     let toneIndex: Int
+    /// The real photograph, once a signed URL has been fetched for it.
+    ///
+    /// Optional, and defaulted, so every existing call site and every `#Preview`
+    /// keeps working with the tone alone. When there is a URL the tone becomes the
+    /// **load state** rather than dead scaffolding: it is what fills the frame on a
+    /// train, and a grid mid-load looks like the grid instead of like an error.
+    ///
+    /// A URL that will not load — expired, or refused because somebody blocked you
+    /// between the signing and the fetch — simply leaves the tone. That is the
+    /// right failure: a photograph you are no longer allowed to see should go
+    /// quietly rather than announce itself.
+    var url: URL? = nil
 
     var body: some View {
         let material = ArchColor.material(toneIndex)
@@ -16,6 +28,21 @@ struct PhotoPlaceholder: View {
                     endPoint: .bottom
                 )
             )
+            .overlay {
+                if let url {
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFill()
+                        } else {
+                            // Not a spinner. The tone underneath is already doing
+                            // the job, and a spinner on top of it would be the app
+                            // drawing attention to its own latency.
+                            Color.clear
+                        }
+                    }
+                }
+            }
+            .clipped()
     }
 }
 
@@ -60,7 +87,7 @@ struct PhotoCard: View {
     }
 
     private var card: some View {
-        PhotoPlaceholder(toneIndex: photo.toneIndex)
+        PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
             .aspectRatio(aspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
             .overlay(

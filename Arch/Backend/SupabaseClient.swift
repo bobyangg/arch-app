@@ -285,6 +285,101 @@ actor SupabaseClient {
         return new
     }
 
+    // MARK: Storage
+
+    /// Put an image in the bucket.
+    ///
+    /// `URLSession.upload` rather than a body on a data task, so a slow connection
+    /// reports progress and a cancelled one actually stops sending. The row in
+    /// `photos` is written first: the storage policy is a lookup against that row,
+    /// so an upload with no row behind it is refused rather than orphaned.
+    func upload(path: String, data: Data, contentType: String = "image/jpeg") async throws {
+        var request = URLRequest(
+            url: ArchConfig.storageURL
+                .appendingPathComponent("object")
+                .appendingPathComponent("photos")
+                .appendingPathComponent(path)
+        )
+        request.httpMethod = "POST"
+        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
+        request.setValue(contentType, forHTTPHeaderField: "Content-Type")
+        // The bucket refuses an overwrite, and so does the absence of an update
+        // policy. Saying so here turns a silent 400 into the right error.
+        request.setValue("false", forHTTPHeaderField: "x-upsert")
+
+        let (body, response): (Data, URLResponse)
+        do {
+            (body, response) = try await session.upload(for: request, from: data)
+        } catch let error as URLError where error.code == .notConnectedToInternet {
+            throw ArchAPIError.offline
+        } catch {
+            throw ArchAPIError.transport
+        }
+        guard let http = response as? HTTPURLResponse else { throw ArchAPIError.transport }
+        guard (200...299).contains(http.statusCode) else {
+            throw ArchAPIError.server(
+                status: http.statusCode,
+                message: String(data: body, encoding: .utf8)
+            )
+        }
+    }
+
+    /// Short-lived URLs for a set of stored objects.
+    ///
+    /// Batched, because a roster is up to seven people with six photographs each
+    /// and signing them one at a time would be forty-two round trips on a phone.
+    /// `ArchBackend.roster()` went to the same trouble for the same reason.
+    ///
+    /// **Never persisted.** A signed URL that outlives a block keeps serving a
+    /// photograph to somebody who has been blocked, which is precisely what the
+    /// private bucket exists to prevent. An hour is already the compromise.
+    func signedURLs(paths: [String], expiresIn seconds: Int = 3600) async throws -> [String: URL] {
+        guard !paths.isEmpty else { return [:] }
+        struct Request: Encodable {
+            let expiresIn: Int
+            let paths: [String]
+        }
+        struct Signed: Decodable {
+            let path: String?
+            let signedURL: String?
+            enum CodingKeys: String, CodingKey {
+                case path
+                case signedURL = "signedURL"
+            }
+        }
+
+        var request = URLRequest(
+            url: ArchConfig.storageURL
+                .appendingPathComponent("object")
+                .appendingPathComponent("sign")
+                .appendingPathComponent("photos")
+        )
+        request.httpMethod = "POST"
+        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONEncoder().encode(
+            Request(expiresIn: seconds, paths: paths)
+        )
+
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
+            throw ArchAPIError.notPermitted
+        }
+        let signed = try JSONDecoder().decode([Signed].self, from: data)
+
+        var out: [String: URL] = [:]
+        for item in signed {
+            // A path the policy refused comes back with a null URL rather than as
+            // an error, so a blocked photograph simply has none — which is what
+            // the placeholder tone is for.
+            guard let path = item.path, let relative = item.signedURL else { continue }
+            out[path] = URL(string: relative, relativeTo: ArchConfig.storageURL)?.absoluteURL
+        }
+        return out
+    }
+
     /// Call an edge function. Used for the one flow that cannot be a table write.
     func callFunction<Body: Encodable, T: Decodable>(
         _ name: String,

@@ -13,8 +13,62 @@ struct Prompt: Identifiable, Hashable {
 
 struct Photo: Identifiable, Hashable {
     let id: String
-    /// Index into `ArchColor.materials`. Mock data carries no colours of its own.
+    /// Index into `ArchColor.materials`.
+    ///
+    /// Was the whole of a photograph in the design build and is now the *load
+    /// state*: the tone stands in until the image arrives, which on a train is a
+    /// good deal of the time. Derived from the image's own colours when there is
+    /// one, so a grid mid-load looks like the grid rather than like an error.
     let toneIndex: Int
+    /// Where the image is, once a signed URL has been fetched for it.
+    ///
+    /// Short-lived on purpose. A URL that outlived a block would keep serving a
+    /// photograph to somebody who has been blocked, which is the whole reason the
+    /// bucket is private.
+    var url: URL?
+    /// Moderation. Defaulted so the ten mock people and every `#Preview` keep
+    /// working without carrying a field that only matters to a live profile.
+    var state: PhotoState = .approved
+}
+
+/// Where a photograph is in moderation. Mirrors the `photo_state` enum in
+/// `backend/001_schema.sql` — the spellings have to match, because they are
+/// compared across the wire.
+enum PhotoState: String, Hashable {
+    case pending
+    case approved
+    case rejected
+}
+
+/// Why a photograph could not be used.
+///
+/// Reads after "Arch could not use it because…", and **none of them blame the
+/// person.** A moderation refusal that sounds like an accusation is how somebody
+/// decides the app thinks they are a liar, when in most cases the photograph was
+/// simply blurred or had two people in it.
+///
+/// A fixed list rather than free text, for the reason the schema gives for every
+/// other enum: a typo becomes a database error instead of a row nobody notices.
+enum PhotoRejection: String, Hashable, CaseIterable {
+    case notYou = "not_you"
+    case moreThanOnePerson = "more_than_one_person"
+    case noFace = "no_face"
+    case explicit
+    case contactDetails = "contact_details"
+    case screenshot
+    case quality
+
+    var sentence: String {
+        switch self {
+        case .notYou:             return "it was not clear the photo is of you"
+        case .moreThanOnePerson:  return "there is more than one person in it"
+        case .noFace:             return "a face is not visible in it"
+        case .explicit:           return "it shows more than Arch allows"
+        case .contactDetails:     return "it has contact details in it"
+        case .screenshot:         return "it is a screenshot rather than a photograph"
+        case .quality:            return "it is too small or too blurred to show well"
+        }
+    }
 }
 
 /// One photo in the phone's library, as far as a design build can know about it.

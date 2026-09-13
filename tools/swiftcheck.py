@@ -94,6 +94,29 @@ def collect():
     return types
 
 
+ALLOWLIST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                         "swiftcheck-allowlist.txt")
+
+
+def load_allowlist():
+    """Apple framework types this project constructs.
+
+    A file rather than a literal, because it is a list that grows whenever a
+    screen reaches for something new, and a growing literal in a checker is a
+    checker people stop running. One name per line; blank lines and `#` comments
+    ignored.
+    """
+    if not os.path.exists(ALLOWLIST):
+        return []
+    out = []
+    with open(ALLOWLIST, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.split("#", 1)[0].strip()
+            if line:
+                out.append(line)
+    return out
+
+
 def main():
     target = sys.argv[1] if len(sys.argv) > 1 else "Arch"
     target = os.path.join(ROOT, target)
@@ -115,6 +138,12 @@ def main():
         "randomElement", "value", "none", "some", "zero", "now", "current",
     }
 
+    # Types from Apple's frameworks that this project constructs. Curated rather
+    # than exhaustive: anything capitalised and called like a constructor that is
+    # neither declared here nor listed here gets reported, which is what catches a
+    # view that was invented rather than written.
+    SYSTEM = set(load_allowlist())
+
     problems = []
     checked = 0
     for path in swift_files(target):
@@ -132,6 +161,18 @@ def main():
                 checked += 1
                 problems.append("%s:%d  %s.%s does not exist"
                                 % (rel, line_no, owner, member))
+
+            # `SomeType(...)` where SomeType is neither ours nor Apple's.
+            #
+            # This is the gap the member check cannot see: a SwiftUI view used in
+            # view position is a bare type name, so an invented one resolves to
+            # nothing and reports nothing. Two were written before this existed.
+            for name in re.findall(r"(?<![.\w])([A-Z]\w+)\s*\(", line):
+                if name in known or name in SYSTEM:
+                    continue
+                checked += 1
+                problems.append("%s:%d  %s(...) is not a type this project declares"
+                                % (rel, line_no, name))
 
     print("=" * 66)
     print("swift cross-reference check")

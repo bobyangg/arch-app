@@ -172,7 +172,7 @@ struct QuotedBlock: View {
         switch item {
         case .photo(let photo):
             HStack(spacing: ArchSpacing.s) {
-                PhotoPlaceholder(toneIndex: photo.toneIndex)
+                PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
                     .frame(width: 40, height: 50)
                     .clipShape(RoundedRectangle(cornerRadius: ArchRadius.detail, style: .continuous))
                 Text("About this photo")

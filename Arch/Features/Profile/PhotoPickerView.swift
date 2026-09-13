@@ -21,11 +21,16 @@ struct PhotoPickerView: View {
     /// iOS has been given part of the library rather than all of it. A real state,
     /// and one that otherwise makes the grid look mysteriously short.
     var isLimited: Bool = false
-    let onAdd: ([LibraryPhoto]) -> Void
+    /// Each chosen photograph with the part of it that was kept. It used to hand
+    /// back the library items alone, which meant the crop step decided nothing.
+    let onAdd: ([PickedPhoto]) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var picked: [String] = []
     @State private var path: [Int] = []
+    /// Filled in as each crop is confirmed, keyed by photo id so that going back
+    /// and re-cropping replaces an answer rather than appending a second one.
+    @State private var crops: [String: PhotoCrop] = [:]
 
     private let columns = Array(
         repeating: GridItem(.flexible(), spacing: ArchSpacing.xxs),
@@ -53,7 +58,10 @@ struct PhotoPickerView: View {
                     photo: chosen[step],
                     step: step + 1,
                     total: chosen.count,
-                    onUse: { advance(from: step) }
+                    onUse: { crop in
+                        crops[chosen[step].id] = crop
+                        advance(from: step)
+                    }
                 )
             }
         }
@@ -197,7 +205,9 @@ struct PhotoPickerView: View {
         if step + 1 < chosen.count {
             path.append(step + 1)
         } else {
-            onAdd(chosen)
+            // `.full` should never be reached -- every photograph passes through
+            // the crop step -- but a missing crop must not lose the photograph.
+            onAdd(chosen.map { PickedPhoto(photo: $0, crop: crops[$0.id] ?? .full) })
             dismiss()
         }
     }
