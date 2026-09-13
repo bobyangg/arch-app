@@ -113,6 +113,9 @@ struct LibraryPhoto: Identifiable, Hashable {
     let toneIndex: Int
     /// Width over height.
     let aspect: CGFloat
+    /// The photograph itself, when it came from the phone rather than from
+    /// `MockData`. Nil in every preview, which is why the tone is still drawn.
+    var image: Data? = nil
 }
 
 /// Three short, self-written tags. Free text rather than a fixed list, because a

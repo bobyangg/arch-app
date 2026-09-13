@@ -11,9 +11,10 @@ import SwiftUI
 /// rather than cropped away, so you can see what you are leaving out — and so that
 /// dragging has something visible to do even when the picture is a flat tone.
 ///
-/// It has to exist at all because almost nothing on anybody's phone is already square.
-/// The alternative is centre-cropping for people, which is how you get profiles
-/// where the first photo is somebody's forehead.
+/// It has to exist at all because almost nothing on anybody's phone is already
+/// square. The alternative is centre-cropping for people, which is how you get
+/// profiles where the first photo is somebody's forehead.
+
 /// Which part of a photograph somebody kept.
 ///
 /// Normalised into the source image's own space, so it survives the image being
@@ -142,7 +143,7 @@ struct PhotoCropView: View {
                     .onAppear { stageSize = geo.size }
                     .onChange(of: geo.size) { _, size in stageSize = size }
 
-                PhotoPlaceholder(toneIndex: photo.toneIndex)
+                PhotoPlaceholder(toneIndex: photo.toneIndex, data: photo.image)
                     .frame(width: image.width, height: image.height)
                     // Its own edges, so the bounds of the photograph read even
                     // against a dark one.

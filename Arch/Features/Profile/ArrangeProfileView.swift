@@ -41,7 +41,7 @@ struct ArrangeProfileView: View {
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isPicking) {
-            PhotoPickerView(slotsLeft: store.slotsLeft) { store.addPhotos($0) }
+            PhotoLibraryPicker(slotsLeft: store.slotsLeft) { store.addPhotos($0) }
         }
     }
 

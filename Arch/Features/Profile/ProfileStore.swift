@@ -113,15 +113,48 @@ final class ProfileStore {
     /// wondering whether the app has frozen, and there is nothing here they need to
     /// wait for — the ordering and the cropping are already done.
     func addPhotos(_ picked: [PickedPhoto]) {
-        for picked in picked.prefix(slotsLeft) {
+        for item in picked.prefix(slotsLeft) {
             // A real uuid, because the server's column is one and the row is
             // written before the bytes are. The old "you-p" + six characters was
             // not a uuid and collided in shape with the seeded mock ids.
             let id = UUID().uuidString.lowercased()
+            let position = person.photos.count
             person.photos.append(
-                Photo(id: id, toneIndex: picked.photo.toneIndex, state: .pending)
+                Photo(id: id,
+                      toneIndex: item.photo.toneIndex,
+                      // Shown from memory until the upload finishes and a signed
+                      // URL exists. Without this the new tile is a flat tone for as
+                      // long as the network takes, which reads as a failure.
+                      url: nil,
+                      state: .pending)
             )
             uploads[id] = .uploading
+            upload(id: id, position: position, item: item)
+        }
+    }
+
+    /// Render the crop and send it.
+    ///
+    /// The rendering is off the main actor: a 1080-square draw from a 12-megapixel
+    /// original is tens of milliseconds, which is a visible stutter in a grid the
+    /// reader is still looking at.
+    private func upload(id: String, position: Int, item: PickedPhoto) {
+        guard ArchConfig.isConfigured else { return }
+        Task { [weak self] in
+            guard let jpeg = await Task.detached(priority: .userInitiated) {
+                PhotoExport.jpeg(from: item.photo, crop: item.crop)
+            }.value else {
+                await MainActor.run { self?.failUpload(id: id) }
+                return
+            }
+            do {
+                try await ArchBackend.addPhoto(id: id, position: position, jpeg: jpeg)
+                await MainActor.run { self?.finishUpload(id: id) }
+            } catch {
+                // The row stays, which is what lets the grid offer "Again" -- and
+                // what makes a lost upload survive the app being closed.
+                await MainActor.run { self?.failUpload(id: id) }
+            }
         }
     }
 

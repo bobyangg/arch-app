@@ -148,7 +148,7 @@ struct PhotoPickerView: View {
         let isFull = order == nil && picked.count >= slotsLeft
 
         return Button { toggle(photo) } label: {
-            PhotoPlaceholder(toneIndex: photo.toneIndex)
+            PhotoPlaceholder(toneIndex: photo.toneIndex, data: photo.image)
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: ArchRadius.detail, style: .continuous))
                 .overlay(alignment: .topTrailing) {

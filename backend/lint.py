@@ -26,7 +26,7 @@ import sqlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql",
-         "005_compatibility.sql", "006_matcher.sql"]
+         "005_compatibility.sql", "006_matcher.sql", "008_photos.sql"]
 
 problems = []
 notes = []

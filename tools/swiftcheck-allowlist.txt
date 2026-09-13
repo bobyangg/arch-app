@@ -87,3 +87,11 @@ SecItemAdd
 SecItemCopyMatching
 SecItemDelete
 SecItemUpdate
+
+# PhotosUI and image export, added with the real photo library
+PhotosPicker
+UIImage
+UIGraphicsImageRenderer
+UIGraphicsImageRendererFormat
+CGColorSpaceCreateDeviceRGB
+CGContext
