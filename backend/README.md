@@ -11,6 +11,28 @@ promises. Everything here runs fine from Windows.
 | `002_policies.sql` | RLS, 30 policies, and the `visible_profiles` view |
 | `lint.py` | Cross-references the SQL without a database to run it against |
 
+## Status
+
+The database is **live and verified**: project `Arch App`, Postgres 17, all 20
+tables, 36 policies, 18 of 18 security checks passing.
+
+Running `004_rls_test.sql` against it found one real leak, now fixed. The `arch_*`
+helper functions were in the `public` schema, and anything in `public` is also a
+PostgREST endpoint -- so `/rest/v1/rpc/arch_blocked?a=X&b=Y` let any signed-in user
+ask whether any two accounts had blocked each other. Every policy was correct and
+the side door was open. They now live in a `private` schema, which PostgREST does
+not expose; `authenticated` keeps EXECUTE because policy expressions are evaluated
+as the querying user and the policies would fail without it.
+
+Also fixed from the Supabase advisors: `auth.uid()` was being re-evaluated per row
+across 26 policies (now `(select auth.uid())`), three `for all` policies were
+overlapping the visibility policies on every read, and ten foreign keys had no
+covering index -- which `delete_account` walks down every one of.
+
+Two advisor warnings remain and are both intentional: `device_bits` has RLS on with
+no policy (server-only by design), and `start_conversation` / `delete_account` are
+callable by signed-in users (they are the API, and both check `auth.uid()` first).
+
 ## Setting the project up
 
 **You have to do step 1 — it needs your account and your agreement to their

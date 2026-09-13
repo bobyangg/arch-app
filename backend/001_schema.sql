@@ -417,6 +417,24 @@ create table appeals (
 );
 
 
+-- --------------------------------------------------------- covering the keys
+--
+-- Postgres needs an index on the referencing side to check a foreign key when the
+-- referenced row is deleted, and `delete_account` deletes down every one of these.
+-- Without them that function degrades into a sequential scan per table.
+
+create index if not exists account_devices_account_idx on account_devices (account_id);
+create index if not exists blocks_blocked_idx on blocks (blocked_id);
+create index if not exists conversations_hi_idx on conversations (hi_account);
+create index if not exists conversations_opened_by_idx on conversations (opened_by);
+create index if not exists dismissals_other_idx on dismissals (other_account_id);
+create index if not exists encounters_other_idx on encounters (other_account_id);
+create index if not exists messages_sender_idx on messages (sender_id);
+create index if not exists push_tokens_account_idx on push_tokens (account_id);
+create index if not exists removals_account_idx on removals (account_id);
+create index if not exists reports_reporter_idx on reports (reporter_id);
+
+
 -- ------------------------------------------------------------------- housekeeping
 
 create or replace function touch_updated_at() returns trigger as $$

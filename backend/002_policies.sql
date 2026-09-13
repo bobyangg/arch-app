@@ -7,16 +7,38 @@
 -- The nightly matcher runs as `service_role`, which bypasses RLS entirely. That is
 -- intended -- it has to read everybody's answers to pair anyone -- and it is why
 -- the service key must never reach a client.
+--
+-- Two things here were learned by running it against a real database rather than
+-- by reasoning about it, and both are worth knowing before editing this file.
+--
+-- **The helpers live in `private`, not `public`.** Anything in `public` is also a
+-- PostgREST endpoint. These functions are SECURITY DEFINER, so they read blocks and
+-- pairings with RLS switched off -- and while they sat in `public`,
+-- `/rest/v1/rpc/arch_blocked?a=X&b=Y` was an oracle any signed-in user could ask
+-- about any two accounts. The policies were correct and the side door was open.
+-- A verified leak, not a theoretical one.
+--
+-- **`auth.uid()` is always wrapped in a scalar subquery.** Written bare it is
+-- re-evaluated for every row scanned; as `(select auth.uid())` it is evaluated once.
+-- On a table holding every account, that is the whole difference.
 
 -- ------------------------------------------------------------------- helpers
 --
 -- All `security definer` so they can consult tables the caller cannot read.
 -- Without that, a policy on `profiles` that checks `blocks` would recurse through
 -- the policy on `blocks` and fail.
+--
+-- `authenticated` keeps EXECUTE because policy expressions are evaluated as the
+-- querying user, and the policies would fail without it. What it does not keep is
+-- a route to call them directly.
+
+create schema if not exists private;
+revoke all on schema private from public;
+grant usage on schema private to authenticated, service_role;
 
 -- Has either person blocked the other? Direction does not matter: a block stops
 -- the pair in both directions, and neither side is told which way it went.
-create or replace function arch_blocked(a uuid, b uuid)
+create or replace function private.arch_blocked(a uuid, b uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select exists (
         select 1 from blocks
@@ -28,10 +50,9 @@ $$;
 -- Are these two in each other's roster right now?
 --
 -- Reads the pair from `pairings`, where one row is both directions, so this cannot
--- disagree with itself. A dismissal by *either* side ends the viewing right: the
--- dismisser has moved on, and the dismissed person keeps their slot but the pair is
--- no longer live for the person who left it.
-create or replace function arch_paired_now(a uuid, b uuid)
+-- disagree with itself. A dismissal ends the viewing right for the person who
+-- dismissed; the other side keeps their slot and is never told.
+create or replace function private.arch_paired_now(a uuid, b uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select exists (
         select 1 from pairings p
@@ -53,7 +74,7 @@ $$;
 -- 'ended', and all three must look the same from the other side. If a block took
 -- the profile away and leaving did not, the difference would say which had
 -- happened -- so an ended conversation takes the profile away in every case.
-create or replace function arch_in_conversation(a uuid, b uuid)
+create or replace function private.arch_in_conversation(a uuid, b uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select exists (
         select 1 from conversations c
@@ -64,26 +85,30 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 
 -- The single rule for seeing somebody's profile, photos, prompts and interests.
-create or replace function arch_can_see(subject uuid)
+-- Inner calls are schema-qualified so that `search_path = public` keeps resolving
+-- tables in public while the helpers still find each other.
+create or replace function private.arch_can_see(subject uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select
-        auth.uid() = subject
+        (select auth.uid()) = subject
         or (
-            not arch_blocked(auth.uid(), subject)
-            and (arch_paired_now(auth.uid(), subject)
-                 or arch_in_conversation(auth.uid(), subject))
+            not private.arch_blocked((select auth.uid()), subject)
+            and (private.arch_paired_now((select auth.uid()), subject)
+                 or private.arch_in_conversation((select auth.uid()), subject))
         );
 $$;
 
--- Am I a participant in this conversation?
-create or replace function arch_in_thread(conversation uuid)
+create or replace function private.arch_in_thread(conversation uuid)
 returns boolean language sql stable security definer set search_path = public as $$
     select exists (
         select 1 from conversations c
         where c.id = conversation
-          and auth.uid() in (c.lo_account, c.hi_account)
+          and (select auth.uid()) in (c.lo_account, c.hi_account)
     );
 $$;
+
+revoke all on all functions in schema private from public;
+grant execute on all functions in schema private to authenticated, service_role;
 
 
 -- ------------------------------------------------------------------- accounts
@@ -91,9 +116,10 @@ $$;
 alter table accounts enable row level security;
 
 create policy accounts_self_read on accounts
-    for select using (id = auth.uid());
+    for select using (id = (select auth.uid()));
 create policy accounts_self_update on accounts
-    for update using (id = auth.uid()) with check (id = auth.uid());
+    for update using (id = (select auth.uid()))
+    with check (id = (select auth.uid()));
 -- No insert policy: accounts are created by the signup edge function, which runs
 -- with the service key after it has verified Apple's token and the App Attest
 -- attestation. A client that could insert its own account row could pick its own
@@ -101,14 +127,16 @@ create policy accounts_self_update on accounts
 
 alter table account_devices enable row level security;
 create policy devices_self_read on account_devices
-    for select using (account_id = auth.uid());
+    for select using (account_id = (select auth.uid()));
 -- Writes are server-side only: the attestation counter is a replay defence, and a
 -- client that can set it can replay.
 
 alter table device_bits enable row level security;
--- No policy at all. These rows outlive accounts and are how a removed user is
--- recognised coming back; a client that could read them could test for its own ban
--- before deciding whether to bother, and one that could write them could clear it.
+-- No policy at all, deliberately. These rows outlive accounts and are how a removed
+-- user is recognised coming back; a client that could read them could test for its
+-- own ban before deciding whether to bother, and one that could write them could
+-- clear it. Supabase's linter flags this as "RLS enabled, no policy" -- that is the
+-- intended state, not an oversight.
 
 
 -- ------------------------------------------------------------------- profiles
@@ -116,33 +144,55 @@ alter table device_bits enable row level security;
 alter table profiles enable row level security;
 
 create policy profiles_visible on profiles
-    for select using (arch_can_see(account_id));
+    for select using (private.arch_can_see(account_id));
 create policy profiles_self_write on profiles
-    for insert with check (account_id = auth.uid());
+    for insert with check (account_id = (select auth.uid()));
 create policy profiles_self_update on profiles
-    for update using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for update using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
+
+-- Photos, prompts and interests all follow the profile, and all split their write
+-- policies by command rather than using `for all`. A `for all` policy includes
+-- SELECT, so it would be evaluated alongside the visibility policy on every single
+-- read; reading your own rows is already the first branch there.
 
 alter table photos enable row level security;
 create policy photos_visible on photos
     for select using (
         -- Your own, at any state, so a rejection can be explained to you. Other
         -- people's only once approved: nothing pending is ever shown.
-        (account_id = auth.uid()) or (state = 'approved' and arch_can_see(account_id))
+        (account_id = (select auth.uid()))
+        or (state = 'approved' and private.arch_can_see(account_id))
     );
-create policy photos_self_write on photos
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+create policy photos_self_insert on photos
+    for insert with check (account_id = (select auth.uid()));
+create policy photos_self_update on photos
+    for update using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
+create policy photos_self_delete on photos
+    for delete using (account_id = (select auth.uid()));
 
 alter table profile_prompts enable row level security;
 create policy prompts_visible on profile_prompts
-    for select using (arch_can_see(account_id));
-create policy prompts_self_write on profile_prompts
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for select using (private.arch_can_see(account_id));
+create policy prompts_self_insert on profile_prompts
+    for insert with check (account_id = (select auth.uid()));
+create policy prompts_self_update on profile_prompts
+    for update using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
+create policy prompts_self_delete on profile_prompts
+    for delete using (account_id = (select auth.uid()));
 
 alter table profile_interests enable row level security;
 create policy interests_visible on profile_interests
-    for select using (arch_can_see(account_id));
-create policy interests_self_write on profile_interests
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for select using (private.arch_can_see(account_id));
+create policy interests_self_insert on profile_interests
+    for insert with check (account_id = (select auth.uid()));
+create policy interests_self_update on profile_interests
+    for update using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
+create policy interests_self_delete on profile_interests
+    for delete using (account_id = (select auth.uid()));
 
 
 -- --------------------------------------------------- the answers nobody sees
@@ -159,18 +209,20 @@ alter table questionnaire_answers enable row level security;
 -- The matcher reads this table as `service_role`, off the back of the API, and
 -- returns pairings -- never answers.
 create policy answers_owner_only on questionnaire_answers
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for all using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
 
 
 -- ------------------------------------------------------------------ discovery
 
 alter table discovery_settings enable row level security;
 create policy discovery_self on discovery_settings
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for all using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
 
 alter table subscriptions enable row level security;
 create policy subscriptions_self_read on subscriptions
-    for select using (account_id = auth.uid());
+    for select using (account_id = (select auth.uid()));
 -- Written only by the server, after Apple's receipt has been verified with Apple.
 
 
@@ -179,24 +231,25 @@ create policy subscriptions_self_read on subscriptions
 alter table pairings enable row level security;
 
 create policy pairings_mine on pairings
-    for select using (auth.uid() in (lo_account, hi_account));
+    for select using ((select auth.uid()) in (lo_account, hi_account));
 -- Insert is the matcher's alone. A client that could write a pairing could put
 -- itself in anybody's roster, which is the one thing mutual pairing exists to stop.
-
+--
 -- `score` is readable by this policy along with the rest of the row. The API layer
 -- must not select it into any client response: Arch shows no percentages, no ranks
 -- and no badges, and a number on the wire is a number that reaches a screen
--- eventually. Prefer a view that omits it.
+-- eventually. `ArchBackend.roster()` names its columns for this reason.
 
 alter table dismissals enable row level security;
 create policy dismissals_own on dismissals
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for all using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
 -- Note the policy is on `account_id` only. The person dismissed cannot read the
 -- row, cannot count the rows, and is never told. That is the whole point.
 
 alter table encounters enable row level security;
 create policy encounters_own on encounters
-    for select using (account_id = auth.uid());
+    for select using (account_id = (select auth.uid()));
 
 
 -- --------------------------------------------------------------- conversations
@@ -204,20 +257,20 @@ create policy encounters_own on encounters
 alter table conversations enable row level security;
 
 create policy conversations_mine on conversations
-    for select using (auth.uid() in (lo_account, hi_account));
+    for select using ((select auth.uid()) in (lo_account, hi_account));
 create policy conversations_update_mine on conversations
-    for update using (auth.uid() in (lo_account, hi_account))
-    with check (auth.uid() in (lo_account, hi_account));
+    for update using ((select auth.uid()) in (lo_account, hi_account))
+    with check ((select auth.uid()) in (lo_account, hi_account));
 
 alter table messages enable row level security;
 
 create policy messages_read on messages
-    for select using (arch_in_thread(conversation_id));
+    for select using (private.arch_in_thread(conversation_id));
 
 create policy messages_send on messages
     for insert with check (
-        sender_id = auth.uid()
-        and arch_in_thread(conversation_id)
+        sender_id = (select auth.uid())
+        and private.arch_in_thread(conversation_id)
         -- An ended conversation takes no more messages. Enforced here rather than
         -- in the client, because the client is not a security boundary and the
         -- other person may have ended it for their own safety.
@@ -233,7 +286,8 @@ create policy messages_send on messages
 
 alter table push_tokens enable row level security;
 create policy push_self on push_tokens
-    for all using (account_id = auth.uid()) with check (account_id = auth.uid());
+    for all using (account_id = (select auth.uid()))
+    with check (account_id = (select auth.uid()));
 
 
 -- --------------------------------------------------------------------- safety
@@ -241,18 +295,18 @@ create policy push_self on push_tokens
 alter table blocks enable row level security;
 
 create policy blocks_own on blocks
-    for select using (blocker_id = auth.uid());
+    for select using (blocker_id = (select auth.uid()));
 create policy blocks_create on blocks
-    for insert with check (blocker_id = auth.uid());
+    for insert with check (blocker_id = (select auth.uid()));
 create policy blocks_remove on blocks
-    for delete using (blocker_id = auth.uid());
+    for delete using (blocker_id = (select auth.uid()));
 -- Only the blocker. Nobody can query whether they have been blocked, and nobody
 -- can count how many times they have been.
 
 alter table reports enable row level security;
 
 create policy reports_create on reports
-    for insert with check (reporter_id = auth.uid());
+    for insert with check (reporter_id = (select auth.uid()));
 -- Deliberately no select policy, not even for the reporter. Reporting is not a
 -- ticket to track: the screen says it has been received and that is the end of the
 -- reader's involvement. It also means nobody can probe whether somebody else has
@@ -260,18 +314,18 @@ create policy reports_create on reports
 
 alter table removals enable row level security;
 create policy removals_self on removals
-    for select using (account_id = auth.uid());
+    for select using (account_id = (select auth.uid()));
 
 alter table appeals enable row level security;
 create policy appeals_self_read on appeals
     for select using (
         exists (select 1 from removals r
-                where r.id = removal_id and r.account_id = auth.uid())
+                where r.id = removal_id and r.account_id = (select auth.uid()))
     );
 create policy appeals_self_create on appeals
     for insert with check (
         exists (select 1 from removals r
-                where r.id = removal_id and r.account_id = auth.uid())
+                where r.id = removal_id and r.account_id = (select auth.uid()))
     );
 
 
