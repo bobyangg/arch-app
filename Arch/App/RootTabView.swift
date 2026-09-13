@@ -20,8 +20,22 @@ struct RootTabView: View {
     /// is the screen a new account starts on.
     var onSignOut: () -> Void = {}
 
-    @State private var store = DailyFiveStore()
-    @State private var settings = SettingsStore()
+    /// Injected by `ArchApp`, which owns them so that a reload after a dropped
+    /// connection refreshes what is already on screen rather than replacing the
+    /// objects underneath it.
+    ///
+    /// Optional, with an owned fallback, because every `#Preview` of this tree
+    /// wants a store full of `MockData` and no session at all. A plain default
+    /// parameter would not do: a view struct is re-made on every render of its
+    /// parent, and the store would be new each time.
+    var injectedDaily: DailyFiveStore?
+    var injectedSettings: SettingsStore?
+
+    @State private var ownedDaily = DailyFiveStore()
+    @State private var ownedSettings = SettingsStore()
+
+    private var store: DailyFiveStore { injectedDaily ?? ownedDaily }
+    private var settings: SettingsStore { injectedSettings ?? ownedSettings }
     /// A design build has no network to lose. A real one watches `NWPathMonitor`
     /// and writes here; everything below reads it and nothing else changes.
     @State private var isOffline = false

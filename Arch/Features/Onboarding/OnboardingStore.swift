@@ -30,9 +30,18 @@ final class OnboardingStore {
     /// previews still build them, and setting this back to `true` puts both
     /// screens back at the front of the flow exactly as they were.
     ///
-    /// The design still says every account has a verified number — Safety says so
-    /// in as many words — because that is still the intent. This is a switch for
-    /// working on the rest, not a change of mind.
+    /// **It is a change of mind now.** This said the design still promised a
+    /// verified number because Safety said so in as many words. Safety no longer
+    /// does: it says an account is tied to an Apple ID and a device, which is what
+    /// actually happens. Sign in with Apple replaced the number, `delete_account`
+    /// keeps the Apple id claimed so a removed user cannot start again, and
+    /// DeviceCheck carries the rest.
+    ///
+    /// So `OnboardingPhone`, `OnboardingCode` and `ChangeNumberSheet` are about
+    /// 170 lines describing an exchange that will not happen. They are left in
+    /// place rather than deleted here because that is a decision worth taking
+    /// deliberately rather than as a side effect of wiring the backend — but
+    /// nothing is waiting on them, and this flag is no longer a pause.
     static let isVerificationOn = false
 
     /// The steps actually in the flow, in order.

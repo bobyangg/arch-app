@@ -14,6 +14,12 @@ struct OnboardingWelcome: View {
     /// previews and the design build take this path instead.
     var demoSignIn: (() -> Void)?
 
+    /// A failure that happened after Apple handed over, so the flow rather than
+    /// this screen is the one that knows about it -- the register call, or the
+    /// network being gone. Shown in the same place and the same register as one
+    /// from the button itself.
+    var externalProblem: String?
+
     @State private var problem: String?
 
     var body: some View {
@@ -58,7 +64,7 @@ struct OnboardingWelcome: View {
                     }
                 }
 
-                Text(problem ?? "Arch does not post anything, and never sees your Apple password. Your email stays hidden if you want it to.")
+                Text(problem ?? externalProblem ?? "Arch does not post anything, and never sees your Apple password. Your email stays hidden if you want it to.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .multilineTextAlignment(.center)

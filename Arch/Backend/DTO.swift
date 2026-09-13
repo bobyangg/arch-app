@@ -160,7 +160,8 @@ extension ProfileRow {
     func person(
         photos: [PhotoRow] = [],
         prompts: [PromptRow] = [],
-        interests: [InterestRow] = []
+        interests: [InterestRow] = [],
+        urls: [String: URL] = [:]
     ) -> Person {
         Person(
             id: accountId,
@@ -173,7 +174,14 @@ extension ProfileRow {
             pronouns: pronouns ?? "",
             photos: photos.sorted { $0.position < $1.position }
                 .enumerated()
-                .map { index, row in Photo(id: row.id, toneIndex: index) },
+                .map { index, row in
+                    // The tone is the load state. A photograph whose URL did not
+                    // sign -- expired, or refused because somebody blocked you
+                    // between the signing and the fetch -- keeps it and goes
+                    // quietly, which is the right failure for a photo you are no
+                    // longer allowed to see.
+                    Photo(id: row.id, toneIndex: index, url: urls[row.id])
+                },
             prompts: prompts.sorted { $0.position < $1.position }
                 .map { Prompt(id: $0.id,
                               question: PromptLibrary.text(forID: $0.promptKey),

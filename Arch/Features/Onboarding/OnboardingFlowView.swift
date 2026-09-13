@@ -12,21 +12,26 @@ struct OnboardingFlowView: View {
 
     @State private var store = OnboardingStore()
     @State private var showingWelcome = true
+    /// Shown on the welcome screen. Never red, and never Apple's own wording --
+    /// their errors are for a log, not for somebody at the front door of an app
+    /// they have not joined yet.
+    @State private var problem: String?
 
     var body: some View {
         ZStack {
             ArchColor.night.ignoresSafeArea()
 
             if showingWelcome {
-                // Design-only: the real Apple button needs an entitlement and a
-                // signed build, so this build takes the demo path and fills the
-                // name Apple would have supplied.
+                // The real Apple button needs an entitlement and a signed build,
+                // and the demo path fills in the name Apple would have supplied.
+                // Which one appears is decided by whether there is a backend to
+                // sign in to at all, not by a build flag somebody has to remember.
                 OnboardingWelcome(
                     onSignIn: { identity in
-                        store.apply(identity)
-                        showingWelcome = false
+                        Task { await signIn(identity) }
                     },
-                    demoSignIn: {
+                    externalProblem: problem,
+                    demoSignIn: ArchConfig.isConfigured ? nil : {
                         store.apply(
                             AppleIdentity(
                                 userID: "001234.abcdef", name: "Sam",
@@ -43,6 +48,47 @@ struct OnboardingFlowView: View {
             }
         }
         .animation(ArchMotion.standard, value: showingWelcome)
+    }
+
+    /// Apple has said who somebody is. Two things still have to happen before the
+    /// questionnaire is worth filling in.
+    ///
+    /// Supabase verifies Apple's token against Apple's own keys and issues the
+    /// session, so who the caller is is settled by the first call. The second adds
+    /// what Supabase does not do: attestation, and the check for whether this
+    /// device has been removed before.
+    private func signIn(_ identity: AppleIdentity) async {
+        guard let token = identity.identityToken,
+              let jwt = String(data: token, encoding: .utf8) else {
+            problem = "Apple did not send anything Arch could use."
+            return
+        }
+        do {
+            _ = try await ArchBackend.signInWithApple(identityToken: jwt)
+            let outcome = try await ArchBackend.register(identity: identity)
+            switch outcome {
+            case .ok(_, let needsOnboarding, _):
+                guard needsOnboarding else {
+                    // Signing back in is not signing up. Somebody reinstalling the
+                    // app already has a profile, and walking them through sixteen
+                    // questions again would be asking for what Arch already holds.
+                    onFinish(ProfileStore(), true)
+                    return
+                }
+                // Name and email arrive from Apple on the *first* authorization
+                // only, so they are put into the draft here and persisted by the
+                // register call -- never fetched again later, because there is no
+                // later.
+                store.apply(identity)
+                showingWelcome = false
+            case .removed:
+                // Handled by the session at the next launch; nothing useful can be
+                // said from inside onboarding without repeating that whole screen.
+                problem = "This account is not available."
+            }
+        } catch {
+            problem = "Arch could not reach the network just now."
+        }
     }
 
     private var flow: some View {
@@ -157,7 +203,52 @@ struct OnboardingFlowView: View {
 
     private func finish(allowing notifications: Bool) {
         store.allowsNotifications = notifications
-        onFinish(store.profile, notifications)
+        guard ArchConfig.isConfigured else {
+            onFinish(store.profile, notifications)
+            return
+        }
+        Task {
+            await commit(allowing: notifications)
+            onFinish(store.profile, notifications)
+        }
+    }
+
+    /// Everything onboarding collected, written before the app opens.
+    ///
+    /// **The profile row goes first.** Every other table references it, and an
+    /// account with answers but no profile is invisible to the matcher in a way
+    /// that looks like nothing happened. If a later write fails the reader lands in
+    /// the app with a profile missing a piece, which the You tab already knows how
+    /// to show — that is a better failure than being held at a spinner on the last
+    /// screen of onboarding with no way forward.
+    private func commit(allowing notifications: Bool) async {
+        let person = store.profile.person
+        try? await ArchBackend.createProfile(
+            PersonDetails(
+                name: person.name, age: person.age,
+                gender: person.gender, pronouns: person.pronouns,
+                place: person.place, height: person.height, work: person.work
+            ),
+            coordinate: person.coordinate
+        )
+        try? await ArchBackend.savePrompts(person.prompts)
+        try? await ArchBackend.saveInterests(person.interests)
+
+        // Stored as the index of the chosen option, not its words. The grids are
+        // indexed by position, and rewording an option is an ordinary copy edit
+        // that must not silently rescore everybody who answered before it.
+        var answers: [String: Int] = [:]
+        for question in Questionnaire.questions {
+            guard let chosen = store.questionnaireAnswers[question.id],
+                  let index = question.options.firstIndex(of: chosen) else { continue }
+            answers[question.id] = index
+        }
+        try? await ArchBackend.saveAnswers(answers)
+
+        try? await ArchBackend.createDiscovery(
+            seeking: store.seekingDrafts.map { ArchUnits.genderColumn($0) },
+            notifyMessages: notifications
+        )
     }
 }
 
