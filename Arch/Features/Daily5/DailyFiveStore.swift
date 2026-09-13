@@ -18,11 +18,25 @@ final class DailyFiveStore {
         self.conversations = conversations
     }
 
-    /// Everyone's five arrive at the same hour, in their own morning. The matching
-    /// runs overnight in one batch — which is what makes mutual pairing possible at
-    /// all — and the result is simply there when people wake up. Nobody experiences
-    /// the hour it was computed.
+    /// Nine in the morning, New York time, for everybody at once.
+    ///
+    /// **Not nine wherever you happen to be.** Mutual pairing creates a pair for two
+    /// people in the same instant, so rolling per-timezone batches would have to hand
+    /// somebody a roster hours after theirs was already on screen, or reserve slots
+    /// across runs and reconcile them afterwards. One batch makes that problem not
+    /// exist, and it is a great deal less to run.
+    ///
+    /// Everyone Arch currently serves is in and around New York, so today this *is*
+    /// the local nine. Somewhere else it is not, and the countdown is shown in the
+    /// reader's own clock rather than claiming an hour that is not theirs.
     static let refillHour = 9
+
+    /// The zone the batch runs in.
+    ///
+    /// An identifier and not a fixed offset: "EST" is UTC-5 all year, so for the
+    /// seven months of daylight saving it would deliver at eight in the morning in
+    /// the city it is named after. Landing in the morning is the whole point.
+    static let refillZone = TimeZone(identifier: "America/New_York") ?? .gmt
 
     static let freeSlots = 5
     static let premiumSlots = 7
@@ -192,14 +206,22 @@ final class DailyFiveStore {
         roster.people.contains { $0.id == person.id }
     }
 
-    /// Tomorrow at `refillHour`, in the reader's own timezone — not a rolling
-    /// 24-hour timer from whenever the slot happened to open. The wait is a fact
-    /// about tomorrow morning rather than a clock to watch.
+    /// The next batch, as an instant — not a rolling 24-hour timer from whenever the
+    /// slot happened to open. The wait is a fact about tomorrow morning rather than a
+    /// clock to watch.
+    ///
+    /// Computed in `refillZone` because that is where the job runs, and returned as a
+    /// `Date`, which has no timezone of its own. Whatever formats it renders it in the
+    /// reader's clock, so somebody in London is told two in the afternoon, which is
+    /// true, rather than nine in the morning, which is not.
     private static func nextRefill(from now: Date = Date()) -> Date {
-        let calendar = Calendar.current
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: now) ?? now
-        return calendar.date(
-            bySettingHour: refillHour, minute: 0, second: 0, of: tomorrow
-        ) ?? tomorrow
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = refillZone
+        let next = calendar.nextDate(
+            after: now,
+            matching: DateComponents(hour: refillHour, minute: 0, second: 0),
+            matchingPolicy: .nextTime
+        )
+        return next ?? now.addingTimeInterval(24 * 60 * 60)
     }
 }

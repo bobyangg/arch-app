@@ -52,7 +52,7 @@ struct HelpPage: View {
         )
         section(
             "New people arrive in the morning",
-            "Rosters are chosen overnight and are filled at nine, wherever you are. You can only be in someone's roster if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
+            "Rosters are chosen overnight and everybody's arrives at the same moment, first thing. You can only be in someone's roster if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
         )
         section(
             "Somebody writing to you is a request",
