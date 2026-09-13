@@ -25,7 +25,8 @@ import sys
 import sqlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql"]
+FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql",
+         "005_compatibility.sql"]
 
 problems = []
 notes = []
@@ -71,7 +72,9 @@ TABLES = {}
 
 def parse_tables(text):
     """{table: [column names]} plus the raw body, for the reference checks."""
-    for match in re.finditer(r"create table\s+(\w+)\s*\((.*?)\n\);", text, re.S | re.I):
+    for match in re.finditer(
+            r"create table\s+(?:if not exists\s+)?(\w+)\s*\((.*?)\n\);",
+            text, re.S | re.I):
         name, body = match.group(1), match.group(2)
         columns = []
         declared = []
@@ -185,7 +188,13 @@ for table in TABLES:
     check(table in rls, "%s: row level security is never enabled" % table)
 
 # 10. Every table with RLS on has at least one policy, or is deliberately sealed.
-SEALED = {"device_bits"}
+# Tables with RLS on and no policy, deliberately. Each is server-only: device_bits
+# outlives accounts and is how a removed user is recognised coming back;
+# attest_challenges would let a client answer a challenge it was never issued; and
+# the compatibility tables would let a client compute its own score, which Arch
+# shows to nobody.
+SEALED = {"device_bits", "attest_challenges",
+          "compatibility_cells", "requirement_cells", "compatibility_digest"}
 policed = set(re.findall(r"create policy\s+\w+\s+on\s+(\w+)", clean, re.I))
 for table in rls:
     if table not in policed and table not in SEALED:
