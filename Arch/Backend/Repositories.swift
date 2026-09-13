@@ -12,6 +12,93 @@ import Foundation
 /// again. Silent retries make an app that seems to work and loses things.
 enum ArchBackend {
 
+    // MARK: Signing in
+
+    /// Exchange Apple's identity token for a session.
+    ///
+    /// Supabase verifies it against Apple's own keys — signature, issuer, audience
+    /// and expiry — so the client is never trusted to say who it is, and none of
+    /// that work is repeated in an edge function.
+    @discardableResult
+    static func signInWithApple(identityToken: String, nonce: String? = nil) async throws -> Session {
+        try await SupabaseClient.shared.signInWithApple(
+            identityToken: identityToken, nonce: nonce
+        )
+    }
+
+    enum Registration {
+        case ok(isNewAccount: Bool, needsOnboarding: Bool, attested: Bool)
+        case removed
+    }
+
+    /// Everything Supabase Auth does not do: attestation, and the ban check.
+    ///
+    /// Also the one and only place `apple_email` and `apple_name` can be captured.
+    /// Apple sends those on the **first** authorization only; if they are not
+    /// persisted here they are gone for good.
+    ///
+    /// Attestation is attempted and not required. `Attestation.isSupported` is
+    /// false on a simulator, and the server decides whether to enforce — a client
+    /// deciding whether it needs to prove itself is not a security control.
+    static func register(identity: AppleIdentity) async throws -> Registration {
+        struct Body: Encodable {
+            let challenge: String?
+            let keyId: String?
+            let attestation: String?
+            let deviceToken: String?
+            let name: String?
+            let email: String?
+        }
+        struct Reply: Decodable {
+            let status: String
+            let isNewAccount: Bool?
+            let needsOnboarding: Bool?
+            let attested: Bool?
+        }
+
+        var challenge: String?
+        var keyID: String?
+        var attestation: String?
+        if Attestation.isSupported {
+            // A failure here is not fatal. The server logs it and, until
+            // ATTEST_ENFORCED is on, lets the signup through -- turning attestation
+            // on and enforcing it in the same change makes the first failure
+            // indistinguishable from every real user being locked out.
+            challenge = try? await self.challenge()
+            if let challenge, let bytes = Data(base64Encoded: challenge) {
+                if let result = try? await Attestation.attest(challenge: bytes) {
+                    keyID = result.keyID
+                    attestation = result.attestation.base64EncodedString()
+                }
+            }
+        }
+        let deviceToken = try? await DeviceIdentity.token()
+
+        let reply: Reply = try await SupabaseClient.shared.callFunction(
+            "register",
+            Body(challenge: challenge, keyId: keyID, attestation: attestation,
+                 deviceToken: deviceToken?.base64EncodedString(),
+                 name: identity.name, email: identity.email),
+            returning: Reply.self
+        )
+
+        guard reply.status == "ok" else { return .removed }
+        return .ok(isNewAccount: reply.isNewAccount ?? true,
+                   needsOnboarding: reply.needsOnboarding ?? true,
+                   attested: reply.attested ?? false)
+    }
+
+    /// A one-time value for the device to attest over. Without it, a captured
+    /// attestation would be replayable for every fake account after it.
+    private static func challenge() async throws -> String {
+        struct Empty: Encodable {}
+        struct Reply: Decodable { let challenge: String }
+        let reply: Reply = try await SupabaseClient.shared.callFunction(
+            "challenge", Empty(), returning: Reply.self
+        )
+        return reply.challenge
+    }
+
     // MARK: Account
 
     /// The signed-in account, or nil if there is no session.
@@ -76,6 +163,10 @@ enum ArchBackend {
         let promptRows = try await prompts
         let interestRows = try await interests
 
+        // Signed in one batch. A photograph with no URL keeps its tone, which is
+        // also what it looks like while one is still loading.
+        let urls = (try? await photoURLs(for: photoRows)) ?? [:]
+
         return Person(
             id: row.accountId,
             name: row.name,
@@ -86,13 +177,82 @@ enum ArchBackend {
             work: row.work ?? "",
             gender: ArchUnits.gender(fromColumn: row.gender),
             pronouns: row.pronouns ?? "",
-            photos: photoRows.enumerated().map { Photo(id: $1.id, toneIndex: $0) },
+            photos: photoRows.enumerated().map {
+                Photo(id: $1.id, toneIndex: $0, url: urls[$1.id],
+                      state: PhotoState(rawValue: $1.state) ?? .approved)
+            },
             prompts: promptRows.map {
                 Prompt(id: $0.id,
                        question: PromptLibrary.text(forID: $0.promptKey),
                        answer: $0.answer)
             },
             interests: interestRows.map { Interest(id: $0.id, text: $0.text) }
+        )
+    }
+
+    /// The profile row, written once at the end of onboarding.
+    ///
+    /// An insert rather than the update `saveDetails` does, because there is
+    /// nothing there yet -- and every other table references this row, so it goes
+    /// first.
+    static func createProfile(_ details: PersonDetails, coordinate: Coordinate?) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        guard let gender = details.gender, let place = details.place else {
+            throw ArchAPIError.conflict
+        }
+        struct NewProfile: Encodable {
+            let accountId: String
+            let name: String
+            let birthdate: String
+            let gender: String
+            let pronouns: String?
+            let placeId: String
+            let coarseLat: Double
+            let coarseLon: Double
+            let heightCm: Int?
+            let work: String?
+        }
+        // The device fix wins when there is one, and the centre of the picked place
+        // otherwise. Either way it is coarsened before it leaves the phone -- the
+        // CHECK constraint on the column refuses anything finer, so this is belt
+        // and braces.
+        let centre = (coordinate ?? place.centre).coarsened
+        try await SupabaseClient.shared.insert(
+            "profiles",
+            NewProfile(
+                accountId: session.userID,
+                name: details.name,
+                birthdate: ArchUnits.birthdate(fromAge: details.age),
+                gender: ArchUnits.genderColumn(gender),
+                pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
+                placeId: place.id,
+                coarseLat: centre.latitude,
+                coarseLon: centre.longitude,
+                heightCm: ArchUnits.centimetres(fromHeight: details.height),
+                work: details.work.isEmpty ? nil : details.work
+            )
+        )
+    }
+
+    /// The discovery row, with the defaults every new account gets.
+    ///
+    /// Only `seeking` comes from onboarding; the rest are the sliders' own defaults
+    /// and are changed in Settings. Asking somebody to pick a radius before they
+    /// have seen a single person would be asking a question they cannot answer yet.
+    static func createDiscovery(seeking: [String], notifyMessages: Bool) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        try await SupabaseClient.shared.upsert(
+            "discovery_settings",
+            DiscoveryRow(
+                accountId: session.userID,
+                seeking: seeking,
+                distanceMiles: 10, minAge: 26, maxAge: 36,
+                paused: false, notifyMessages: notifyMessages
+            )
         )
     }
 
@@ -223,6 +383,62 @@ enum ArchBackend {
         return out
     }
 
+    /// The three prompts, as the whole set.
+    ///
+    /// Whole-set rather than per-prompt, for the reason the photo order is: the
+    /// position column is unique per account, so writing them one at a time
+    /// collides with itself when two of them swap.
+    static func savePrompts(_ prompts: [Prompt]) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        struct PromptWrite: Encodable {
+            let id: String
+            let accountId: String
+            let position: Int
+            let promptKey: String
+            let answer: String
+        }
+        try await SupabaseClient.shared.delete(
+            "profile_prompts", filters: ["account_id": "eq.\(session.userID)"]
+        )
+        let rows = prompts.enumerated().map { index, prompt in
+            PromptWrite(
+                id: prompt.id,
+                accountId: session.userID,
+                position: index,
+                // Stored by id, not by its words: rewording a prompt is an ordinary
+                // copy edit, and rows holding the old text would keep asking the old
+                // question forever.
+                promptKey: PromptLibrary.question(matching: prompt.question)?.id
+                    ?? prompt.question,
+                answer: prompt.answer
+            )
+        }
+        try await SupabaseClient.shared.insert("profile_prompts", rows)
+    }
+
+    /// The interests, as the whole set, for the same reason.
+    static func saveInterests(_ interests: [Interest]) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        struct InterestWrite: Encodable {
+            let id: String
+            let accountId: String
+            let position: Int
+            let text: String
+        }
+        try await SupabaseClient.shared.delete(
+            "profile_interests", filters: ["account_id": "eq.\(session.userID)"]
+        )
+        let rows = interests.enumerated().map { index, interest in
+            InterestWrite(id: interest.id, accountId: session.userID,
+                          position: index, text: interest.text)
+        }
+        try await SupabaseClient.shared.insert("profile_interests", rows)
+    }
+
     /// The sixteen answers, written once at the end of onboarding.
     ///
     /// Sent as one upsert rather than sixteen inserts so that a connection dropping
@@ -299,7 +515,9 @@ enum ArchBackend {
         )
 
         let profileRows = try await profiles
-        let photosBy = Dictionary(grouping: try await photos, by: \.accountId)
+        let photoRows = try await photos
+        let urls = (try? await photoURLs(for: photoRows)) ?? [:]
+        let photosBy = Dictionary(grouping: photoRows, by: \.accountId)
         let promptsBy = Dictionary(grouping: try await prompts, by: \.accountId)
         let interestsBy = Dictionary(grouping: try await interests, by: \.accountId)
 
@@ -309,7 +527,8 @@ enum ArchBackend {
             byID[id]?.person(
                 photos: photosBy[id] ?? [],
                 prompts: promptsBy[id] ?? [],
-                interests: interestsBy[id] ?? []
+                interests: interestsBy[id] ?? [],
+                urls: urls
             )
         }
     }

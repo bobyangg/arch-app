@@ -17,6 +17,46 @@ final class ProfileStore {
 
     // MARK: Photos
 
+    /// Something a write to the server could not do.
+    ///
+    /// Screens read this to say so. Nil almost always — a failed save is rare and
+    /// is a thing to mention once, not a state to build a screen around.
+    var lastError: ArchAPIError?
+
+    /// Replace everything with what the server has.
+    ///
+    /// Used at launch and after a reconnection. The store keeps its identity so
+    /// views already on screen refresh rather than being rebuilt underneath the
+    /// reader.
+    func adopt(_ person: Person) {
+        self.person = person
+        uploads.removeAll()
+        rejections.removeAll()
+        lastError = nil
+    }
+
+    /// Persist in the background, and remember if it did not work.
+    ///
+    /// The local change has already happened, so the reader sees their edit
+    /// immediately. That is the right order for a profile edit — the alternative
+    /// is a spinner on every keystroke — and it does mean a failure has to be
+    /// reported afterwards rather than prevented.
+    ///
+    /// Does nothing in a design build, where there is nowhere to write.
+    private func persist(_ work: @escaping () async throws -> Void) {
+        guard ArchConfig.isConfigured else { return }
+        Task { [weak self] in
+            do {
+                try await work()
+                await MainActor.run { self?.lastError = nil }
+            } catch let error as ArchAPIError {
+                await MainActor.run { self?.lastError = error }
+            } catch {
+                await MainActor.run { self?.lastError = .transport }
+            }
+        }
+    }
+
     var canAddPhoto: Bool { person.photos.count < Person.photoLimit }
 
     /// A profile needs a main photo, so the last one cannot be removed.
@@ -31,6 +71,9 @@ final class ProfileStore {
         guard source != target else { return }
         let photo = person.photos.remove(at: source)
         person.photos.insert(photo, at: target)
+        persist { [order = photoOrder] in
+            try await ArchBackend.reorderPhotos(order)
+        }
     }
 
     /// How many photos you could still add.
@@ -91,6 +134,7 @@ final class ProfileStore {
         person.photos.removeAll { $0.id == id }
         uploads[id] = nil
         rejections[id] = nil
+        persist { try await ArchBackend.removePhoto(id: id) }
     }
 
     /// The order, as the whole list rather than as a move.
@@ -109,12 +153,18 @@ final class ProfileStore {
         guard source != target else { return }
         let prompt = person.prompts.remove(at: source)
         person.prompts.insert(prompt, at: target)
+        persist { [prompts = person.prompts] in
+            try await ArchBackend.savePrompts(prompts)
+        }
     }
 
     func updateAnswer(id: String, to text: String) {
         guard let index = person.prompts.firstIndex(where: { $0.id == id }) else { return }
         let existing = person.prompts[index]
         person.prompts[index] = Prompt(id: existing.id, question: existing.question, answer: text)
+        persist { [prompts = person.prompts] in
+            try await ArchBackend.savePrompts(prompts)
+        }
     }
 
     /// Question and answer move together, because changing one without the other
@@ -122,6 +172,9 @@ final class ProfileStore {
     func updatePrompt(id: String, question: String, answer: String) {
         guard let index = person.prompts.firstIndex(where: { $0.id == id }) else { return }
         person.prompts[index] = Prompt(id: id, question: question, answer: answer)
+        persist { [prompts = person.prompts] in
+            try await ArchBackend.savePrompts(prompts)
+        }
     }
 
     /// The questions the other slots are using, so a picker can mark them.
@@ -142,6 +195,9 @@ final class ProfileStore {
             .map { index, text in
                 Interest(id: "you-i\(index + 1)", text: String(text.prefix(Interest.characterLimit)))
             }
+        persist { [interests = person.interests] in
+            try await ArchBackend.saveInterests(interests)
+        }
     }
 
     // MARK: Details
@@ -160,5 +216,6 @@ final class ProfileStore {
         person.place = details.place
         person.height = details.height
         person.work = details.work
+        persist { try await ArchBackend.saveDetails(details) }
     }
 }

@@ -33,6 +33,42 @@ final class SettingsStore {
 
     // Discovery
     /// A requirement rather than a preference: nobody outside it reaches you.
+    /// Discovery settings, from the server.
+    ///
+    /// The defaults above are what a design build shows and what a brand-new
+    /// account gets; this replaces them once there is somewhere to read from.
+    func load() async throws {
+        guard ArchConfig.isConfigured else { return }
+        guard let row = try await ArchBackend.discovery() else { return }
+        seeking = Set(row.seeking.compactMap { ArchUnits.gender(fromColumn: $0) })
+        distance = row.distanceMiles
+        minAge = row.minAge
+        maxAge = row.maxAge
+        isPaused = row.paused
+        messageAlert = row.notifyMessages
+    }
+
+    /// Written whole rather than field by field. Every one of these is a filter the
+    /// matcher reads tonight, and a half-written set is a roster built to settings
+    /// nobody chose.
+    func save() {
+        guard ArchConfig.isConfigured else { return }
+        Task { [seeking, distance, minAge, maxAge, isPaused, messageAlert] in
+            guard let session = await SupabaseClient.shared.restore() else { return }
+            try? await ArchBackend.saveDiscovery(
+                DiscoveryRow(
+                    accountId: session.userID,
+                    seeking: seeking.map { ArchUnits.genderColumn($0) },
+                    distanceMiles: distance,
+                    minAge: minAge,
+                    maxAge: maxAge,
+                    paused: isPaused,
+                    notifyMessages: messageAlert
+                )
+            )
+        }
+    }
+
     var seeking: Set<Gender> = [.man, .woman, .nonBinary]
     var distance = 10
     var minAge = 26

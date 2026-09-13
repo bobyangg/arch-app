@@ -38,6 +38,55 @@ final class DailyFiveStore {
     /// the city it is named after. Landing in the morning is the whole point.
     static let refillZone = TimeZone(identifier: "America/New_York") ?? .gmt
 
+    /// Something a write to the server could not do. Screens read this to say so.
+    var lastError: ArchAPIError?
+
+    /// Tonight's roster and every conversation, from the server.
+    ///
+    /// One call rather than one per screen: the tabs are three views over the same
+    /// two collections, and loading them separately is how the roster and the
+    /// message list end up disagreeing about whether somebody is still there.
+    func load() async throws {
+        guard ArchConfig.isConfigured else { return }
+        let people = try await ArchBackend.roster()
+        let threads = try await ArchBackend.conversations()
+
+        // The slots the server did not fill are open, not missing. `capacity`
+        // already knows about Premium.
+        //
+        // An open slot carries when it refills and *why* it is open — and the why
+        // is always `.yours` here, because the server does not say. It cannot: a
+        // slot that knew whether the other person left would be the app telling you
+        // you were dismissed, which is the one thing it promises never to do.
+        var slots = people.map { RosterSlot.filled($0) }
+        let refill = Self.nextRefill()
+        while slots.count < capacity {
+            slots.append(.empty(id: "open-\(slots.count)",
+                                refillsAt: refill,
+                                opening: .yours))
+        }
+        roster = Roster(slots: Array(slots.prefix(capacity)),
+                        isFirstMorning: people.isEmpty && threads.isEmpty)
+        conversations = threads
+        lastError = nil
+    }
+
+    /// Persist in the background. The local change has already happened, because
+    /// dismissing somebody should not wait on a round trip.
+    private func persist(_ work: @escaping () async throws -> Void) {
+        guard ArchConfig.isConfigured else { return }
+        Task { [weak self] in
+            do {
+                try await work()
+                await MainActor.run { self?.lastError = nil }
+            } catch let error as ArchAPIError {
+                await MainActor.run { self?.lastError = error }
+            } catch {
+                await MainActor.run { self?.lastError = .transport }
+            }
+        }
+    }
+
     static let freeSlots = 5
     static let premiumSlots = 7
     /// Above this, the roster waits. The point is that people answer the
@@ -108,11 +157,13 @@ final class DailyFiveStore {
         guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
         conversations[index].state = .open
         conversations[index].unreadCount = 0
+        persist { try await ArchBackend.accept(conversation.id) }
     }
 
     /// Declining removes it. They are not told, the same as everything else here.
     func decline(_ conversation: Conversation) {
         conversations.removeAll { $0.id == conversation.id }
+        persist { try await ArchBackend.end(conversation.id) }
     }
 
     /// Somebody wrote to you.
@@ -136,6 +187,7 @@ final class DailyFiveStore {
             refillsAt: Self.nextRefill(),
             opening: opening
         )
+        persist { try await ArchBackend.dismiss(person) }
     }
 
     /// The first message.
@@ -183,12 +235,22 @@ final class DailyFiveStore {
     func leave(_ conversation: Conversation) {
         conversations.removeAll { $0.id == conversation.id }
         dismiss(conversation.person)
+        persist { try await ArchBackend.end(conversation.id) }
     }
 
     /// Blocking does everything leaving does, and stops them reaching you again.
     func block(_ person: Person) {
         conversations.removeAll { $0.person.id == person.id }
         dismiss(person)
+        persist {
+            try await ArchBackend.block(person)
+            // The conversation ends too, and lands on the same state
+            // leaving does -- if blocking looked different from here the
+            // other person could tell the two apart.
+            if let thread = self.conversations.first(where: { $0.person.id == person.id }) {
+                try await ArchBackend.end(thread.id)
+            }
+        }
     }
 
     /// What the other side sees when somebody leaves, blocks, or deletes.
@@ -200,6 +262,7 @@ final class DailyFiveStore {
         guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
         conversations[index].state = .ended
         conversations[index].unreadCount = 0
+        persist { try await ArchBackend.end(conversation.id) }
     }
 
     func holdsSlot(_ person: Person) -> Bool {

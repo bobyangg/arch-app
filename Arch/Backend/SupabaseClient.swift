@@ -88,7 +88,7 @@ actor SupabaseClient {
             .appendingPathComponent("token")
             .appending(queryItems: [URLQueryItem(name: "grant_type", value: "refresh_token")]))
         request.httpMethod = "POST"
-        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(ArchConfig.key, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(
             withJSONObject: ["refresh_token": refreshToken]
@@ -121,14 +121,14 @@ actor SupabaseClient {
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
-        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(ArchConfig.key, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let prefer { request.setValue(prefer, forHTTPHeaderField: "Prefer") }
         if authenticated {
             request.setValue("Bearer \(try await validToken())",
                              forHTTPHeaderField: "Authorization")
         } else {
-            request.setValue("Bearer \(ArchConfig.anonKey)",
+            request.setValue("Bearer \(ArchConfig.key)",
                              forHTTPHeaderField: "Authorization")
         }
         request.httpBody = body
@@ -301,7 +301,7 @@ actor SupabaseClient {
                 .appendingPathComponent(path)
         )
         request.httpMethod = "POST"
-        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(ArchConfig.key, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
         request.setValue(contentType, forHTTPHeaderField: "Content-Type")
         // The bucket refuses an overwrite, and so does the absence of an update
@@ -356,7 +356,7 @@ actor SupabaseClient {
                 .appendingPathComponent("photos")
         )
         request.httpMethod = "POST"
-        request.setValue(ArchConfig.anonKey, forHTTPHeaderField: "apikey")
+        request.setValue(ArchConfig.key, forHTTPHeaderField: "apikey")
         request.setValue("Bearer \(try await validToken())", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONEncoder().encode(
