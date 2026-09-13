@@ -108,7 +108,7 @@ struct YouProfileView: View {
 
             // The gear is the rightmost thing on the screen, so nothing competes
             // with it for "this is settings".
-            Button { path.append(.settings) } label: {
+            Button { path.append(Route.settings) } label: {
                 Image(systemName: "gearshape")
                     .archText(.body)
                     .foregroundStyle(ArchColor.mortar)
