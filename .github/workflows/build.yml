@@ -79,8 +79,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee build.log
 
-      # The first build of this project will not pass. The log is the deliverable
-      # until it does.
+      # The first build of this project will not pass, so the error list is the
+      # deliverable until it does.
+      #
+      # Emitted as workflow annotations as well as into the summary, because
+      # **annotations are readable on a public repository without signing in and
+      # logs are not.** That is what lets the errors be read straight off the run
+      # rather than downloaded, unzipped and pasted by hand.
       - name: The errors, gathered
         if: failure()
         run: |
@@ -92,6 +97,19 @@ jobs:
           errors=$(grep -c 'error:' build.log || echo 0)
           warnings=$(grep -c 'warning:' build.log || echo 0)
           echo "Total: $errors errors, $warnings warnings" >> "$GITHUB_STEP_SUMMARY"
+
+          # One annotation per distinct error, capped so a cascade of a thousand
+          # does not bury the first real one.
+          grep -E "error:" build.log | sort -u | head -40 | while IFS= read -r line; do
+            printf '::error::%s\n' "$line"
+          done
+
+          # xcodebuild's own summary lines say what it could not do at all, which
+          # is a different and often more useful thing than a compile error.
+          grep -E "^(\*\*|The following build commands failed|Command .* failed)" build.log \
+            | sort -u | head -10 | while IFS= read -r line; do
+            printf '::error::%s\n' "$line"
+          done
 
       - name: Keep the log
         if: always()
