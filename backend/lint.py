@@ -52,7 +52,13 @@ clean = strip_comments(source)
 # ------------------------------------------------------------------ inventory
 
 TYPES = set(re.findall(r"create type\s+(\w+)\s+as enum", clean, re.I))
-FUNCTIONS = set(re.findall(r"create or replace function\s+(\w+)\s*\(", clean, re.I))
+# Schema-qualified now: the RLS helpers live in `private`, so that PostgREST has
+# no route to call them as RPC endpoints. Match either spelling and index the bare
+# name, which is how policies and triggers refer to them.
+FUNCTIONS = set(
+    name.split(".")[-1]
+    for name in re.findall(r"create or replace function\s+([\w.]+)\s*\(", clean, re.I)
+)
 VIEWS = set(re.findall(r"create or replace view\s+(\w+)", clean, re.I))
 
 BUILTIN = {
@@ -151,7 +157,7 @@ for table, cols in re.findall(r"create index\s+\w+\s+on\s+(\w+)\s*\(([^)]*)\)",
               "index on %s names unknown column '%s'" % (table, col))
 
 # 6. Functions called inside policies were defined.
-called = set(re.findall(r"\b(arch_\w+)\s*\(", clean))
+called = set(re.findall(r"\b(?:private\.)?(arch_\w+)\s*\(", clean))
 for fn in called:
     check(fn in FUNCTIONS, "policy calls undefined function '%s'" % fn)
 
