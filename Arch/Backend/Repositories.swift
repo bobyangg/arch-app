@@ -358,10 +358,19 @@ enum ArchBackend {
         let messagesBy = Dictionary(grouping: messages, by: \.conversationId)
 
         return rows.compactMap { row in
-            // A profile that will not load is a person who has deleted their
+            // A profile that will not load is somebody who has deleted their
             // account. The thread stays, because the words they said are still
             // yours to read; it simply has nowhere to go.
-            guard let person = byID[row.other(than: me)] else { return nil }
+            //
+            // This used to `return nil`, which made the thread vanish from the
+            // list — the exact opposite of the sentence above it, and of what
+            // `delete_account` goes to trouble to guarantee. It is also why the
+            // placeholder has to look like every other ended thread: leaving,
+            // blocking and deleting are required to be indistinguishable from this
+            // side, and a thread that disappeared only on deletion would say which
+            // of the three had happened.
+            let person = byID[row.other(than: me)]
+                ?? Person.departed(id: row.other(than: me))
             return row.conversation(with: person,
                                     messages: messagesBy[row.id] ?? [],
                                     me: me)

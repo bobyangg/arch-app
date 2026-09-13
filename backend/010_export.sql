@@ -1,0 +1,29 @@
+-- Arch: a copy of everything Arch holds about you.
+--
+-- A zip: `index.html` anybody can open and read, the same content as JSON for
+-- anybody who wants to machine-read it, and the photographs. Both audiences are
+-- real -- the person who is curious what an app knows about them, and the person
+-- exercising a right -- and JSON alone serves only the second.
+--
+-- Applied as migration `data_export`.
+--
+-- **`private.export_payload` is in SQL rather than only in the exporter, because
+-- this is the dangerous part.** The exporter runs with the service key, which
+-- bypasses every policy that keeps the app's promises, so the one place those
+-- promises can be broken silently is a `select` written in a hurry inside it.
+-- As a function it can be tested, and it is:
+--
+--   * no `dismissals` where you are the other party. Who dismissed you is the one
+--     thing the app promises never to reveal, and an export is as good a way to
+--     find out as a screen would be.
+--   * no `blocks` where you are the blocked party. Same promise.
+--   * no `pairings.score`. Arch shows no percentages and no ranking anywhere; an
+--     export is a wire like any other.
+--   * no `reports`, including ones you filed. Reporting is not a ticket to track.
+--   * no other profile beyond a name. Five people a night for a year, with
+--     profiles attached, is a dossier rather than your data.
+--
+-- `export_one_live` is a partial unique index, so "Requested" on the screen is a
+-- fact about the server rather than a local flag that forgets itself.
+--
+-- Still to build: the exporter itself, which needs somewhere to send the mail.

@@ -1,0 +1,34 @@
+-- Arch: the one notification.
+--
+-- Somebody wrote to you. That is the whole list -- no morning-roster notification,
+-- nothing telling anybody to come back.
+--
+-- It carries the sender's name and what they wrote, so a reader can tell whether
+-- it needs them now without opening the app. A vague "someone wrote to you" would
+-- be more private in one narrow sense and worse in every other: it is a curiosity
+-- gap, which is the engagement pattern the rest of this app refuses. iOS already
+-- lets anybody hide previews per app, so where that line sits stays the reader's
+-- choice rather than one Arch makes for them.
+--
+-- Applied as migration `push_outbox`. The full text of the trigger and the
+-- push_outbox table is deployed; the two design points worth keeping in front of a
+-- reader are:
+--
+-- **The name is frozen at insert, not resolved at send.** If the sender deletes
+-- their account in between, `delete_account` has already dropped their profile and
+-- a send-time lookup would produce a nameless notification -- for exactly the
+-- readers who most need the name. Verified: the title survives the sender's
+-- account being deleted in the same transaction.
+--
+-- **Nothing is written at all when notifications are off.** Not written-and-
+-- skipped. A row that exists is a record of who was told what, and Arch does not
+-- keep one it has no use for.
+--
+-- **An outbox rather than a call out of the trigger.** pg_net is beta, POST-and-
+-- JSON only, and a request that fails inside a trigger either rolls back the
+-- message or is lost without trace. A row committed alongside the message means a
+-- delivered message always has a queued notification, and a sweep retries the rest.
+--
+-- Still to build: the APNs sender itself, which needs APNS_KEY_ID and APNS_KEY
+-- from an Apple developer account. Until those exist, push_outbox fills and
+-- nothing drains it -- which is visible rather than silent.

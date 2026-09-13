@@ -31,6 +31,36 @@ struct Photo: Identifiable, Hashable {
     var state: PhotoState = .approved
 }
 
+extension Person {
+    /// Somebody whose account is gone.
+    ///
+    /// Their words stay — what was said to you was said to you, and `delete_account`
+    /// leaves the messages exactly where they are. What goes is the profile, so
+    /// there is a name-shaped hole where the person used to be.
+    ///
+    /// It renders like **every** ended thread rather than like a special case.
+    /// Leaving, blocking and deleting an account have to be indistinguishable from
+    /// the other side; a thread that looked different only on deletion would tell
+    /// the reader which of the three had happened, and that is the one thing the
+    /// design promises it will not.
+    static func departed(id: String) -> Person {
+        Person(
+            id: id,
+            name: "",
+            age: 0,
+            place: nil,
+            height: "",
+            work: "",
+            photos: [],
+            prompts: [],
+            interests: []
+        )
+    }
+
+    /// Whether there is a profile behind this person any more.
+    var hasDeparted: Bool { name.isEmpty }
+}
+
 /// Where a photograph is in moderation. Mirrors the `photo_state` enum in
 /// `backend/001_schema.sql` — the spellings have to match, because they are
 /// compared across the wire.
@@ -616,6 +646,15 @@ struct SettingsSection: Identifiable, Hashable {
     let id: String
     let title: String
     let rows: [SettingsRow]
+    /// A line under the group saying what it actually does.
+    ///
+    /// `SettingNote` states the rule for a detail page -- every setting gets an
+    /// explanation, because a switch with no explanation is a switch people leave
+    /// alone. A toggle row has no detail page to put one on, so the Messages
+    /// switch was the single setting in the app breaking that rule. The note goes
+    /// under the group rather than under the row: one section, one note, and the
+    /// row still only toggles and never pushes.
+    var note: String? = nil
 }
 
 // MARK: - Content

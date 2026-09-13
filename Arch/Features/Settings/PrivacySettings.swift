@@ -69,6 +69,19 @@ struct BlockedSetting: View {
 }
 
 /// A copy of everything Arch holds.
+///
+/// **A zip, not a single file.** `index.html` anybody can open and read, the same
+/// content as JSON for anybody who wants to machine-read it, and the photographs
+/// themselves. The two audiences for this are the person who is curious about what
+/// an app knows about them and the person exercising a right, and JSON alone
+/// serves only the second while a web page alone is not really an export.
+///
+/// What it deliberately leaves out is the more interesting half, and it lives in
+/// `private.export_payload` where it can be tested rather than in the exporter
+/// where it would be a `select` written in a hurry: no compatibility score, no
+/// record of who dismissed or blocked you, no reports, and no profile of anybody
+/// else beyond their name. A year of rosters with profiles attached is a dossier,
+/// not your data.
 struct DataSetting: View {
     let store: SettingsStore
     @State private var requested = false
@@ -86,12 +99,27 @@ struct DataSetting: View {
                 line("Who has been in \(store.rosterName), and when.")
             }
 
-            SettingNote("Sent as a file to \(store.email). It usually takes a few minutes and never more than 30 days.")
+            SettingNote(store.email.isEmpty
+                // Apple sends the address on the first authorization only, and
+                // deleting an account clears it. Promising delivery to an address
+                // that is not on file would be a lie the screen tells confidently.
+                ? "Arch has no email address for you, so there is nowhere to send this. Adding one in Account makes it possible."
+                : "A zip, sent to \(store.email): a page you can read, the same thing as JSON, and your photos. It usually takes a few minutes and never more than 30 days.")
 
             ArchButton(title: requested ? "Requested" : "Request my data",
                        kind: .quiet,
-                       isEnabled: !requested) {
+                       isEnabled: !requested && !store.email.isEmpty) {
                 requested = true
+            }
+
+            if requested {
+                // One live request at a time, which the server enforces with a
+                // partial unique index rather than trusting this flag.
+                Text("One person’s data is built at a time. Asking again before it arrives does not make it faster.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
