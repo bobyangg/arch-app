@@ -30,7 +30,6 @@ struct OnboardingFlowView: View {
                     onSignIn: { identity in
                         Task { await signIn(identity) }
                     },
-                    externalProblem: problem,
                     demoSignIn: ArchConfig.isConfigured ? nil : {
                         store.apply(
                             AppleIdentity(
@@ -39,7 +38,8 @@ struct OnboardingFlowView: View {
                             )
                         )
                         showingWelcome = false
-                    }
+                    },
+                    externalProblem: problem
                 )
                     .transition(.opacity)
             } else {
