@@ -1,16 +1,19 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Roster — full</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
 <style>
 :root{
-  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
-  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B; --verdigris:#4E8C7D;
-  --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
-  --lampQuiet:rgba(240,164,75,.45);
-  --serif: ui-serif, "New York", Georgia, serif;
-  --sans: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D; --verdigris:#7FA98F;
+  --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+  --lampQuiet:rgba(229,113,77,.45);
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
-body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
+body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
 .phone{width:393px; height:1500px; background:var(--night); overflow:hidden; position:relative;}
 .scroll{padding:0 20px; height:100%; }
 .safetop{height:60px;}
@@ -84,26 +87,26 @@ body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
 <div class="archwrap"><svg data-arch="5"></svg></div>
 <div class="hairline" style="margin-bottom:24px"></div>
   <div class="card">
-    <div class="photo3x4" style="background:linear-gradient(#29313C,#232A34);"></div>
+    <div class="photo3x4" style="background:linear-gradient(#2F3138,#282A30);"></div>
     <div class="namerow"><div class="t-titleM">Nadia</div><div class="x">&#10005;</div></div>
     <div class="vitals"><div class="vital">29</div><div class="vital">Gowanus</div><div class="vital">5 ft 7</div><div class="vital">Structural engineer</div></div>
   </div>
 
   <div class="card">
-    <div class="photo3x4" style="background:linear-gradient(#443329,#3B2C23);"></div>
+    <div class="photo3x4" style="background:linear-gradient(#46332A,#3D2C24);"></div>
     <div class="namerow"><div class="t-titleM">Teo</div><div class="x">&#10005;</div></div>
     <div class="vitals"><div class="vital">33</div><div class="vital">Ridgewood</div><div class="vital">6 ft</div><div class="vital">Pastry cook</div></div>
   </div>
 
   <div class="card">
-    <div class="photo3x4" style="background:linear-gradient(#2B3733,#25302C);"></div>
+    <div class="photo3x4" style="background:linear-gradient(#2C3630,#262F2A);"></div>
     <div class="namerow"><div class="t-titleM">Priya</div><div class="x">&#10005;</div></div>
     <div class="vitals"><div class="vital">27</div><div class="vital">Crown Heights</div><div class="vital">5 ft 4</div><div class="vital">Restores film cameras</div></div>
   </div>
 
 </div></div>
 <script>
-const C={limestone:'#EDE7DD', mortar:'#8D949E', lamp:'#F0A44B'};
+const C={limestone:'#F5EFE6', mortar:'#9A8F86', lamp:'#E5714D'};
 function pt(cx,cy,r,deg){const a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
 function segPath(cx,cy,a0,a1,ro,ri){
   const [x0,y0]=pt(cx,cy,ro,a0), [x1,y1]=pt(cx,cy,ro,a1);
@@ -120,7 +123,7 @@ function drawArch(el, W, filled, capacity){
     const p=document.createElementNS('http://www.w3.org/2000/svg','path');
     p.setAttribute('d', segPath(cx,cy,a0,a1,base,base-thickness));
     if(i<filled){ p.setAttribute('fill', C.lamp); }
-    else { p.setAttribute('fill','none'); p.setAttribute('stroke','rgba(141,148,158,.30)');
+    else { p.setAttribute('fill','none'); p.setAttribute('stroke','rgba(154,143,134,.30)');
            p.setAttribute('stroke-width','1'); }
     el.appendChild(p);
   }

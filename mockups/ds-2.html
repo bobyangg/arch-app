@@ -4,16 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Arch — design system</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
 <style>
   :root{
-    --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
-    --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B; --verdigris:#4E8C7D;
-    --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
-    --serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
-    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+    --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D; --verdigris:#7FA98F;
+    --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+    --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+    --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
   }
   *{box-sizing:border-box; margin:0; padding:0;}
-  body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
+  body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
   
   .phone{width:393px; height:852px; background:var(--night); overflow:hidden; position:relative;}
   .screen{padding:0 20px 24px; height:100%; overflow:hidden;}
@@ -38,7 +41,7 @@
 
   /* palette */
   .sw{display:flex; align-items:center; gap:16px; padding:8px 0;}
-  .chip{width:56px; height:40px; border-radius:6px; flex:none; box-shadow:inset 0 0 0 .5px rgba(141,148,158,.22);}
+  .chip{width:56px; height:40px; border-radius:6px; flex:none; box-shadow:inset 0 0 0 .5px rgba(154,143,134,.22);}
   .sw .n{font-size:15px; font-weight:600;}
   .sw .u{font-size:13px; color:var(--mortar);}
   .sw .h{margin-left:auto; font-size:12px; color:var(--mortar); font-variant-numeric:tabular-nums;}
@@ -96,18 +99,18 @@
   </div></div>
 <script>
 const $ = (id)=>document.getElementById(id);
-const C = {night:'#0F1319', stone:'#171C24', stoneRaised:'#212832', limestone:'#EDE7DD',
-           mortar:'#8D949E', lamp:'#F0A44B', verdigris:'#4E8C7D'};
+const C = {night:'#191715', stone:'#232120', stoneRaised:'#2E2B29', limestone:'#F5EFE6',
+           mortar:'#9A8F86', lamp:'#E5714D', verdigris:'#7FA98F'};
 
 /* ---------- palette ---------- */
 const tokens = [
-  ['night','#0F1319','App background'],
-  ['stone','#171C24','Cards, sheets, incoming bubbles'],
-  ['stoneRaised','#212832','Elevated, tab bar, outgoing'],
-  ['limestone','#EDE7DD','Primary text'],
-  ['mortar','#8D949E','Secondary text, dividers'],
-  ['lamp','#F0A44B','Action, active tab, premium'],
-  ['verdigris','#4E8C7D','Connection only'],
+  ['night','#191715','App background'],
+  ['stone','#232120','Cards, sheets, incoming bubbles'],
+  ['stoneRaised','#2E2B29','Elevated, tab bar, outgoing'],
+  ['limestone','#F5EFE6','Primary text'],
+  ['mortar','#9A8F86','Secondary text, dividers'],
+  ['lamp','#E5714D','Action, active tab, premium'],
+  ['verdigris','#7FA98F','Connection only'],
 ];
 if($('palette')) $('palette').innerHTML = tokens.map(([n,h,u]) =>
   `<div class="sw"><div class="chip" style="background:${h}"></div>
@@ -116,8 +119,10 @@ if($('palette')) $('palette').innerHTML = tokens.map(([n,h,u]) =>
 
 /* ---------- arch mark (identical proportions to ArchMark.swift) ---------- */
 function archMarkPath(W, sw){
-  const r = 0.42*W, cx = W/2, cy = 0.59*W, foot = 0.90*W;
-  return `M0,0 H${W} M${cx-r},${foot} V${cy} A${r},${r} 0 0 1 ${cx+r},${cy} V${foot}`;
+  const f = (n) => n*W;
+  return `M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
+       + ` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+       + ` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
 }
 function drawMark(el, W, sw, color){
   const p = document.createElementNS('http://www.w3.org/2000/svg','path');
@@ -154,8 +159,8 @@ function drawArch(el, W, completed, current, opts){
     path.setAttribute('d', segPath(cx,cy,a0,a1,ro,ri));
     const done = i < completed;
     path.setAttribute('fill', done ? (opts.connected ? C.verdigris : C.lamp) : C.stoneRaised);
-    if(i===current){ path.setAttribute('stroke', 'rgba(240,164,75,.45)'); path.setAttribute('stroke-width','1'); }
-    if(proud && completed>=count){ path.setAttribute('stroke','rgba(237,231,221,.15)'); path.setAttribute('stroke-width','1'); }
+    if(i===current){ path.setAttribute('stroke', 'rgba(229,113,77,.45)'); path.setAttribute('stroke-width','1'); }
+    if(proud && completed>=count){ path.setAttribute('stroke','rgba(245,239,230,.15)'); path.setAttribute('stroke-width','1'); }
     el.appendChild(path);
   }
 }

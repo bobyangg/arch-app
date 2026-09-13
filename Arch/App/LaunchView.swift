@@ -2,9 +2,9 @@ import SwiftUI
 
 /// The launch screen.
 ///
-/// The mark draws itself once — the span rises, then the deck lands across it,
-/// which is the order an arch bridge is actually built in. Then the wordmark
-/// arrives and the app opens. It happens once per launch and never repeats.
+/// The mark draws itself once — the piers rise, then the deck lands across them,
+/// which is the order a bridge is actually built in. Then the word arrives and the
+/// app opens. It happens once per launch and never repeats.
 ///
 /// Under Reduce Motion the mark is simply there, held briefly, with nothing drawn.
 struct LaunchView: View {
@@ -14,29 +14,13 @@ struct LaunchView: View {
     @State private var wordmarkOpacity: Double = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    private let stroke: CGFloat = 4
-
     var body: some View {
         ZStack {
             ArchColor.night
                 .ignoresSafeArea()
 
-            VStack(spacing: ArchSpacing.l) {
-                ArchMark(lineWidth: stroke, trim: drawn)
-                    .stroke(
-                        ArchColor.lamp,
-                        style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
-                    )
-                    .frame(width: 96, height: 87)
-
-                Text("Arch")
-                    .archText(.display)
-                    .foregroundStyle(ArchColor.limestone)
-                    .opacity(wordmarkOpacity)
-            }
+            ArchWordmark(markWidth: 104, drawn: drawn, wordOpacity: wordmarkOpacity)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Arch")
         .task { await open() }
     }
 
@@ -57,7 +41,12 @@ struct LaunchView: View {
     }
 }
 
-#Preview("Launch") {
+#Preview("Launch, dark") {
     LaunchView(onFinish: {})
         .preferredColorScheme(.dark)
+}
+
+#Preview("Launch, light") {
+    LaunchView(onFinish: {})
+        .preferredColorScheme(.light)
 }

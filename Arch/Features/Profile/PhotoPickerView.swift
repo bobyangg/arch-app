@@ -160,7 +160,7 @@ struct PhotoPickerView: View {
     private func orderMark(_ number: Int) -> some View {
         Text("\(number)")
             .archText(.badge)
-            .foregroundStyle(ArchColor.night)
+            .foregroundStyle(ArchColor.onLamp)
             .frame(width: 22, height: 22)
             .background(Circle().fill(ArchColor.lamp))
             .padding(ArchSpacing.xxs)

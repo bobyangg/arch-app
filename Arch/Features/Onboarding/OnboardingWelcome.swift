@@ -20,17 +20,7 @@ struct OnboardingWelcome: View {
         VStack(alignment: .leading, spacing: 0) {
             Spacer()
 
-            ArchMark(lineWidth: 4)
-                .stroke(
-                    ArchColor.lamp,
-                    style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round)
-                )
-                .frame(width: 84, height: 76)
-
-            Text("Arch")
-                .archText(.display)
-                .foregroundStyle(ArchColor.limestone)
-                .padding(.top, ArchSpacing.m)
+            ArchWordmark(markWidth: 84)
 
             Spacer()
 

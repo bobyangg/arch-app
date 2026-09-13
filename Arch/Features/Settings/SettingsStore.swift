@@ -44,6 +44,19 @@ final class SettingsStore {
     var visibility = "Anyone Arch picks me for"
     var blocked: [String] = []
 
+    // Appearance
+
+    /// Light, dark, or whatever the phone is doing.
+    ///
+    /// Written straight back to `UserDefaults`, because the app root reads the same
+    /// key through `@AppStorage` and there is no store between them — onboarding and
+    /// the removal screen are outside this object's reach but inside the app's.
+    var theme: ArchTheme = ArchTheme(
+        rawValue: UserDefaults.standard.string(forKey: ArchTheme.storageKey) ?? ""
+    ) ?? .system {
+        didSet { UserDefaults.standard.set(theme.rawValue, forKey: ArchTheme.storageKey) }
+    }
+
     /// Five to a hundred, and the top of the slider means anywhere.
     ///
     /// It started at one mile, which promised a precision Arch does not have and
@@ -106,6 +119,9 @@ final class SettingsStore {
                 .init(id: "a-delete", title: "Delete your account", control: .push)
             ]),
             SettingsSection(id: "notifications", title: "Notifications", rows: notifications),
+            SettingsSection(id: "appearance", title: "Appearance", rows: [
+                .init(id: "x-theme", title: "Light and dark", detail: theme.title, control: .push)
+            ]),
             SettingsSection(id: "discovery", title: "Discovery", rows: [
                 .init(id: "d-seeking", title: "Who you want to meet", detail: seekingText, control: .push),
                 .init(id: "d-distance", title: "Distance", detail: distanceText, control: .push),

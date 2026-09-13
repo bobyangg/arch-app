@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct ArchApp: App {
+    /// The reader's appearance choice, read straight from defaults rather than
+    /// handed down through the view tree — onboarding, the tabs and the removal
+    /// screen are three different roots, and all three have to honour it.
+    @AppStorage(ArchTheme.storageKey) private var theme: ArchTheme = .system
     @State private var hasLaunched = false
     /// Nil until onboarding hands one over. There is no way into the app without
     /// finishing it, which is what keeps a live profile from being half-empty.
@@ -56,9 +60,9 @@ struct ArchApp: App {
                         .transition(.opacity)
                 }
             }
-            // Arch is a dark app. There is no light variant and nothing here is
-            // designed to survive one.
-            .preferredColorScheme(.dark)
+            // Arch has two appearances and one palette. `system` passes nil, which
+            // hands the decision back to iOS — the case almost everybody is in.
+            .preferredColorScheme(theme.colorScheme)
         }
     }
 }

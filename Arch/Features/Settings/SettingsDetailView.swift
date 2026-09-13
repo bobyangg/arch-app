@@ -81,6 +81,7 @@ struct SettingsDetailView: View {
         case "a-premium":  PremiumSetting(store: store, onOpen: onOpenPremium)
         case "a-delete":   DeleteAccountSetting(store: store, onDelete: onDeleteAccount)
         case "n-blocked":  NotificationsBlockedSetting(store: store)
+        case "x-theme":    AppearanceSetting(store: store)
         case "d-seeking":  SeekingSetting(store: store)
         case "d-distance": DistanceSetting(store: store)
         case "d-age":      AgeSetting(store: store)

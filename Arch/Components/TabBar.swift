@@ -57,7 +57,14 @@ private struct TabBarItem: View {
     let badge: Int
     let action: () -> Void
 
-    private var tint: Color { isActive ? ArchColor.lamp : ArchColor.mortar }
+    /// Premium's keystone lights amber, every other tab terracotta. The palette has
+    /// two accents and this is the seam between them: amber marks the thing you can
+    /// buy, terracotta the things you do. Inactive is `mortar` for all four, so the
+    /// bar still reads as one set at rest.
+    private var tint: Color {
+        guard isActive else { return ArchColor.mortar }
+        return tab == .premium ? ArchColor.ember : ArchColor.lamp
+    }
     private var weight: CGFloat { isActive ? 2.25 : ArchSpacing.glyphStroke }
 
     var body: some View {
@@ -117,7 +124,7 @@ struct UnreadBadge: View {
     var body: some View {
         Text("\(count)")
             .archText(.badge)
-            .foregroundStyle(ArchColor.night)
+            .foregroundStyle(ArchColor.onLamp)
             .padding(.horizontal, count > 9 ? 5 : 0)
             .frame(minWidth: 16, minHeight: 16)
             .background(Capsule().fill(ArchColor.lamp))

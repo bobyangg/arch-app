@@ -32,12 +32,15 @@ private func roundedPolygon(_ points: [CGPoint], radius: CGFloat) -> Path {
 
 // MARK: - The mark
 
-/// The Arch mark: a horizontal deck spanning a semicircular arch, reduced to two
-/// strokes and nothing else. The deck overhangs the arch on both sides, the way a
-/// bridge deck actually sits on its span.
+/// The Arch mark: a letter A whose apex has been flattened into a bridge deck,
+/// drawn as three strokes and nothing else. The deck bows upward and overhangs its
+/// piers; the piers splay outward the way a real one carries load to the ground.
 ///
-/// One shape does five jobs — wordmark, launch animation, Daily 5 tab icon, app
-/// icon, empty-state illustration — so the mark is never redrawn slightly
+/// It is one shape at every weight rather than two marks. Stroked at 1.75pt it is
+/// the Daily 5 tab glyph; stroked at 12pt it is the chunky terracotta mark on the
+/// brand board, where the round caps do the work that a filled outline would
+/// otherwise have to. So one shape does five jobs — wordmark, launch animation, tab
+/// icon, app icon, empty-state illustration — and is never redrawn slightly
 /// differently somewhere else in the app.
 struct ArchMark: Shape {
     /// The stroke the caller will apply. The path insets itself by half of it so
@@ -48,12 +51,21 @@ struct ArchMark: Shape {
     var trim: CGFloat = 1
 
     /// Intrinsic proportion of the mark: height as a fraction of width.
-    static let aspect: CGFloat = 0.90
+    ///
+    /// Equal to `baseline`, because the deck's crown sits exactly on the top edge
+    /// of the box. Move one and the mark stops being centred in its frame.
+    static let aspect: CGFloat = 0.64
 
-    // Proportions, all fractions of the mark's width.
-    private static let archRadius: CGFloat = 0.42
-    private static let crownGap: CGFloat = 0.17
-    private static let baseline: CGFloat = 0.90
+    // Proportions, all fractions of the mark's width, measured down from the crown.
+    /// How far the deck's ends fall below the crown of its bow. This is the whole
+    /// curve of the deck: enough to read as a span, not enough to read as a dome.
+    private static let deckEnd: CGFloat = 0.07
+    /// How far the deck overhangs past the piers, each side.
+    private static let deckInset: CGFloat = 0.03
+    /// Where a pier meets the deck, and where it lands.
+    private static let pierTop: CGFloat = 0.33
+    private static let pierFoot: CGFloat = 0.19
+    private static let baseline: CGFloat = 0.64
 
     var animatableData: CGFloat {
         get { trim }
@@ -72,36 +84,82 @@ struct ArchMark: Shape {
             x: available.midX - width / 2,
             y: available.midY - height / 2
         )
+        func x(_ fraction: CGFloat) -> CGFloat { origin.x + width * fraction }
+        func y(_ fraction: CGFloat) -> CGFloat { origin.y + width * fraction }
 
-        let radius = width * Self.archRadius
-        let centre = CGPoint(
-            x: origin.x + width / 2,
-            y: origin.y + width * (Self.crownGap + Self.archRadius)
-        )
-        let footY = origin.y + width * Self.baseline
+        let footY = y(Self.baseline)
+        // The piers meet the deck above its ends, so the strokes overlap and the
+        // joint closes itself at any weight rather than showing a seam at large ones.
+        let springY = y(Self.deckEnd - 0.02)
 
         var path = Path()
 
-        // Subpath order matters only when `trim` is animating: the arch is drawn
-        // first and the deck lands across it, which is the order an arch bridge is
-        // actually built in.
+        // Subpath order matters only when `trim` is animating: the piers rise and
+        // the deck lands across them, which is the order a bridge is actually built
+        // in. Drawing the deck first would be a deck floating on nothing.
 
-        // The arch: left pier, span, right pier.
-        path.move(to: CGPoint(x: centre.x - radius, y: footY))
-        path.addLine(to: CGPoint(x: centre.x - radius, y: centre.y))
-        path.addRelativeArc(
-            center: centre,
-            radius: radius,
-            startAngle: .degrees(180),
-            delta: .degrees(180)
+        // Left pier. The control sits inboard of the chord, so the pier leaves the
+        // deck almost upright and does its splaying near the ground — a leg taking
+        // weight, rather than a compass opening.
+        path.move(to: CGPoint(x: x(Self.pierTop), y: springY))
+        path.addQuadCurve(
+            to: CGPoint(x: x(Self.pierFoot), y: footY),
+            control: CGPoint(x: x(Self.pierTop - 0.01), y: y(0.40))
         )
-        path.addLine(to: CGPoint(x: centre.x + radius, y: footY))
 
-        // The deck.
-        path.move(to: CGPoint(x: origin.x, y: origin.y))
-        path.addLine(to: CGPoint(x: origin.x + width, y: origin.y))
+        // Right pier, mirrored.
+        path.move(to: CGPoint(x: x(1 - Self.pierTop), y: springY))
+        path.addQuadCurve(
+            to: CGPoint(x: x(1 - Self.pierFoot), y: footY),
+            control: CGPoint(x: x(1 - Self.pierTop + 0.01), y: y(0.40))
+        )
+
+        // The deck, bowed so its crown sits at the top of the frame. A quadratic
+        // reaches half way to its control point, so the control goes twice as far.
+        path.move(to: CGPoint(x: x(Self.deckInset), y: y(Self.deckEnd)))
+        path.addQuadCurve(
+            to: CGPoint(x: x(1 - Self.deckInset), y: y(Self.deckEnd)),
+            control: CGPoint(x: x(0.5), y: y(-Self.deckEnd))
+        )
 
         return trim >= 1 ? path : path.trimmedPath(from: 0, to: max(0, trim))
+    }
+}
+
+// MARK: - The wordmark
+
+/// The mark over the word, which is how the brand board locks them up.
+///
+/// Lowercase, always: `arch` is a thing you build, not a proper noun shouting its
+/// own name. Body copy still calls the app Arch, because that is a sentence.
+struct ArchWordmark: View {
+    /// Width of the mark. The word is metered against it rather than given its own
+    /// size, so the lock-up holds together at any scale.
+    var markWidth: CGFloat = 96
+    var tint: Color = ArchColor.lamp
+    var wordColor: Color = ArchColor.limestone
+    /// 0...1, for the launch screen. The mark draws itself, then the word arrives.
+    var drawn: CGFloat = 1
+    var wordOpacity: Double = 1
+
+    private var stroke: CGFloat { max(2, markWidth * 0.13) }
+
+    var body: some View {
+        VStack(spacing: markWidth * 0.16) {
+            ArchMark(lineWidth: stroke, trim: drawn)
+                .stroke(
+                    tint,
+                    style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
+                )
+                .frame(width: markWidth, height: markWidth * ArchMark.aspect)
+
+            Text("arch")
+                .font(ArchTypography.font(.frauncesDisplaySemiBold, size: markWidth * 0.42))
+                .foregroundStyle(wordColor)
+                .opacity(wordOpacity)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Arch")
     }
 }
 
@@ -292,40 +350,34 @@ struct PersonGlyph: Shape {
 
 // MARK: - Previews
 
-#Preview("Arch mark") {
-    VStack(spacing: ArchSpacing.xxl) {
-        ArchMark(lineWidth: 6)
-            .stroke(
-                ArchColor.lamp,
-                style: StrokeStyle(lineWidth: 6, lineCap: .round, lineJoin: .round)
-            )
-            .frame(width: 160, height: 144)
+#Preview("Wordmark") {
+    HStack(spacing: 0) {
+        ForEach([ColorScheme.light, .dark], id: \.self) { scheme in
+            VStack(spacing: ArchSpacing.xxl) {
+                ArchWordmark(markWidth: 120)
 
-        HStack(spacing: ArchSpacing.xl) {
-            ForEach([29, 40, 60, 76], id: \.self) { size in
-                let side = CGFloat(size)
-                let stroke = max(1, side * 0.075)
-                VStack(spacing: ArchSpacing.xs) {
-                    ArchMark(lineWidth: stroke)
-                        .stroke(
-                            ArchColor.lamp,
-                            style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
-                        )
-                        .padding(side * 0.16)
-                        .frame(width: side, height: side)
-                        .background(ArchColor.stone)
-                        .clipShape(RoundedRectangle(cornerRadius: side * 0.22))
-                    Text("\(size)pt")
-                        .archText(.caption)
-                        .foregroundStyle(ArchColor.mortar)
+                HStack(spacing: ArchSpacing.m) {
+                    ForEach([29, 40, 60, 76], id: \.self) { size in
+                        let side = CGFloat(size)
+                        let stroke = max(1, side * 0.11)
+                        ArchMark(lineWidth: stroke)
+                            .stroke(
+                                ArchColor.lamp,
+                                style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
+                            )
+                            .padding(side * 0.18)
+                            .frame(width: side, height: side)
+                            .background(ArchColor.stone)
+                            .clipShape(RoundedRectangle(cornerRadius: side * 0.22))
+                    }
                 }
             }
+            .padding(ArchSpacing.l)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(ArchColor.night)
+            .environment(\.colorScheme, scheme)
         }
     }
-    .padding(ArchSpacing.screenMargin)
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .background(ArchColor.night)
-    .preferredColorScheme(.dark)
 }
 
 #Preview("Glyphs") {
@@ -343,5 +395,4 @@ struct PersonGlyph: Shape {
     .padding(ArchSpacing.xxxl)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(ArchColor.night)
-    .preferredColorScheme(.dark)
 }
