@@ -146,7 +146,12 @@ for table, info in TABLES.items():
 # 4. Every table named by a policy, an index, an ALTER or a trigger exists.
 for stmt, table in re.findall(r"(alter table)\s+(\w+)", clean, re.I):
     check(table in TABLES, "alter table names unknown table '%s'" % table)
-for table in re.findall(r"create policy\s+\w+\s+on\s+(\w+)", clean, re.I):
+for table in re.findall(r"create policy\s+\w+\s+on\s+([\w.]+)", clean, re.I):
+    # `storage.objects` is Supabase's own table, not one of ours -- and the
+    # unqualified pattern captured `storage` from it and then reported that as a
+    # missing table. Anything schema-qualified belongs to somebody else.
+    if "." in table:
+        continue
     check(table in TABLES, "policy names unknown table '%s'" % table)
 for table in re.findall(r"create index\s+\w+\s+on\s+(\w+)", clean, re.I):
     check(table in TABLES, "index names unknown table '%s'" % table)
