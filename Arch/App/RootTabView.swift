@@ -10,15 +10,6 @@ struct RootTabView: View {
     /// Built by onboarding and handed over, so the profile you filled in is the
     /// one the You tab edits.
     let profile: ProfileStore
-    /// What iOS answered when onboarding asked. Seeded here so "Not now" is
-    /// reflected in Settings from the first launch rather than the second.
-    var allowsNotifications: Bool = true
-    /// Deleting an account puts you back where you came from.
-    var onDeleteAccount: () -> Void = {}
-    /// Not the same thing as deleting, even though both land in the same place:
-    /// with no password, signing in *is* entering your number, so the way back in
-    /// is the screen a new account starts on.
-    var onSignOut: () -> Void = {}
 
     /// Injected by `ArchApp`, which owns them so that a reload after a dropped
     /// connection refreshes what is already on screen rather than replacing the
@@ -30,6 +21,16 @@ struct RootTabView: View {
     /// parent, and the store would be new each time.
     var injectedDaily: DailyFiveStore?
     var injectedSettings: SettingsStore?
+
+    /// What iOS answered when onboarding asked. Seeded here so "Not now" is
+    /// reflected in Settings from the first launch rather than the second.
+    var allowsNotifications: Bool = true
+    /// Deleting an account puts you back where you came from.
+    var onDeleteAccount: () -> Void = {}
+    /// Not the same thing as deleting, even though both land in the same place:
+    /// with no password, signing in *is* entering your number, so the way back in
+    /// is the screen a new account starts on.
+    var onSignOut: () -> Void = {}
 
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()

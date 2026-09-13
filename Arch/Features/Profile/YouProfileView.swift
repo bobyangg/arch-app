@@ -99,7 +99,7 @@ struct YouProfileView: View {
 
             Spacer(minLength: 0)
 
-            Button { path.append(.arrange) } label: {
+            Button { path.append(Route.arrange) } label: {
                 Text("Arrange")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
@@ -207,7 +207,7 @@ struct YouProfileView: View {
                 // rather than opening a second, half-capable photo editor.
                 PhotoCard(
                     photo: photo,
-                    affordance: .edit(action: { path.append(.arrange) }),
+                    affordance: .edit(action: { path.append(Route.arrange) }),
                     position: photoPosition(photo)
                 )
             case .prompt(let prompt):
