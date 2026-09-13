@@ -25,7 +25,7 @@ import sys
 import sqlparse
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-FILES = ["001_schema.sql", "002_policies.sql"]
+FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql"]
 
 problems = []
 notes = []
@@ -184,6 +184,36 @@ policed = set(re.findall(r"create policy\s+\w+\s+on\s+(\w+)", clean, re.I))
 for table in rls:
     if table not in policed and table not in SEALED:
         notes.append("%s: RLS on and no policy -- nothing can read it" % table)
+
+
+# 11. `insert into t (a, b, c)` names real columns, and the VALUES list is the
+#     same length. Column order against a SELECT is not checkable by name -- an
+#     insert whose select list is in the wrong order is perfectly well-formed --
+#     but a count mismatch is the cheap half of that bug and worth catching.
+for table, cols, values in re.findall(
+        r"insert into\s+(\w+)\s*\(([^)]*)\)\s*values\s*\(([^;]*?)\)\s*(?:on conflict|returning|;)",
+        clean, re.I | re.S):
+    if table not in TABLES:
+        check(False, "insert into unknown table '%s'" % table)
+        continue
+    names = [c.strip() for c in cols.split(",") if c.strip()]
+    for col in names:
+        check(col in TABLES[table]["columns"],
+              "insert into %s names unknown column '%s'" % (table, col))
+    # Only count when the VALUES list has no nested call that could hide a comma.
+    if "(" not in values:
+        supplied = len([v for v in values.split(",") if v.strip()])
+        check(supplied == len(names),
+              "insert into %s lists %d columns but supplies %d values"
+              % (table, len(names), supplied))
+
+for table, cols in re.findall(r"insert into\s+(\w+)\s*\(([^)]*)\)\s*select",
+                              clean, re.I):
+    if table not in TABLES:
+        continue
+    for col in [c.strip() for c in cols.split(",") if c.strip()]:
+        check(col in TABLES[table]["columns"],
+              "insert into %s names unknown column '%s'" % (table, col))
 
 
 # -------------------------------------------------------------------- report
