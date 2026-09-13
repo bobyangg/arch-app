@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Positioning one photo inside the four-to-five frame.
+/// Positioning one photo inside the square frame.
 ///
 /// **One frame and one zoom.** No rotate, no flip, no thirds grid, no filters. The
 /// only thing that matters here is which part of the photograph ends up in the
@@ -11,7 +11,7 @@ import SwiftUI
 /// rather than cropped away, so you can see what you are leaving out — and so that
 /// dragging has something visible to do even when the picture is a flat tone.
 ///
-/// It has to exist at all because almost nothing on anybody's phone is already 4:5.
+/// It has to exist at all because almost nothing on anybody's phone is already square.
 /// The alternative is centre-cropping for people, which is how you get profiles
 /// where the first photo is somebody's forehead.
 struct PhotoCropView: View {
@@ -184,15 +184,16 @@ struct PhotoCropView: View {
 
     // MARK: Geometry
 
-    /// The 4:5 frame, as large as it can be inside the stage with a margin left
-    /// over on every side for the part of the photograph you are cutting off.
+    /// The frame, in the shape the rest of the app draws photos in, as large as it
+    /// can be inside the stage with a margin left over on every side for the part
+    /// of the photograph you are cutting off.
     private func frameSize(in stage: CGSize) -> CGSize {
         let width = min(
             stage.width - Self.inset * 2,
-            (stage.height - Self.inset * 2) * 4 / 5
+            (stage.height - Self.inset * 2) * PhotoCard.aspect
         )
         let safe = max(width, 1)
-        return CGSize(width: safe, height: safe * 5 / 4)
+        return CGSize(width: safe, height: safe / PhotoCard.aspect)
     }
 
     /// The photograph at its own shape, scaled so it covers the frame, then zoomed.
