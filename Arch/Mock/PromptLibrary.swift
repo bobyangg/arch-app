@@ -65,4 +65,20 @@ enum PromptLibrary {
     static func question(matching text: String) -> PromptQuestion? {
         all.first { $0.text == text }
     }
+
+    /// Finds a question by its id, for a profile that arrived from the server.
+    ///
+    /// Stored answers keep the *id*, not the words. Rewording a prompt is an
+    /// ordinary copy edit, and if rows held the old text every profile answered
+    /// before the edit would quietly keep asking the old question.
+    static func question(id: String) -> PromptQuestion? {
+        all.first { $0.id == id }
+    }
+
+    /// The words for a stored id, falling back to the id itself so that a prompt
+    /// retired after somebody answered it still renders something rather than an
+    /// empty heading.
+    static func text(forID id: String) -> String {
+        question(id: id)?.text ?? id
+    }
 }
