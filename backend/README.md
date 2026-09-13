@@ -7,9 +7,11 @@ promises. Everything here runs fine from Windows.
 
 | | |
 |---|---|
-| `001_schema.sql` | 20 tables, 9 enums, the constraints |
-| `002_policies.sql` | RLS, 30 policies, and the `visible_profiles` view |
-| `lint.py` | Cross-references the SQL without a database to run it against |
+| `001_schema.sql` | 20 tables, 9 enums, the constraints, the indexes |
+| `002_policies.sql` | RLS, 36 policies, the `private` helpers, the `visible_profiles` view |
+| `003_functions.sql` | `start_conversation` and `delete_account` |
+| `004_rls_test.sql` | 18 security checks, run in the SQL Editor, rolls back |
+| `lint.py` | Cross-references the SQL before it ever reaches a database |
 
 ## Status
 
@@ -43,8 +45,8 @@ Pick a region near your users (`us-east-1` for New York). Save the database
 password it gives you somewhere real; it is shown once.
 
 **2. Apply the schema.** Dashboard → SQL Editor → New query. Paste
-`001_schema.sql`, run it. Then the same for `002_policies.sql`. Order matters —
-the policies reference the tables.
+`001_schema.sql`, run it. Then `002_policies.sql`, then `003_functions.sql`.
+Order matters — each references what the one before it created.
 
 **3. Turn on Apple sign-in.** Authentication → Providers → Apple. You need, from
 [developer.apple.com](https://developer.apple.com):
@@ -92,8 +94,7 @@ bypasses RLS entirely, so everything looks readable in the dashboard whether the
 policies work or not. Setting the role to `authenticated` with a jwt claim is the
 only way these policies get exercised before a real phone does it.
 
-There is no Postgres on this machine, so the SQL has never been executed.
-`lint.py` is the partial answer:
+`lint.py` runs without a database at all:
 
 ```bash
 python backend/lint.py
@@ -101,25 +102,11 @@ python backend/lint.py
 
 It cross-references every foreign key, column type, enum, policy target, index
 column, trigger and view column, and checks RLS is enabled on all twenty tables.
-**It proves the names resolve. It does not prove a policy is correct.**
+**It proves the names resolve. It does not prove a policy is correct** — which is
+exactly the gap the leak above lived in, and why `004_rls_test.sql` exists.
 
-That needs a real database and a deliberate attempt to read what should not be
-readable. Once the project exists, make two accounts and check, as account B:
-
-- [ ] B cannot read A's `questionnaire_answers` — **the one that matters most.**
-      It should return zero rows, not an error.
-- [ ] B cannot read A's `profiles` row when they are not paired and have no
-      conversation
-- [ ] B *can* read A's profile while they are paired
-- [ ] B cannot read A's row in `dismissals`, whichever way the dismissal went
-- [ ] B cannot read `device_bits` at all
-- [ ] B cannot insert a row into `pairings`
-- [ ] B cannot insert a message into a conversation whose state is `ended`
-- [ ] B cannot read `reports`, including their own
-
-A failure on the first line is the one that would matter. The questionnaire works
-because people answer it honestly, and they answer it honestly because it is shown
-to nobody.
+Re-run both after any schema change, and check the Supabase advisors too: the
+`arch_*` exposure was flagged there before the test caught it.
 
 ## What the schema refuses to let you do
 
