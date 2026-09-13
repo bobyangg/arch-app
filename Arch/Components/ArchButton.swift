@@ -64,7 +64,7 @@ struct ArchButtonStyle: ButtonStyle {
 
     private var foreground: Color {
         guard kind == .primary else { return ArchColor.mortar }
-        return isEnabled ? ArchColor.night : ArchColor.mortar
+        return isEnabled ? ArchColor.onLamp : ArchColor.mortar
     }
 }
 

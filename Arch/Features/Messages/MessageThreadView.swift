@@ -226,7 +226,7 @@ struct MessageThreadView: View {
             Button { draft = "" } label: {
                 Image(systemName: "arrow.up")
                     .archText(.subhead)
-                    .foregroundStyle(ArchColor.night)
+                    .foregroundStyle(ArchColor.onLamp)
                     .frame(width: 36, height: 36)
                     .background(Circle().fill(ArchColor.lamp))
                     .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1)

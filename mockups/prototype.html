@@ -1,25 +1,59 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Arch Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
 <style>
 :root{
-  /* The Arch palette, verbatim. */
-  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
-  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B; --verdigris:#4E8C7D;
-  --hairline:rgba(141,148,158,.12);
-  --quiet:rgba(141,148,158,.20);
-  --lampQuiet:rgba(240,164,75,.45);
-  --selected:rgba(237,231,221,.30);
-  --surround:#05070A;
+  /* Candlelight: the light appearance, and the one the tokens default to.
+     Dark overrides the same names below, so nothing downstream knows which
+     world it is in — exactly as ArchColor.swift works. */
+  --night:#FAF6F0; --stone:#FFFFFF; --stoneRaised:#F2ECE2;
+  --limestone:#232120; --mortar:#6F675F;
+  --lamp:#C9512F; --ember:#A9661A; --verdigris:#3F7359;
+  --onLamp:#FAF6F0;
+  --hairline:rgba(111,103,95,.16);
+  --quiet:rgba(111,103,95,.28);
+  --lampQuiet:rgba(201,81,47,.45);
+  --selected:rgba(35,33,32,.30);
+  --surround:#EDE4D8;
 
-  /* New York on Apple devices; Source Serif 4 everywhere else. */
-  --serif: ui-serif, "New York", "Source Serif 4", Georgia, serif;
-  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  --tone0a:#E4E0DA; --tone0b:#DAD5CE;
+  --tone1a:#EDDDCE; --tone1b:#E4D2C0;
+  --tone2a:#DFE3D8; --tone2b:#D4DACC;
+  --tone3a:#E6E2DC; --tone3b:#DCD7D0;
+  --tone4a:#F2DFCD; --tone4b:#E9D2BB;
+  --tone5a:#EFE9DE; --tone5b:#E6DED1;
+
+  /* Fraunces for the brand voice, Instrument Sans for chrome. */
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
 
   --r-photo:24px; --r-card:20px; --r-control:12px; --r-sheet:28px; --r-detail:8px;
   --s-xxs:4px; --s-xs:8px; --s-s:12px; --s-m:16px; --s-l:20px;
   --s-xl:24px; --s-xxl:32px; --s-xxxl:48px;
+}
+
+/* Rich Charcoal. `system` is resolved to one of these two in script, so this is
+   the only place the dark values are written. */
+html[data-theme="dark"]{
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86;
+  --lamp:#E5714D; --ember:#F0A243; --verdigris:#7FA98F;
+  --onLamp:#1F1C1A;
+  --hairline:rgba(154,143,134,.16);
+  --quiet:rgba(154,143,134,.28);
+  --lampQuiet:rgba(229,113,77,.45);
+  --selected:rgba(245,239,230,.30);
+  --surround:#0E0D0C;
+
+  --tone0a:#2F3138; --tone0b:#282A30;
+  --tone1a:#3E332A; --tone1b:#362C24;
+  --tone2a:#2C3630; --tone2b:#262F2A;
+  --tone3a:#383A3E; --tone3b:#303236;
+  --tone4a:#46332A; --tone4b:#3D2C24;
+  --tone5a:#4A4640; --tone5b:#413E38;
 }
 *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
@@ -37,17 +71,23 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
   display:flex; flex-direction:column;
 }
 @media (min-width:460px) and (min-height:900px){
-  #device{border-radius:44px; box-shadow:0 0 0 10px #14181f, 0 30px 80px rgba(0,0,0,.7);}
+  #device{border-radius:44px; box-shadow:0 0 0 10px var(--stoneRaised), 0 30px 80px rgba(0,0,0,.28);}
 }
 @media (max-width:459px), (max-height:899px){
   #device{width:100vw; height:100dvh;}
 }
 
 /* ---- type scale ---- */
-.display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500; letter-spacing:.5px;}
-.titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
-.titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
-.prompt{font-family:var(--serif); font-size:19px; line-height:26px; font-weight:400;}
+/* WONK and SOFT off, matching the static cuts the app ships. Fraunces' own
+   defaults are a wonky black at caption size, which is not the brand. */
+.display,.titleL,.titleM,.prompt{
+  font-family:var(--serif); font-optical-sizing:auto;
+  font-variation-settings:"SOFT" 0,"WONK" 0;
+}
+.display{font-size:40px; line-height:46px; font-weight:600;}
+.titleL{font-size:30px; line-height:36px; font-weight:600;}
+.titleM{font-size:24px; line-height:30px; font-weight:600;}
+.prompt{font-size:19px; line-height:26px; font-weight:400;}
 .bodyL{font-size:20px; line-height:28px;}
 .body{font-size:17px; line-height:24px;}
 .callout{font-size:16px; line-height:22px;}
@@ -76,7 +116,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .tab[aria-selected="true"] .lbl{color:var(--lamp);}
 .glyph{width:26px; height:26px; position:relative;}
 .badge{position:absolute; top:-5px; right:-9px; min-width:16px; height:16px; border-radius:8px;
-       background:var(--lamp); color:var(--night); font-size:11px; font-weight:600;
+       background:var(--lamp); color:var(--onLamp); font-size:11px; font-weight:600;
        display:flex; align-items:center; justify-content:center; padding:0 4px;}
 
 /* ---- pieces ---- */
@@ -94,7 +134,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 
 .btn{height:52px; border-radius:var(--r-control); display:flex; align-items:center;
      justify-content:center; font-size:15px; font-weight:600; width:100%;}
-.btn.primary{background:var(--lamp); color:var(--night);}
+.btn.primary{background:var(--lamp); color:var(--onLamp);}
 .btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
 .btn.quiet{border:1px solid var(--quiet); color:var(--mortar);}
 .btntext{height:44px; display:flex; align-items:center; justify-content:center;
@@ -181,7 +221,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 
 /* ---- onboarding ---- */
 .rule{display:flex; gap:4px;}
-.seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);
+.seg{flex:1; height:2px; border-radius:1px; background:var(--quiet);
      transition:background .25s ease;}
 .seg.on{background:var(--lamp);}
 .applebtn{height:52px; border-radius:var(--r-control); background:#fff; color:#000;
@@ -195,7 +235,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 
 /* ---- the picker ---- */
 .picknum{position:absolute; top:4px; right:4px; width:22px; height:22px; border-radius:11px;
-         background:var(--lamp); color:var(--night); font-size:11px; line-height:14px;
+         background:var(--lamp); color:var(--onLamp); font-size:11px; line-height:14px;
          font-weight:600; display:flex; align-items:center; justify-content:center;}
 /* Uploading is a wait, not an event: a rule filling along the bottom edge rather
    than a spinner parked on top of the photograph. */
@@ -243,9 +283,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 
 <script>
 /* ============================ data ============================ */
-const TONES=[["#29313C","#232A34"],["#3B322A","#332B24"],["#2B3733","#25302C"],
-             ["#333941","#2C3138"],["#443329","#3B2C23"],["#4A4640","#413E38"]];
-const tone=i=>`background:linear-gradient(${TONES[i%6][0]},${TONES[i%6][1]})`;
+/* Quarry tones live in CSS rather than here, so a photograph stand-in follows the
+   appearance the same way every other surface does. */
+const tone=i=>`background:linear-gradient(var(--tone${i%6}a),var(--tone${i%6}b))`;
 
 const P=(id,name,age,placeId,h,work,photos,prompts,interests,gender,pronouns)=>
   ({id,name,age,place:placeById(placeId),h,work,photos,prompts,interests,
@@ -307,9 +347,9 @@ const PLACES=[
  ["nj-jersey-city","Jersey City","New Jersey",40.728,-74.078],
  ["nj-hoboken","Hoboken","New Jersey",40.744,-74.032],
  /* Towns, where a neighbourhood is not a thing anybody would name. */
- ["ny-beacon","Beacon","New York",41.505,-73.970],
- ["ny-hudson","Hudson","New York",42.253,-73.791],
- ["ny-new-paltz","New Paltz","New York",41.747,-74.087]
+ ["ny-beacon","Beacon","Fraunces",41.505,-73.970],
+ ["ny-hudson","Hudson","Fraunces",42.253,-73.791],
+ ["ny-new-paltz","New Paltz","Fraunces",41.747,-74.087]
 ].map(([id,name,city,lat,lon])=>({id,name,city,centre:coarse({lat,lon})}));
 
 const placeById=id=>PLACES.find(p=>p.id===id);
@@ -586,7 +626,8 @@ const S={
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
-       visibility:"Anyone Arch picks me for",blocked:[]},
+       visibility:"Anyone Arch picks me for",blocked:[],
+       theme:"Match my phone"},
   edit:null,
   report:{reason:null,block:true,sent:false},
   number:null,
@@ -631,22 +672,28 @@ function archSVG(filled,total,w,dropIndex){
     const drop=(i===dropIndex)?' class="stone-drop"':'';
     paths+=on
       ? `<path${drop} d="${d}" fill="var(--lamp)"/>`
-      : `<path d="${d}" fill="none" stroke="rgba(141,148,158,.30)" stroke-width="1"/>`;
+      : `<path d="${d}" fill="none" stroke="var(--quiet)" stroke-width="1"/>`;
   }
   return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" aria-hidden="true">${paths}</svg>`;
 }
+/* The mark: a letter A whose apex has flattened into a bridge deck. Same
+   fractions as ArchMark.swift — piers at .33 splaying to .19, deck bowed .07. */
 function markSVG(size,stroke,color){
-  const W=size-stroke, r=.42*W, cx=W/2, cy=.59*W, foot=.90*W;
-  const d=`M${cx-r},${foot} V${cy} A${r},${r} 0 0 1 ${cx+r},${cy} V${foot} M0,0 H${W}`;
-  return `<svg width="${size}" height="${size*.9}" viewBox="0 0 ${size} ${size*.9}" aria-hidden="true">
+  const W=size-stroke, A=.64, f=(x)=>x*W;
+  const d=`M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
+        +` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+        +` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
+  return `<svg width="${size}" height="${size*A+stroke}" viewBox="0 0 ${size} ${size*A+stroke}" aria-hidden="true">
     <path d="${d}" fill="none" stroke="${color}" stroke-width="${stroke}"
       stroke-linecap="round" stroke-linejoin="round"
       transform="translate(${stroke/2},${stroke/2})"/></svg>`;
 }
 
 /* ============================ tab glyphs ============================ */
+/* Premium's keystone lights amber, every other tab terracotta: the palette's two
+   accents, split between the thing you can buy and the things you do. */
 function glyph(kind,active){
-  const c=active?"var(--lamp)":"var(--mortar)", sw=active?2.25:1.75;
+  const c=active?(kind==="premium"?"var(--ember)":"var(--lamp)"):"var(--mortar)", sw=active?2.25:1.75;
   if(kind==="daily") return markSVG(26,sw,c);
   if(kind==="premium"){
     const w=20,h=24,ox=3,oy=1,i=sw/2,t=w*.16;
@@ -947,7 +994,7 @@ function thread(id){
     <div class="bottombar" style="display:flex; gap:8px; align-items:center">
       <div class="field onNight" style="flex:1"><input placeholder="Message" id="threadInput"></div>
       <button class="iconbtn" data-a="threadSend"
-        style="background:var(--lamp); color:var(--night); border-radius:18px; width:36px; height:36px">↑</button></div>`;
+        style="background:var(--lamp); color:var(--onLamp); border-radius:18px; width:36px; height:36px">↑</button></div>`;
 }
 
 function premiumRoot(){
@@ -1265,6 +1312,7 @@ function settingsSections(){
       ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"],
       ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
+    ["Appearance",[["x-theme","Light and dark",x.theme,"push"]]],
     ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
       ["d-distance","Distance",distanceText(),"push"],
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
@@ -1327,6 +1375,42 @@ function multiOpts(pairs,chosen,act){
       +'<div class="opt '+(chosen.indexOf(p[0])>=0?"sel":"")+'">'+esc(p[1])+'</div></button>';
   }).join("")+'</div>';
 }
+/* ---- appearance ----
+   "Match my phone" is resolved here rather than in CSS, so the stylesheet only
+   ever has to know about light and dark. Mirrors ArchTheme in the app. */
+const THEMES=["Match my phone","Light","Dark"];
+const THEME_NOTES={
+  "Match my phone":"Follows your device's appearance setting.",
+  "Light":"Candlelight. Paper, warm ink, terracotta.",
+  "Dark":"Rich charcoal. The same palette after dark."};
+const prefersDark=window.matchMedia("(prefers-color-scheme: dark)");
+function resolvedTheme(){
+  const t=S.set.theme;
+  if(t==="Light") return "light";
+  if(t==="Dark") return "dark";
+  return prefersDark.matches?"dark":"light";
+}
+function applyTheme(){
+  document.documentElement.dataset.theme=resolvedTheme();
+  try{localStorage.setItem("arch.appearance",S.set.theme);}catch(e){}
+}
+/* A display preference belongs to the device, so it survives a reload here the
+   same way it survives a launch in the app. */
+try{const saved=localStorage.getItem("arch.appearance");
+  if(THEMES.indexOf(saved)>=0) S.set.theme=saved;}catch(e){}
+prefersDark.addEventListener("change",()=>{if(S.set.theme==="Match my phone") applyTheme();});
+
+/* The app's own surfaces, type and accent, so the choice can be seen before it is
+   made rather than one screen later. */
+function themeSpecimen(){
+  return `<div class="card" style="padding:var(--s-m)">
+    <div style="display:flex; align-items:center; gap:var(--s-s)">
+      ${markSVG(30,3.4,"var(--lamp)")}<div class="titleM">arch</div></div>
+    <div class="prompt mortar mt-m">The last thing I read twice</div>
+    <div class="callout">A field guide to bridges I found in my grandad's garage.</div>
+    <div class="btn primary mt-m" style="height:44px">Send a message</div></div>`;
+}
+
 function opts(list,chosen,act){
   return '<div class="v gap-xs">'+list.map(function(o){
     return '<button data-a="'+act+'" data-o="'+esc(o)+'" style="display:block;width:100%">'
@@ -1337,7 +1421,7 @@ function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div
 
 const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
-  "d-seeking":"Who you want to meet",
+  "d-seeking":"Who you want to meet","x-theme":"Light and dark",
   "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
   "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
@@ -1376,6 +1460,10 @@ function settingDetail(id){
      +NOTE("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that &mdash; turn them back on there and your choices come back exactly as you left them.")
      +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>'
      +NOTE("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.");
+  } else if(id==="x-theme"){
+    b=themeSpecimen()
+     +opts(THEMES,x.theme,"setTheme")
+     +NOTE(THEME_NOTES[x.theme]);
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
@@ -1440,8 +1528,8 @@ function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
     return `<div class="screen"><div class="pad v" style="height:100%; padding:48px 20px">
-      <div style="flex:1"></div>${markSVG(84,4,"var(--lamp)")}
-      <div class="display mt-m">Arch</div><div style="flex:1"></div>
+      <div style="flex:1"></div>${markSVG(84,11,"var(--lamp)")}
+      <div class="display mt-s">arch</div><div style="flex:1"></div>
       <div class="titleL">Five people a day</div>
       <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
         actually like. You read them properly, you decide, and then you are done until tomorrow.</div>
@@ -1727,7 +1815,8 @@ function render(){
     const label={premium:"Premium",daily:"Daily 5",messages:"Messages",you:"You"}[k];
     const badge=(k==="messages"&&unread)?`<div class="badge">${unread}</div>`:"";
     return `<button class="tab" data-a="tab" data-k="${k}" aria-selected="${S.tab===k}">
-      <div class="glyph">${glyph(k,S.tab===k)}${badge}</div><div class="lbl">${label}</div></button>`;
+      <div class="glyph">${glyph(k,S.tab===k)}${badge}</div>
+      <div class="lbl"${S.tab===k&&k==="premium"?' style="color:var(--ember)"':""}>${label}</div></button>`;
   }).join("");
   r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
 }
@@ -1840,7 +1929,7 @@ function placeSheet(target,query){
   if(!found.length){
     body=`<div class="v gap-xs"><div class="body">Nothing by that name</div>
       <div class="footnote mortar">Try the borough or the town instead &mdash; Arch is only
-        in New York so far.</div></div>`;
+        in Fraunces so far.</div></div>`;
   } else if(searching){
     body=`<div class="v gap-xs">${found.map(row).join("")}</div>`;
   } else {
@@ -2079,6 +2168,7 @@ document.addEventListener("click",e=>{
     setting:()=>push({name:"settingDetail",id:el.dataset.id}),
     toggleSetting:()=>{const k=TOGGLES[el.dataset.id]; S.set[k]=!S.set[k]; render();},
     setIntent:()=>{S.set.intent=el.dataset.o; render();},
+    setTheme:()=>{S.set.theme=el.dataset.o; applyTheme(); render();},
     /* Never empties. A preference for nobody is not a preference, and the row would
        silently stop matching anyone with nothing on screen saying why. */
     setSeeking:()=>{
@@ -2443,5 +2533,6 @@ function mountRange(){
 const _render=render;
 render=function(){ _render(); mountRange(); mountCrop(); };
 
+applyTheme();
 render();
 </script>

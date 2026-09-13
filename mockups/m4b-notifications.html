@@ -1,20 +1,23 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>Notifications</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
 <style>
 :root{
-  --night:#0F1319; --stone:#171C24; --stoneRaised:#212832;
-  --limestone:#EDE7DD; --mortar:#8D949E; --lamp:#F0A44B;
-  --hairline:rgba(141,148,158,.12); --quiet:rgba(141,148,158,.20);
-  --serif: ui-serif, "New York", Georgia, serif;
-  --sans: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
+  --limestone:#F5EFE6; --mortar:#9A8F86; --lamp:#E5714D;
+  --hairline:rgba(154,143,134,.12); --quiet:rgba(154,143,134,.20);
+  --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
+  --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
 }
 *{box-sizing:border-box; margin:0; padding:0;}
-body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
+body{font-variation-settings:"SOFT" 0,"WONK" 0; font-optical-sizing:auto; background:var(--night); color:var(--limestone); font-family:var(--sans);}
 .phone{width:393px; height:600px; background:var(--night); overflow:hidden;
        position:relative; display:flex; flex-direction:column;}
 .pad{padding:0 20px;}
 
-.t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500;}
+.t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:600;}
 .t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
 .t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
 .t-prompt{font-family:var(--serif); font-size:19px; line-height:26px;}
@@ -27,7 +30,7 @@ body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
 .back{width:44px; height:44px; display:flex; align-items:center;
       justify-content:center; font-size:15px;}
 .rule{display:flex; gap:4px; padding:0 20px;}
-.seg{flex:1; height:2px; border-radius:1px; background:rgba(141,148,158,.25);}
+.seg{flex:1; height:2px; border-radius:1px; background:rgba(154,143,134,.25);}
 .seg.on{background:var(--lamp);}
 
 .body{flex:1; padding:24px 20px 0;}
@@ -49,6 +52,6 @@ body{background:var(--night); color:var(--limestone); font-family:var(--sans);}
 
 .opt{background:var(--stone); border-radius:12px; padding:16px; font-size:17px;
      line-height:24px; margin-bottom:8px;}
-.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px rgba(237,231,221,.30);}
+.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px rgba(245,239,230,.30);}
 </style></head><body>
 <div class="phone"><div class="topbar"><div class="back">&#8249;</div></div><div class="rule"><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div><div class="seg on"></div></div><div class="body"><div class="t-titleL">Notifications</div><div class="t-body mortar" style="margin-top:12px;">Two kinds, and nothing else.</div><div class="t-body" style="margin-top:24px;">One in the morning, when your five are ready.</div><div class="t-body" style="margin-top:16px;">One when somebody writes to you.</div><div class="t-footnote mortar" style="margin-top:24px;">No reminders to come back, no notifications about people who have not written to you, and nothing at all in the evening.</div></div><div class="foot"><div class="btn btn-primary">Allow notifications</div><div class="btn-text">Not now</div></div></div></body></html>
