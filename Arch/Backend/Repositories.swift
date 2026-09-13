@@ -500,7 +500,7 @@ enum ArchBackend {
         guard !ids.isEmpty else { return [] }
         let list = "in.(\(ids.joined(separator: ",")))"
 
-        async let profiles: [ProfileRow] = SupabaseClient.shared.select(
+        async let profiles: [VisibleProfileRow] = SupabaseClient.shared.select(
             "visible_profiles", filters: ["account_id": list]
         )
         async let photos: [PhotoRow] = SupabaseClient.shared.select(
@@ -557,7 +557,7 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else { return [] }
         let me = session.userID
 
-        let rows: [ConversationRow] = try await SupabaseClient.shared.select(
+        let rows: [ThreadRow] = try await SupabaseClient.shared.select(
             "conversations",
             columns: "id,lo_account,hi_account,state,opened_by,last_message_at",
             order: "last_message_at.desc.nullslast"
