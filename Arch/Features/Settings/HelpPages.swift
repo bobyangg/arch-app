@@ -73,8 +73,8 @@ struct HelpPage: View {
     @ViewBuilder
     private var safety: some View {
         section(
-            "Every account has a verified number",
-            "It is not a guarantee that someone is who they say, but it makes throwaway accounts expensive, which is most of the problem."
+            "Every account is tied to an Apple ID and a device",
+            "It is not a guarantee that somebody is who they say. It does mean that starting again after being removed costs a new Apple ID and usually a new phone, rather than thirty seconds — and making throwaway accounts expensive is most of the problem."
         )
         section(
             "Blocking is silent and complete",

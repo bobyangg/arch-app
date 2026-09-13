@@ -379,7 +379,7 @@ struct SignOutConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("Your profile, your conversations and the people in your roster all stay exactly as they are. Nothing is deleted. You will need a code sent to your number to come back.")
+            Text("Your profile, your conversations and the people in your roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple brings you straight back to it.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

@@ -57,7 +57,11 @@ final class OnboardingStore {
     var code = ""
 
     var name = ""
+    /// From Apple, and only ever on the first authorization. Never shown to
+    /// anybody — it is here so account notices have somewhere to go.
     var email = ""
+    /// Apple's stable id for this person and this app. The account key.
+    var appleUserID = ""
     var ageText = ""
     /// Picked from the library, so it carries a position as well as its name.
     var place: Place?
@@ -104,7 +108,7 @@ final class OnboardingStore {
         case .verify:
             return hasSentCode ? code.count == 6 : phone.filter(\.isNumber).count >= 7
         case .identity:
-            return !name.isBlank && email.contains("@") && !email.hasSuffix("@")
+            return !name.isBlank
         case .about:
             return Int(ageText) != nil && place != nil
                 && !height.isBlank && !work.isBlank
@@ -220,6 +224,17 @@ final class OnboardingStore {
     /// The nearest place fills the profile chip, because a geocoder saying
     /// "Bedford-Stuyvesant" is not what somebody who writes "Bed-Stuy" wants under
     /// their name — the picker is still there to correct it.
+    /// What Apple handed over at the front door.
+    ///
+    /// The name is a starting point rather than an answer — what is on an Apple ID
+    /// is not always what somebody wants a stranger reading — so it fills the field
+    /// and stays editable.
+    func apply(_ identity: AppleIdentity) {
+        appleUserID = identity.userID
+        if let name = identity.name, !name.isBlank { self.name = name }
+        if let email = identity.email { self.email = email }
+    }
+
     func useDeviceLocation(_ fix: Coordinate) {
         locationPermission = .granted
         coordinate = fix.coarsened
