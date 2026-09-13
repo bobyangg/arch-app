@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Stands in for a photograph. Nothing is fetched and nothing is stock: each block
 /// is a quarry tone from the palette with a four-to-six percent fall-off top to
@@ -17,6 +18,9 @@ struct PhotoPlaceholder: View {
     /// right failure: a photograph you are no longer allowed to see should go
     /// quietly rather than announce itself.
     var url: URL? = nil
+    /// A photograph already in memory — one just chosen from the library, before
+    /// it has been uploaded and has anywhere to be fetched from.
+    var data: Data? = nil
 
     var body: some View {
         let material = ArchColor.material(toneIndex)
@@ -29,7 +33,9 @@ struct PhotoPlaceholder: View {
                 )
             )
             .overlay {
-                if let url {
+                if let data, let image = UIImage(data: data) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if let url {
                     AsyncImage(url: url) { phase in
                         if let image = phase.image {
                             image.resizable().scaledToFill()

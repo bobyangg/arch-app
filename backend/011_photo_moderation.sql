@@ -1,0 +1,30 @@
+-- Arch: how a photograph becomes visible.
+--
+-- **Nothing set `approved`, so nothing was ever visible.** `photos.state` defaults
+-- to `pending` and the roster read filters on `approved`. Every upload landed in a
+-- state no code moved it out of. That failed closed, which is the right direction
+-- to fail in, but it meant the product did not work.
+--
+-- **The posture is reactive, and that is the design's own model rather than a
+-- shortcut.** `RemovalReason.photos` reads "reports that the photos were not of
+-- you"; the reports table, the removal flow and the appeal screen were all built
+-- around people flagging what they see. Pre-moderating every photograph needs a
+-- person on call before anybody can finish a profile, and an app with nobody on
+-- call would simply leave everybody pending -- which is the state this fixes.
+--
+-- So: a photograph is approved when its bytes arrive, and a person takes it down
+-- afterwards. If that changes -- a queue, a classifier, a launch somewhere with
+-- different rules -- it changes in one trigger, and the rest of the system already
+-- understands `pending` and `rejected`.
+--
+-- Applied as migration `photo_moderation`. Verified 6 of 6 against the live
+-- database: a new photo starts pending, is approved when the bytes land, can be
+-- taken down by a person with a reason, and -- the one worth having a test for --
+-- **re-uploading over a rejected photo does not launder it back to approved.**
+-- That is also why there is no UPDATE policy on storage.objects.
+--
+-- `reason_when_rejected` makes the reason compulsory: a rejected photograph with
+-- nothing to say is the exact failure `PhotoRejectedView` exists to prevent.
+--
+-- `photo_reviews` mirrors `appeals` in shape and in its unique constraint, for the
+-- same reason: one ask per photograph, because a second is not a second chance.

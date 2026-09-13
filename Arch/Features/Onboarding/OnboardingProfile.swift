@@ -37,7 +37,7 @@ struct OnboardingPhotos: View {
             }
         }
         .sheet(isPresented: $isPicking) {
-            PhotoPickerView(slotsLeft: profile.slotsLeft) { profile.addPhotos($0) }
+            PhotoLibraryPicker(slotsLeft: profile.slotsLeft) { profile.addPhotos($0) }
         }
     }
 }
