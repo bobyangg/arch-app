@@ -1,0 +1,102 @@
+# Compiling Arch.
+#
+# Sixteen thousand lines of Swift were written on a Windows machine with no Swift
+# toolchain. This is the first thing that has ever told us whether any of it is
+# true. It needs no Mac and no paid developer account: GitHub's macOS runner is
+# free on public repositories, and building for the simulator requires no signing.
+
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The checks that need no Xcode run first and separately, so a Swift failure
+  # never hides a schema failure or the other way round.
+  checks:
+    name: Cross-reference checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - run: pip install sqlparse
+
+      - name: Swift names resolve
+        run: python tools/swiftcheck.py Arch
+
+      - name: SQL cross-references
+        run: python backend/lint.py
+
+      # All four run from the repository root. `working-directory: matcher` was
+      # here and would have looked for matcher/matcher/selftest.py -- caught by
+      # running them the way CI would rather than the way they are usually run.
+      - name: The matcher agrees with itself
+        run: python matcher/selftest.py
+
+      - name: The compatibility tables still match the Swift
+        run: python matcher/sqlgen.py --digest
+        # Prints the two fingerprints. Compare against the database with:
+        #   select digest, source_digest from compatibility_digest;
+
+  build:
+    name: Build for the simulator
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use a pinned Xcode
+        run: sudo xcode-select -switch /Applications/Xcode_16.2.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      # `-destination generic/platform=iOS Simulator` builds without booting a
+      # simulator, which is faster and does not depend on which runtimes the
+      # runner image happens to carry.
+      - name: Build
+        run: |
+          set -o pipefail
+          xcodebuild build \
+            -project Arch.xcodeproj \
+            -scheme Arch \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee build.log
+
+      # The first build of this project will not pass. The log is the deliverable
+      # until it does.
+      - name: The errors, gathered
+        if: failure()
+        run: |
+          echo "## Build errors" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "error:" build.log | sort -u | head -100 >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          errors=$(grep -c 'error:' build.log || echo 0)
+          warnings=$(grep -c 'warning:' build.log || echo 0)
+          echo "Total: $errors errors, $warnings warnings" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
