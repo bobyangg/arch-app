@@ -2,7 +2,7 @@
 ==============================================================================
 Arch matcher -- do the 95 numbers work?
 ==============================================================================
-Compatibility.swift at a609091
+Compatibility.swift at 92a555d
 
   age_asymmetry=False     archetypes=6            block_rate=0.004        
   cooldown=7              fill=off                n=600                   
@@ -34,7 +34,7 @@ Compatibility.swift at a609091
 ------------------------------------------------------------------------------
   if everyone answered at random   mean 9.963  sd 0.812
   in this population               mean 10.199  sd 0.939
-  percentiles   p1 7.98  p5 8.59  p25 9.54  p50 10.23  p75 10.88  p95 11.70  p99 12.19
+  percentiles   p1 7.98  p5 8.60  p25 9.54  p50 10.23  p75 10.88  p95 11.70  p99 12.19
   distinct values seen             1044
   sd as a share of the range       12.5%
 
@@ -87,9 +87,9 @@ Compatibility.swift at a609091
 
 1f. Delivered -- the real matcher against the same matcher on noise
 ------------------------------------------------------------------------------
-  real tables      4490 pairs, mean compatibility 10.715 (sd 0.858)
-  ranked by noise  4475 pairs, mean compatibility 10.203 (sd 0.929)
-  gain             +0.512 points = 0.63 pool sd   weak  (good >= 1.2, bad < 0.5)
+  real tables      4504 pairs, mean compatibility 10.720 (sd 0.858)
+  ranked by noise  4514 pairs, mean compatibility 10.209 (sd 0.931)
+  gain             +0.511 points = 0.63 pool sd   weak  (good >= 1.2, bad < 0.5)
 
   For scale: picking everybody's unconstrained best five would average
   11.408. The mutual cap and the cooldown eat the rest, so the matcher
@@ -102,35 +102,36 @@ Compatibility.swift at a609091
 2. Who starves?
 ==============================================================================
   night   pairs   held   active   empty   full rosters
-    1     1379      0      580       7     466
-    2      576      0      580      23     463
-    3      524      0      580      32     422
-    4      543      0      580      41     415
-    5      504      2      578      51     418
-    6      489      9      571      70     392
-    7      475     22      558      86     372
+    1     1378      0      580       7     462
+    2      576      0      580      23     469
+    3      547      0      580      31     446
+    4      544      0      580      43     432
+    5      510      0      580      55     408
+    6      497     10      570      67     392
+    7      452     24      556      80     354
 
   unique people met across the week   p10 5   median 17   p90 22
 
-  Empty on 3 or more of 7 nights: 51 people
+  Empty on 3 or more of 7 nights: 56 people
 
   which single rule, relaxed on its own, would unstick them:
       distance       29
-      requirements   12
-      orientation    8
-      age            2
+      requirements   13
+      orientation    9
+      age            5
   by where they live:
-      New York       29
-      Brooklyn       9
-      The Bronx      5
-      Manhattan      4
+      New York       28
+      Brooklyn       10
+      The Bronx      8
+      Manhattan      3
+      Staten Island  3
       Queens         2
-      Staten Island  2
+      New Jersey     2
   by their distance setting:
-      10 miles       31
-      25 miles       15
-      50 miles       3
-      Anywhere       2
+      10 miles       35
+      25 miles       14
+      50 miles       2
+      Anywhere       5
 
   worst affected:
       pid     nights  candidates  met  binding rule   would give  where
@@ -142,10 +143,10 @@ Compatibility.swift at a609091
       p460       7           0      0  distance            35    New York
       p575       7           0      0  distance            81    New York
       p004       6           1      1  requirements        51    Brooklyn
-      p096       6           1      1  distance            56    New York
+      p056       6           1      1  distance            63    New York
       p185       6           1      1  distance            37    New York
-      p277       6           1      1  distance           121    New York
-      p290       6           1      1  distance            59    New York
+      p257       6           1      1  requirements        22    The Bronx
+      p295       6           1      1  distance            11    New York
 
 ==============================================================================
 3. What the mutual cap costs
@@ -156,7 +157,7 @@ Compatibility.swift at a609091
   The real question is how much work it is doing. Shadow demand is how many
   people would hold you in their top five with no constraints at all:
 
-      median 3   p90 11   p95 15   max 35   (capacity 5)
+      median 3   p90 11   p95 15   max 34   (capacity 5)
       wanted by nobody: 85 people
       p95 is 3.0x capacity   PASS  (good <= 3x)
 
@@ -191,10 +192,10 @@ Compatibility.swift at a609091
 
   noise   cand sd   margin   vs shuffled   vs alignment   spearman   gain(sd)
    0.00     0.941     1.60          0.27           0.87       0.56       0.65
-   0.15     0.837     1.51          0.15           0.65       0.61       0.65
+   0.15     0.837     1.51          0.15           0.65       0.61       0.66
    0.30     0.778     1.42          0.12           0.54       0.61       0.64
-   0.50     0.744     1.40          0.10           0.45       0.57       0.61
-   1.00     0.737     1.38          0.12           0.42       0.53       0.62
+   0.50     0.744     1.40          0.10           0.45       0.57       0.62
+   1.00     0.737     1.38          0.12           0.42       0.53       0.63
 
   (mean of 3 seeds per row)
 ==============================================================================
@@ -204,10 +205,10 @@ Compatibility.swift at a609091
   Nights is 7, so a cooldown of 7 means nobody repeats all week.
 
   cooldown   pairs/night   empty night 7   persistent zero   met (median)
-  none               798            2.7%              2.6%              7
-  3                  669            5.5%              5.5%             12
-  7                  626           13.5%              8.9%             16
-  never              626           13.5%              8.9%             16
+  none               795            2.6%              2.6%              7
+  3                  668            5.5%              5.0%             12
+  7                  626           13.0%              8.6%             16
+  never              626           13.0%              8.6%             16
 
   The trade is real and it is the product decision, not a bug: the cooldown
   is what stops the same faces recurring, and it is also what strands the
@@ -219,10 +220,10 @@ Compatibility.swift at a609091
   and not at n=2400 is a launch problem, not a design problem.
 
      n     median candidates   p10    empty night 7   persistent zero
-    300                  21     2           21.1%             14.7%
+    300                  21     2           21.5%             14.0%
     600                  45     6           12.6%              7.9%
-   1200                  91    13            7.2%              5.4%
-   2400                 180    26            4.3%              3.0%
+   1200                  91    13            7.2%              5.2%
+   2400                 180    26            4.2%              2.6%
 
   Counts would have risen down this column and said the opposite. As a share
   of the city, a bigger pool is the single most effective fix available.

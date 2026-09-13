@@ -15,13 +15,33 @@ import geo
 import population
 import tables
 
-#: `weight * grid[a][b]`, flattened per scored question, so scoring a pair is
-#: thirteen list lookups rather than thirteen dictionary lookups and a multiply.
-WEIGHTED = [
-    [[tables.TABLES[qid]["weight"] * cell for cell in row]
+#: `weight * grid[a][b]`, in **thousandths, as integers**.
+#:
+#: Not a micro-optimisation -- a correctness requirement, and the single most
+#: important line in this file.
+#:
+#: Floating-point addition is not associative, and this score is a sum of thirteen
+#: terms. Python sums them left to right; SQL is free to associate them however the
+#: planner likes. Measured on this population, **54% of pair scores differ between
+#: forward and reverse summation of the identical thirteen terms** -- and because
+#: scores sit on a coarse lattice where exact ties are everywhere, and ties are
+#: broken by a hash, a one-ULP difference flips which candidate somebody takes.
+#: Run end to end, that changed half the delivered pairs. Both outputs looked
+#: perfectly plausible and nothing raised.
+#:
+#: Every `weight * cell` is exact at 1/1000 (weights have one decimal, cells have
+#: two), so integers lose nothing and make the Python and the SQL comparable
+#: exactly rather than approximately. The multiplication below is integer-only:
+#: going via floats and rounding would reintroduce the thing it is avoiding.
+WEIGHTED_MILLI = [
+    [[int(round(tables.TABLES[qid]["weight"] * 10)) * int(round(cell * 100))
+      for cell in row]
      for row in tables.TABLES[qid]["grid"]]
     for qid in population.SCORED_IDS
 ]
+
+#: The same numbers as points, for anything that reports rather than ranks.
+WEIGHTED = [[[v / 1000.0 for v in row] for row in grid] for grid in WEIGHTED_MILLI]
 
 #: Allowed-grids for q14/q15/q16, in the same order as `Person.reqs`.
 REQ_GRIDS = [tables.REQUIREMENTS[qid] for qid in population.REQ_IDS]
@@ -30,13 +50,27 @@ REQ_GRIDS = [tables.REQUIREMENTS[qid] for qid in population.REQ_IDS]
 FILTER_NAMES = ("orientation", "age", "distance", "requirements", "blocked", "paused")
 
 
-def score(a, b):
-    """A pair as one number. Higher is better; 12.870 is the real ceiling."""
+def score_milli(a, b):
+    """A pair as one integer, in thousandths. The canonical score.
+
+    Integer addition is associative, so this is the same number whoever adds it up
+    and in whatever order -- which is what lets the SQL matcher be checked against
+    this one for exact equality rather than for being close.
+    """
     aa, ba = a.answers, b.answers
-    total = 0.0
+    total = 0
     for j in range(13):
-        total += WEIGHTED[j][aa[j]][ba[j]]
+        total += WEIGHTED_MILLI[j][aa[j]][ba[j]]
     return total
+
+
+def score(a, b):
+    """The same pair in points. Higher is better; 12.870 is the real ceiling.
+
+    One division of an exact integer, so it is still reproducible -- the ordering
+    decisions are all made on `score_milli`, and this is for reading.
+    """
+    return score_milli(a, b) / 1000.0
 
 
 def orientation_ok(a, b):
