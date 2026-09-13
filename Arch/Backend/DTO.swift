@@ -9,7 +9,7 @@ import Foundation
 /// stores centimetres; the app shows "6 ft 1". The database has a row per photo with
 /// a storage path; the app has an ordered array.
 ///
-/// It is also the seam that keeps a mistake from becoming a leak. `ProfileRow` has
+/// It is also the seam that keeps a mistake from becoming a leak. `VisibleProfileRow` has
 /// no field for a questionnaire answer, so no amount of careless work upstream can
 /// put one on screen — there is nowhere for it to land.
 
@@ -20,7 +20,7 @@ import Foundation
 /// Note what is absent: birthdate, coordinates, compatibility score, questionnaire
 /// answers, last-seen. The view does not select them and this type could not hold
 /// them if it did.
-struct ProfileRow: Decodable, Hashable {
+struct VisibleProfileRow: Decodable, Hashable {
     let accountId: String
     let name: String
     let age: Int
@@ -99,7 +99,7 @@ struct PairingRow: Decodable, Hashable, Identifiable {
 struct RosterEntryRow: Decodable, Hashable {
     let pairingId: String
     let night: String
-    let profile: ProfileRow
+    let profile: VisibleProfileRow
     let photos: [PhotoRow]
     let prompts: [PromptRow]
     let interests: [InterestRow]
@@ -107,7 +107,7 @@ struct RosterEntryRow: Decodable, Hashable {
 
 // MARK: - Conversations
 
-struct ConversationRow: Decodable, Hashable, Identifiable {
+struct ThreadRow: Decodable, Hashable, Identifiable {
     let id: String
     let loAccount: String
     let hiAccount: String
@@ -151,7 +151,7 @@ struct RemovalRow: Decodable, Hashable, Identifiable {
 
 // MARK: - Mapping into the app's own types
 
-extension ProfileRow {
+extension VisibleProfileRow {
 
     /// A row as the `Person` every screen already knows how to draw.
     ///
@@ -192,7 +192,7 @@ extension ProfileRow {
     }
 }
 
-extension ConversationRow {
+extension ThreadRow {
 
     func conversation(with person: Person, messages: [MessageRow], me: String) -> Conversation {
         Conversation(

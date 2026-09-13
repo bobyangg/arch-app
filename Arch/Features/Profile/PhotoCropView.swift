@@ -317,7 +317,7 @@ struct CropSurround: Shape {
 
 #Preview("A portrait photo") {
     NavigationStack {
-        PhotoCropView(photo: MockData.photoLibrary[0]) {}
+        PhotoCropView(photo: MockData.photoLibrary[0]) { _ in }
     }
     .preferredColorScheme(.dark)
 }
@@ -326,14 +326,14 @@ struct CropSurround: Shape {
 /// itself to become a portrait.
 #Preview("A landscape photo, second of three") {
     NavigationStack {
-        PhotoCropView(photo: MockData.photoLibrary[6], step: 2, total: 3) {}
+        PhotoCropView(photo: MockData.photoLibrary[6], step: 2, total: 3) { _ in }
     }
     .preferredColorScheme(.dark)
 }
 
 #Preview("A panorama") {
     NavigationStack {
-        PhotoCropView(photo: MockData.photoLibrary[17]) {}
+        PhotoCropView(photo: MockData.photoLibrary[17]) { _ in }
     }
     .preferredColorScheme(.dark)
 }
