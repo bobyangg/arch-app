@@ -344,6 +344,60 @@ struct Person: Identifiable, Hashable {
     }
 }
 
+/// Why an account was removed, in the words the person is shown.
+///
+/// The same five categories the report sheet offers, because a removal follows
+/// from reports and the person is entitled to know which kind.
+///
+/// **The category, never the evidence.** "Reports of abusive messages" is fair.
+/// "Three people reported you on Tuesday" teaches somebody which signal tripped
+/// and edges towards naming who reported them, which is the one promise this app
+/// cannot break.
+enum RemovalReason: String, Hashable {
+    case abuse
+    case photos
+    case underage
+    case selling
+    case other
+
+    /// Reads after "Arch removed it after…".
+    var sentence: String {
+        switch self {
+        case .abuse:    return "reports of abusive messages"
+        case .photos:   return "reports that the photos were not of you"
+        case .underage: return "reports that you are under eighteen"
+        case .selling:  return "reports of selling or promotion"
+        case .other:    return "reports from other people"
+        }
+    }
+}
+
+/// An account that is no longer usable, and why.
+struct Removal: Hashable {
+    enum Kind: Hashable {
+        /// Permanent.
+        case removed
+        /// The lighter tier. Comes back on its own.
+        case paused(until: String)
+        /// Refused at signup because the device is blocked — which is not the same
+        /// as saying this person did anything. Phones change hands.
+        case device
+    }
+
+    var kind: Kind
+    var reason: RemovalReason
+    var appeal: AppealState = .notSent
+}
+
+/// Where an appeal has got to.
+enum AppealState: Hashable {
+    case notSent
+    /// Written and waiting. Nothing about the account changes meanwhile.
+    case sent
+    /// A person read it and the removal stands. There is no third round.
+    case answered
+}
+
 /// Why a slot is open.
 ///
 /// The app says *that* someone left, never *who* and never *why*. Dismissing you

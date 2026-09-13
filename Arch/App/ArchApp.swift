@@ -9,11 +9,25 @@ struct ArchApp: App {
     /// Carried out of onboarding so Settings knows on the first launch, not the
     /// second, whether it is allowed to send anything.
     @State private var allowsNotifications = true
+    /// Set when the account is no longer usable. It takes the whole window, because
+    /// there is nothing left underneath it to navigate.
+    @State private var removal: Removal?
 
     var body: some Scene {
         WindowGroup {
             ZStack {
-                if let profile {
+                if let removal {
+                    RemovedAccountView(
+                        removal: removal,
+                        onAppeal: { _ in
+                            withAnimation(ArchMotion.standard) { self.removal?.appeal = .sent }
+                        },
+                        // Not part of the design. A prototype needs a way out of a
+                        // screen that is deliberately a dead end.
+                        onLeave: { withAnimation(ArchMotion.standard) { self.removal = nil } }
+                    )
+                    .transition(.opacity)
+                } else if let profile {
                     RootTabView(
                         profile: profile,
                         allowsNotifications: allowsNotifications,
