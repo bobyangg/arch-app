@@ -99,6 +99,33 @@ def test_scoring():
         if abs(fast - slow) > 1e-9:
             ok = False
     check("fast scorer agrees with tables.score", ok)
+
+    # The property the SQL port depends on. Float addition is not associative, and
+    # before this was integers, 54% of these sums changed under reassociation --
+    # which flipped half the delivered pairs, silently, because every output still
+    # looked like a plausible roster.
+    check("every weighted cell is a whole number of thousandths",
+          all(isinstance(v, int)
+              for grid in filters.WEIGHTED_MILLI for row in grid for v in row))
+    check("no weighted cell exceeds 1400 thousandths",
+          max(max(max(r) for r in g) for g in filters.WEIGHTED_MILLI) == 1400)
+    rng = __import__("random").Random(11)
+    flips = 0
+    for _ in range(5000):
+        a, b = people[rng.randrange(len(people))], people[rng.randrange(len(people))]
+        terms = [filters.WEIGHTED_MILLI[j][a.answers[j]][b.answers[j]] for j in range(13)]
+        forward, reverse = 0, 0
+        for t in terms:
+            forward += t
+        for t in reversed(terms):
+            reverse += t
+        if forward != reverse:
+            flips += 1
+    check("scoring does not depend on summation order", flips == 0, str(flips))
+    check("points are the integer divided by a thousand",
+          all(abs(filters.score(people[i], people[i + 1])
+                  - filters.score_milli(people[i], people[i + 1]) / 1000.0) < 1e-12
+              for i in range(0, 100, 9)))
     check("scoring is symmetric",
           all(abs(filters.score(people[i], people[i + 1])
                   - filters.score(people[i + 1], people[i])) < 1e-12
@@ -164,6 +191,13 @@ def test_match():
           match.tiebreak(1, "p001", "p002") == match.tiebreak(1, "p002", "p001"))
     check("tiebreak is stable across processes (not hash())",
           match.tiebreak(0, "a", "b") == match.tiebreak(0, "a", "b"))
+    # SHA-256 and not blake2b, because Postgres can compute one and not the other,
+    # and a tiebreak the database cannot reproduce makes the two unComparable.
+    check("tiebreak is a 32-byte sha256 digest Postgres can also compute",
+          isinstance(t1, bytes) and len(t1) == 32, repr(t1)[:40])
+    import hashlib as _h
+    check("tiebreak matches a plain sha256 of seed|lo|hi",
+          match.tiebreak(5, "b", "a") == _h.sha256(b"5|a|b").digest())
 
     pairs2, filled2 = match.match_night(graph, need, seen, 1, cfg, cfg.seed)
     check("a night is reproducible", pairs == pairs2)

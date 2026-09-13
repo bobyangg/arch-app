@@ -21,10 +21,17 @@ def tiebreak(seed, a, b):
     the degree distribution, roster composition and the starvation cohort all at
     once. `hash()` will not do -- it is salted per process, so the run stops being
     reproducible.
+
+    **SHA-256 rather than blake2b, because Postgres has neither `hash()` nor
+    blake2b but does have `extensions.digest(..., 'sha256')`.** The nightly matcher
+    runs in the database, and a tiebreak this program could compute and the
+    database could not would make the two impossible to compare -- which is the
+    whole point of keeping this file. Returned as raw bytes, which sort
+    lexicographically in Python and as `bytea` in Postgres identically.
     """
     lo, hi = (a, b) if a < b else (b, a)
     key = ("%s|%s|%s" % (seed, lo, hi)).encode("utf-8")
-    return int.from_bytes(hashlib.blake2b(key, digest_size=8).digest(), "big")
+    return hashlib.sha256(key).digest()
 
 
 def sort_graph(graph, seed):
