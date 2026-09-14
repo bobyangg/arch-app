@@ -163,6 +163,48 @@ enum ArchBackend {
 
     // MARK: Your own profile
 
+    /// Notes on your profile, from the reviewer.
+    ///
+    /// The words go up; the photographs do not. The function reads those from the
+    /// bucket itself, so what the reviewer sees is what the profile shows and not
+    /// whatever the client chose to send. The answer comes back in the shape
+    /// `ProfileNotes` decodes, and the server keeps a copy against a digest of the
+    /// profile so the same profile is not reviewed twice.
+    static func reviewProfile(_ person: Person, fresh: Bool = false) async throws -> ProfileNotes {
+        struct Body: Encodable {
+            struct Prompt: Encodable {
+                let question: String
+                let answer: String
+            }
+            let name: String
+            let age: Int
+            let work: String?
+            let prompts: [Prompt]
+            let interests: [String]
+            let fresh: Bool
+        }
+        struct Reply: Decodable {
+            let status: String
+            let notes: ProfileNotes
+        }
+
+        let reply: Reply = try await SupabaseClient.shared.callFunction(
+            "review",
+            Body(
+                name: person.name,
+                age: person.age,
+                work: person.work.isEmpty ? nil : person.work,
+                prompts: person.answeredPrompts.map {
+                    Body.Prompt(question: $0.question, answer: $0.answer)
+                },
+                interests: person.interests.map(\.text),
+                fresh: fresh
+            ),
+            returning: Reply.self
+        )
+        return reply.notes
+    }
+
     static func ownProfile() async throws -> Person? {
         guard let session = await SupabaseClient.shared.restore() else { return nil }
         let me = session.userID

@@ -1303,6 +1303,35 @@ enum MockData {
     /// Not likes — Arch has none. This is the photo or answer somebody quoted in
     /// the composer when they chose to write, which is a signal the app genuinely
     /// has rather than one the review has to invent.
+    /// What the reviewer says about Sam, in a design build.
+    ///
+    /// Written to the same rules the server gives the model: about the photograph
+    /// as a photograph and the writing as writing, never about the person, and
+    /// with "keep" used as a real verdict rather than a consolation. Photo 5 is
+    /// missing because it is refused — the profile does not show it, so the
+    /// reviewer never sees it.
+    static let profileNotes = ProfileNotes(
+        overall: "This reads like one person, which is rarer than it sounds: the park, the click track and the coat-on goodbye all belong to the same life. The photographs are behind the writing. Lead with a face, lose the two that say the same thing, and the profile will match its answers.",
+        items: [
+            ProfileNote(kind: .photo, position: 1, verdict: .change,
+                        note: "This is the one people see in their five, and you are a long way from the camera in it. It is a good photograph of a hill. Lead with the one where your face fills a third of the frame — photo 2 does — and keep this for later."),
+            ProfileNote(kind: .photo, position: 2, verdict: .keep,
+                        note: "Close, lit from a window, looking at whoever took it. This is the photograph the profile should open on."),
+            ProfileNote(kind: .photo, position: 3, verdict: .consider,
+                        note: "The desk and the racks say what you do without a caption, which is worth having. The overhead light is flattening it; the same frame by the window in photo 2 would do more."),
+            ProfileNote(kind: .photo, position: 4, verdict: .change,
+                        note: "Same angle and same light as photo 3, a few minutes apart. Two of these is one too many. Replace it with something outdoors, or with other people in it, so the set has more than one room."),
+            ProfileNote(kind: .photo, position: 6, verdict: .keep,
+                        note: "The only one where you are laughing, and the only one with anyone else in it. It belongs higher — fourth, after the desk."),
+            ProfileNote(kind: .answer, position: 1, verdict: .keep,
+                        note: "A specific bench at a specific hour. Somebody who knows the park can reply to this, and somebody who does not can ask. The second sentence earns its place."),
+            ProfileNote(kind: .answer, position: 2, verdict: .consider,
+                        note: "The coat-on goodbye is a real detail and it lands. It could stop one clause earlier: \"still be there twenty minutes later\" is the picture, and \"coat on\" is it again."),
+            ProfileNote(kind: .answer, position: 3, verdict: .keep,
+                        note: "The best of the three. It admits something, it is funny without trying, and \"it was me for about a year\" gives a stranger three different things to ask about.")
+        ]
+    )
+
     static let writtenAbout: [String: Int] = [
         "you-q3": 4,
         "you-p2": 3,

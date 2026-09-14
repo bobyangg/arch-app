@@ -15,12 +15,16 @@ import SwiftUI
 /// profile scores 72" would be a fact about your worth, and the app does not have
 /// an opinion on that.
 ///
-/// **Notes** is the part the AI does, and it is not built. It says so.
+/// **Notes** is the part a model does. It reads the photographs as photographs and
+/// the answers as writing, and says what is vague and what to say instead — and it
+/// is held to the same rule as the half above: nothing about the person, nothing
+/// that is a score. The server's schema has no field for one.
 struct ProfileReviewView: View {
     let person: Person
     /// Item id to the number of people who wrote about it.
     let writtenAbout: [String: Int]
 
+    @State private var review = ProfileReviewStore()
     @Environment(\.dismiss) private var dismiss
 
     /// Photos and answered prompts, most-written-about first.
@@ -79,6 +83,7 @@ struct ProfileReviewView: View {
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
+        .task { await review.load(person) }
     }
 
     // MARK: Pieces
@@ -121,29 +126,149 @@ struct ProfileReviewView: View {
         }
     }
 
-    /// The half that needs a model, and does not have one.
+    /// The half that needs a model.
     private var notes: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text("Notes on your profile")
-                .archText(.prompt)
-                .foregroundStyle(ArchColor.mortar)
+        section(
+            "Notes on your profile",
+            "About the photographs as photographs and the answers as writing. Nothing here is a score, and nothing here is about you."
+        ) {
+            switch review.state {
+            case .idle, .loading:
+                quietCard {
+                    HStack(spacing: ArchSpacing.s) {
+                        ProgressView()
+                            .tint(ArchColor.mortar)
+                        Text("Reading your profile")
+                            .archText(.body)
+                            .foregroundStyle(ArchColor.limestone)
+                    }
+                    Text("A moment. It looks at every photograph and every answer.")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            VStack(alignment: .leading, spacing: ArchSpacing.s) {
-                Text("Not running yet")
-                    .archText(.body)
-                    .foregroundStyle(ArchColor.limestone)
-                Text("This is where specific notes on your photos and answers will go — what is vague, what to say instead. It is not built yet, and until it is, the half above is the honest part.")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
+            case .failed(let sentence):
+                quietCard {
+                    Text(sentence)
+                        .archText(.body)
+                        .foregroundStyle(ArchColor.limestone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button {
+                        Task { await review.load(person, fresh: true) }
+                    } label: {
+                        Text("Try again")
+                            .archText(.subhead)
+                            .foregroundStyle(ArchColor.mortar)
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 1))
+                }
+
+            case .ready(let notes):
+                quietCard {
+                    Text(notes.overall)
+                        .archText(.body)
+                        .foregroundStyle(ArchColor.limestone)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                ForEach(ordered(notes)) { note in
+                    noteRow(note)
+                }
+
+                // Asking again is a real action with a real cost, so it is the
+                // quietest control on the screen and the server, not the app,
+                // decides how many it will run.
+                ArchTextButton(title: "Ask again") {
+                    Task { await review.load(person, fresh: true) }
+                }
+                .disabled(review.isLoading)
             }
+        }
+    }
+
+    /// Photographs first, in profile order, then the answers.
+    private func ordered(_ notes: ProfileNotes) -> [ProfileNote] {
+        notes.items.sorted {
+            if $0.kind != $1.kind { return $0.kind == .photo }
+            return $0.position < $1.position
+        }
+    }
+
+    /// The note beside the thing it is about, so the reader never has to match a
+    /// number to a card.
+    private func noteRow(_ note: ProfileNote) -> some View {
+        HStack(alignment: .top, spacing: ArchSpacing.s) {
+            switch note.kind {
+            case .photo:
+                if let photo = photo(at: note.position) {
+                    PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
+                        .frame(width: 44, height: 44)
+                        .clipShape(RoundedRectangle(cornerRadius: ArchRadius.detail, style: .continuous))
+                }
+            case .answer:
+                EmptyView()
+            }
+
+            VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+                HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.xs) {
+                    Text(subject(of: note))
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
+                    Spacer(minLength: ArchSpacing.s)
+                    // A word, not a colour. "Change" in terracotta would make the
+                    // accent mean "wrong", and it means "act" everywhere else.
+                    Text(note.verdict.word)
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+                if case .answer = note.kind, let prompt = prompt(at: note.position) {
+                    Text(prompt.answer)
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .lineLimit(2)
+                }
+                Text(note.note)
+                    .archText(.callout)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ArchSpacing.xxs)
+            }
+        }
+        .padding(ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                .fill(ArchColor.stone)
+        )
+    }
+
+    private func subject(of note: ProfileNote) -> String {
+        switch note.kind {
+        case .photo:  return "Photo \(note.position)"
+        case .answer: return prompt(at: note.position)?.question ?? "Answer \(note.position)"
+        }
+    }
+
+    private func photo(at position: Int) -> Photo? {
+        let index = position - 1
+        return person.photos.indices.contains(index) ? person.photos[index] : nil
+    }
+
+    private func prompt(at position: Int) -> Prompt? {
+        let answered = person.answeredPrompts
+        let index = position - 1
+        return answered.indices.contains(index) ? answered[index] : nil
+    }
+
+    private func quietCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) { content() }
             .padding(ArchSpacing.m)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
                     .fill(ArchColor.stone)
             )
-        }
     }
 
     @ViewBuilder
