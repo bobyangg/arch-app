@@ -29,6 +29,13 @@ struct Photo: Identifiable, Hashable {
     /// Moderation. Defaulted so the ten mock people and every `#Preview` keep
     /// working without carrying a field that only matters to a live profile.
     var state: PhotoState = .approved
+    /// Why, when `state` is `.rejected`.
+    ///
+    /// On the photograph rather than in a dictionary beside it, because unlike an
+    /// upload — which is something happening *to* a photo for a few seconds — a
+    /// refusal is a property of the photograph that the server already knows and
+    /// sends. Keeping a second copy in the store is how the two drift.
+    var rejection: PhotoRejection? = nil
 }
 
 extension Person {
@@ -1023,7 +1030,13 @@ enum MockData {
             Photo(id: "you-p2", toneIndex: 1),
             Photo(id: "you-p3", toneIndex: 4),
             Photo(id: "you-p4", toneIndex: 0),
-            Photo(id: "you-p5", toneIndex: 2),
+            // One refused, so the state is reachable in a design build. Without it
+            // `PhotoRejectedView` could only ever be seen in its own `#Preview` —
+            // which is how it came to be written, wired to nothing, and never
+            // noticed. The fifth rather than the first: a refused main photo would
+            // make every other screen in the design build look broken, and five
+            // remain visible, which is above the floor of four.
+            Photo(id: "you-p5", toneIndex: 2, state: .rejected, rejection: .moreThanOnePerson),
             Photo(id: "you-p6", toneIndex: 5)
         ],
         prompts: [

@@ -259,6 +259,14 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .failface{position:absolute; inset:0; display:flex; flex-direction:column; gap:2px;
           align-items:center; justify-content:center; color:var(--mortar); font-size:15px;}
 .failface span{font-size:11px; line-height:14px; font-weight:600;}
+/* A refused photograph. Scrimmed rather than replaced, so the photo is still
+   recognisable underneath — and no red here either: a photo that did not pass
+   review is not a hazard. */
+.rejface{position:absolute; inset:0; display:flex; flex-direction:column; gap:2px;
+         align-items:center; justify-content:center; background:rgba(15,19,25,.72);
+         color:var(--onLamp); font-size:11px; line-height:14px; font-weight:600;
+         text-align:center;}
+.rejface span{font-size:12px; font-weight:500; opacity:.85;}
 .cropstage{position:relative; padding:28px; overflow:hidden; touch-action:none;}
 .cropframe{position:relative; width:100%; aspect-ratio:1; border-radius:var(--r-photo);
            border:1px solid var(--quiet); box-shadow:0 0 0 9999px rgba(15,19,25,.55);}
@@ -513,11 +521,6 @@ const capWord=n=>{const w=numWord(n); return w[0].toUpperCase()+w.slice(1);};
 
 const PLANS=[["One month","$24.99","$24.99 a month",0],["Three months","$53.97","$17.99 a month",1],
  ["Twelve months","$143.88","$11.99 a month",0]];
-const SETTINGS=[["Account",[["Phone number","+1 (917) 555 0142"],["Email","sam@example.com"],["Arch Premium","Not subscribed"]]],
- ["Notifications",[["Your daily five","9:00"],["New people","On"],["Messages","On"]]],
- ["Discovery",[["Distance","Within 10 miles"],["Age range","26 to 36"],["Looking for","Something serious"],["Pause my profile",null]]],
- ["Privacy",[["Who can see me",null],["Blocked people","None"],["Download your data",null]]],
- ["Help",[["How Arch works",null],["Safety",null],["Contact us",null]]]];
 const QUESTIONS=[
  ["Someone cancels plans an hour before. What is your honest first reaction?",
   ["Relief","Irritation","Neither, genuinely"]],
@@ -642,7 +645,7 @@ const S={
       ["out","Thursday is good. I will find somewhere with chairs outside.","Last week"]]}],
   you:JSON.parse(JSON.stringify(YOU)),
   plan:1,
-  set:{phone:"+1 (917) 555 0142",email:"sam@example.com",sub:false,
+  set:{email:"sam@example.com",sub:false,
        msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
@@ -651,7 +654,6 @@ const S={
        theme:"Match my phone"},
   edit:null,
   report:{reason:null,block:true,sent:false},
-  number:null,
   /* A design build has no network to lose. A real one watches the system and
      writes here; everything else reads it. */
   offline:false,
@@ -672,6 +674,13 @@ const S={
    removing splice both together and an upload can never end up attached to the
    wrong photograph. */
 S.you.up=S.you.photos.map(()=>null);
+/* Parallel to photos again: null, or a reason key. One is seeded so the state is
+   reachable at all — in the app the server sends it, and without a seed here the
+   screen could only ever be seen by someone who went looking for it. The fifth
+   rather than the first: a refused main photo would make every other screen look
+   broken, and five remain visible, which is above the floor of four. */
+S.you.rej=S.you.photos.map((_,i)=>i===4?"more_than_one_person":null);
+S.you.asked=S.you.photos.map(()=>false);
 let UID=0;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const stack=()=>S.stacks[S.tab];
@@ -1159,10 +1168,23 @@ function reviewRoot(){
    four rather than letting you walk off it. */
 function photoSlots(target,acts){
   const ps=target.photos, up=target.up||[], canRemove=ps.length>4;
+  const rej=target.rej||[];
   let h="";
   ps.forEach((t,i)=>{
     const u=up[i], failed=u&&u.state==="failed", loading=u&&u.state==="uploading";
     const x=(canRemove&&!loading)?`<button class="x" data-a="${acts.rm}" data-i="${i}">✕</button>`:"";
+    /* Deliberately not the failed-upload tile. The bytes arrived perfectly well,
+       so "Again" would send the same photograph back to be refused a second time.
+       The photograph stays visible underneath rather than being covered: it is the
+       reader's own, and hiding it would make "which one?" unanswerable. */
+    if(rej[i]&&!loading&&!failed){
+      h+=`<div class="slot" style="${tone(t)}">
+        <button class="rejface" data-a="${acts.why||"whyRejected"}" data-i="${i}"
+          aria-label="This photo is not on your profile. Tap to read why.">
+          Not shown<span>Why</span></button>
+        ${x}</div>`;
+      return;
+    }
     if(failed){
       h+=`<div class="slot" style="background:var(--stone)">
         <button class="failface" data-a="${acts.retry}" data-i="${i}"
@@ -1176,6 +1198,21 @@ function photoSlots(target,acts){
   if(ps.length<6) h+=`<button class="slot add" data-a="${acts.add}">+</button>`;
   return h;
 }
+
+/* Why a photograph could not be used. Reads after "Arch could not use it
+   because…", and **none of them blame the person** — a refusal that sounds like an
+   accusation is how somebody decides the app thinks they are a liar, when in most
+   cases the photograph was simply blurred or had two people in it.
+   Verbatim from `PhotoRejection.sentence`. */
+const REJECTION_REASONS={
+  not_you:"it was not clear the photo is of you",
+  more_than_one_person:"there is more than one person in it",
+  no_face:"a face is not visible in it",
+  explicit:"it shows more than Arch allows",
+  contact_details:"it has contact details in it",
+  screenshot:"it is a screenshot rather than a photograph",
+  quality:"it is too small or too blurred to show well"
+};
 
 /* ============================ the photo picker ============================ */
 function openPicker(target){
@@ -1280,6 +1317,10 @@ function commitPicked(){
     t.photos.push(LIBRARY[i][0]);
     const id="u"+(++UID);
     t.up.push({id,state:"uploading"});
+    // Every parallel array grows together, or a refusal ends up attached to the
+    // wrong photograph the first time anybody adds one.
+    if(t.rej) t.rej.push(null);
+    if(t.asked) t.asked.push(false);
     const fails=S.failOnce&&pk.ids.length>=3&&n===pk.ids.length-1;
     if(fails) S.failOnce=false;
     setTimeout(()=>settleUpload(t,id,fails?"failed":null),1400);
@@ -1303,7 +1344,15 @@ function arrange(){
   const p=S.you;
   const slots=photoSlots(p,{rm:"rmPhoto",add:"addPhoto",retry:"retryPhoto"});
   const failed=(p.up||[]).filter(u=>u&&u.state==="failed").length;
-  const caption=failed
+  const refused=(p.rej||[]).filter(Boolean).length;
+  /* Before the floor line, because a refused photo is usually *why* somebody is
+     under the floor, and naming the cause before the rule is the order a person
+     can act on. */
+  const caption=refused
+    ? (refused===1
+        ? "One photo is not on your profile. Tap it to read why."
+        : capWord(refused)+" photos are not on your profile. Tap one to read why.")
+    : failed
     ? (failed===1
         ? "One photo did not upload. It is not on your profile until it does."
         : capWord(failed)+" photos did not upload. They are not on your profile until they do.")
@@ -1337,7 +1386,7 @@ function settingsSections(){
     notif=[["n-blocked","Notifications are off","In your iPhone settings","push"]];
   }
   return [
-    ["Account",[["a-phone","Phone number",x.phone,"push"],["a-email","Email",x.email,"push"],
+    ["Account",[["a-email","Email",x.email,"push"],
       ["a-premium","Arch Premium",x.sub?"Subscribed":"Not subscribed","push"],
       ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
@@ -1448,7 +1497,7 @@ function opts(list,chosen,act){
 function sect(t,b){return '<div class="v gap-xs"><div class="subhead">'+t+'</div>'
   +'<div class="body mortar">'+b+'</div></div>';}
 
-const SET_TITLES={"a-phone":"Phone number","a-email":"Email","a-premium":"Arch Premium",
+const SET_TITLES={"a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
   "d-seeking":"Who you want to meet","x-theme":"Light and dark",
   "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
@@ -1481,7 +1530,7 @@ function settingDetail(id){
     b='<div class="v gap-m">'
      +'<div class="body">Your profile, photos and answers are deleted.</div>'
      +'<div class="body">The people you are talking to can still read what was said, and cannot reply. They are not told why.</div>'
-     +'<div class="body">You cannot undo this, and the same number can start again from scratch.</div></div>'
+     +'<div class="body">You cannot undo this, and this Apple ID cannot make another account.</div></div>'
      +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s roster, but your conversations keep working.")
      +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
   } else if(id==="n-blocked"){
@@ -1510,11 +1559,6 @@ function settingDetail(id){
      +'<div class="body">Who has been in '+rosterName()+', and when.</div></div>'
      +NOTE("Sent as a file to "+esc(x.email)+". It usually takes a few minutes and never more than 30 days.")
      +'<button class="btn quiet">Request my data</button>';
-  } else if(id==="a-phone"){
-    b=HEADING(x.phone)
-     +NOTE("This is how Arch knows you are a person. It is never shown to anyone and never appears on your profile.")
-     +'<button class="btn quiet" data-a="numberOpen">Change number</button>'
-     +NOTE("You will have to verify the new number before it takes effect.");
   } else if(id==="a-email"){
     b='<div class="field onNight"><input value="'+esc(x.email)+'" data-s="email"></div>'
      +NOTE("Used for signing in and account notices. Never shown to anyone, and Arch does not send anything else here.");
@@ -1546,13 +1590,12 @@ function settingDetail(id){
 }
 
 /* ============================ onboarding ============================ */
-/* Phone verification, on or off. Off while there is no backend to verify against
-   and no SMS to receive, so the flow can be walked end to end without inventing a
-   code. Nothing is deleted — the two screens are still below, and flipping this
-   back to true puts them back at the front. */
-const VERIFY_ON=false;
-const ALL_STEPS=["verify","identity","about","seeking","photos","answers","interests","questions","notifications"];
-const STEPS=VERIFY_ON?ALL_STEPS:ALL_STEPS.filter(x=>x!=="verify");
+/* There is no phone step, and there is no phone number anywhere in Arch.
+   An account is tied to an Apple ID and a device — Sign in with Apple replaced the
+   number, delete_account keeps the Apple id claimed so a removed account cannot
+   start again, and DeviceCheck carries the rest. A number would have verified
+   nothing that was not already verified. */
+const STEPS=["identity","about","seeking","photos","answers","interests","questions","notifications"];
 function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
@@ -1573,28 +1616,7 @@ function onboarding(){
   let segs=""; for(let i=0;i<total;i++) segs+=`<div class="seg ${i<cur?"on":""}"></div>`;
   let body="",foot="",cta="Continue",enabled=true;
 
-  if(step==="verify"&&!o.sent){
-    body=`<div class="titleL">Your number</div>
-      <div class="body mortar mt-s">Arch verifies every number. It is the main thing keeping this
-        from filling up with accounts that are not people.</div>
-      <div style="display:flex; gap:8px" class="mt-xl">
-        <div class="field onNight" style="flex:none"><span class="mortar">+1</span></div>
-        <div class="field onNight" style="flex:1"><input id="obPhone" inputmode="tel"
-          placeholder="917 555 0142" value="${esc(o.phone)}"></div></div>
-      <div class="footnote mortar mt-xl">Your number is never shown to anyone and never appears
-        on your profile.</div>`;
-    cta="Send a code"; enabled=o.phone.replace(/\D/g,"").length>=7;
-  } else if(step==="verify"){
-    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field onNight center"
-      style="flex:1; justify-content:center; height:56px"><span class="titleM">${o.code[i]||""}</span></div>`;
-    body=`<div class="titleL">Check your messages</div>
-      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(o.phone)}.</div>
-      <div style="display:flex; gap:8px" class="mt-xl">${boxes}</div>
-      <input id="obCode" inputmode="numeric" maxlength="6" value="${esc(o.code)}"
-        style="position:absolute; opacity:.001; width:1px; height:1px">
-      <button class="footnote mortar mt-xl" data-a="obResend">Send it again</button>`;
-    cta="Verify"; enabled=o.code.length===6;
-  } else if(step==="identity"){
+  if(step==="identity"){
     body=`<div class="titleL">Your name</div>
       <div class="body mortar mt-s">This is what people see. Apple gave us the one on your
         account &mdash; change it if it is not what you go by.</div>
@@ -1721,7 +1743,7 @@ function onboarding(){
   }
   return `<div class="v" style="flex:none; padding-bottom:12px"><div class="safetop"></div>
       <div style="display:flex; padding-left:8px">
-        ${o.step>0||o.sent||inQ?`<button class="iconbtn" data-a="obBack">‹</button>`
+        ${o.step>0||inQ?`<button class="iconbtn" data-a="obBack">‹</button>`
           :`<div style="width:44px;height:44px"></div>`}</div>
       <div class="rule pad">${segs}</div></div>
     <div class="screen"><div class="pad pb-xxxl" style="padding-top:24px; position:relative">${body}</div></div>${foot}`;
@@ -1796,6 +1818,59 @@ function removedRoot(){
     ${foot}
     <button class="footnote mortar center mt-m" data-a="leaveRemoved" style="width:100%">
       Prototype only: back to the app</button></div></div>`;
+}
+
+/* A photograph moderation would not take.
+   Built on `removedRoot`'s skeleton, because it is the same job in miniature: bad
+   news, delivered plainly, without the app performing its own disapproval. Title,
+   one sentence of why, the consequences bare, then the way out. No red, no icon,
+   no alert.
+   It names the photograph by *showing* it — unlike the removal screen, which names
+   a category and never the evidence. Here the evidence is the reader's own
+   property, and it is the only stable way to say which one: a position number
+   changes the moment anybody reorders, and "your third photo" is a puzzle rather
+   than an answer. */
+function rejectedSheet(i){
+  const p=S.you, why=REJECTION_REASONS[p.rej[i]]||REJECTION_REASONS.quality;
+  const remaining=p.photos.length-(p.rej||[]).filter(Boolean).length;
+  const asked=(p.asked||[])[i];
+  const lines=["It was not shown to anyone, and never has been.",
+               "Your other photos are on your profile as normal."];
+  if(remaining<4) lines.push("A profile needs four photos, so adding another is the quickest way back.");
+
+  /* Both quiet. The app is not pushing the reader toward either one — replacing the
+     photograph is usually faster, and asking for a second look is legitimate. */
+  const foot=asked
+    ? `<div class="v gap-xxs mt-s"><div class="subhead">A person is looking at it</div>
+        <div class="footnote mortar">You can add a different photo in the meantime, and this
+          one will appear if it is cleared.</div></div>`
+    : `<button class="btn quiet mt-s" data-a="rejAskReview" data-i="${i}">Ask us to look again</button>
+       <div class="footnote mortar mt-s">One person looks at every photo that is sent back.
+         It usually takes a day.</div>`;
+
+  openSheet(`<div class="titleM" style="padding-top:8px">One of your photos is not on your profile</div>
+    <div class="body mortar mt-s">Arch could not use it because ${why}.</div>
+    <div class="mt-l" style="width:132px; border-radius:var(--r-control); overflow:hidden;
+      aspect-ratio:1; ${tone(p.photos[i])}"></div>
+    <div class="v gap-s mt-xl">${lines.map(l=>`<div class="body">${l}</div>`).join("")}</div>
+    <button class="btn quiet mt-xxl" data-a="rejChooseAnother" data-i="${i}">Choose another</button>
+    ${foot}`);
+}
+
+/* Asking for a second look. Modelled on `appealSheet`, including the part that
+   matters: **it does not imply the photograph is coming back.** Most photographs
+   sent back stay back, and a sheet that suggested otherwise would be collecting
+   hope rather than information. */
+function rejReviewSheet(i){
+  openSheet(`<div class="titleM" style="padding-top:8px">Tell us what we missed</div>
+    <div class="body mortar mt-s">A person reads this. If the photo is of you and something
+      about it was misread, say so here.</div>
+    <div class="field mt-m" style="align-items:flex-start"><textarea id="rejNote" rows="5"
+      maxlength="500" placeholder="What do you think we got wrong?"></textarea></div>
+    <button class="btn quiet mt-m" data-a="rejSendReview" data-i="${i}">Send</button>
+    <div class="footnote mortar mt-s">Your other photos are unaffected while this is read.</div>
+    <button class="btntext" data-a="closeSheet">Cancel</button>`);
+  setTimeout(()=>document.getElementById("rejNote")?.focus(),320);
 }
 
 /* One field and a person, not a form of dropdowns — the app already promises that
@@ -1978,50 +2053,6 @@ function placeSheet(target,query){
       placeholder="Search" value="${esc(q)}"></div>
     <div class="v gap-xl mt-m" style="max-height:420px; overflow-y:auto">${offer}${body}</div>
     <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
-}
-
-/* The number *is* the sign-in — there is no password to fall back on — so changing
-   it is the verification flow again rather than a field you edit. The number
-   already being taken is a real ending, not an error: two accounts cannot share
-   one, so the screen says what to do instead of blinking and leaving you to it. */
-function numberSheet(){
-  const n=S.number;
-  let body="",cta="",back="";
-  if(n.step==="number"){
-    body=`<div class="titleM" style="padding-top:8px">A new number</div>
-      <div class="body mortar mt-s">Arch verifies every number, so you will get a code before
-        anything changes. Until then ${esc(S.set.phone)} still signs you in.</div>
-      <div style="display:flex; gap:8px" class="mt-m">
-        <div class="field" style="flex:none"><span class="mortar">+1</span></div>
-        <div class="field" style="flex:1"><input id="numberInput" inputmode="tel"
-          placeholder="917 555 0142" value="${esc(n.value)}"></div></div>`;
-    cta="Send a code"; back="Cancel";
-  } else if(n.step==="code"){
-    let boxes=""; for(let i=0;i<6;i++) boxes+=`<div class="field center"
-      style="flex:1; justify-content:center; height:56px"><span class="titleM">${n.code[i]||""}</span></div>`;
-    body=`<div class="titleM" style="padding-top:8px">Check your messages</div>
-      <div class="body mortar mt-s">We sent a six-digit code to +1 ${esc(n.value)}.</div>
-      <div style="display:flex; gap:8px" class="mt-m">${boxes}</div>
-      <input id="numberCode" inputmode="numeric" maxlength="6" value="${esc(n.code)}"
-        style="position:absolute; opacity:.001; width:1px; height:1px">`;
-    cta="Verify"; back="Use a different number";
-  } else if(n.step==="taken"){
-    body=`<div class="titleM" style="padding-top:8px">That number already has an account</div>
-      <div class="body mortar mt-s">Two accounts cannot share a number. If that one is yours,
-        sign out and sign in with it instead &mdash; this account stays exactly as it is
-        until you do.</div>`;
-    cta=""; back="Try another number";
-  } else {
-    body=`<div class="titleM" style="padding-top:8px">Your number has changed</div>
-      <div class="body mortar mt-s">+1 ${esc(n.value)} signs you in from now on. The old one
-        does not reach this account any more, and nothing else about your profile moved.</div>`;
-    cta="Done"; back="";
-  }
-  openSheet(body
-    +(cta?`<button class="btn primary mt-xxl" data-a="numberNext">${cta}</button>`:"")
-    +(back?`<button class="btntext ${cta?"":"mt-xxl"}" data-a="${
-        n.step==="number"?"closeSheet":"numberBack"}">${back}</button>`:""));
-  if(n.step==="code") setTimeout(()=>document.getElementById("numberCode")?.focus(),320);
 }
 
 function heightSheet(target){
@@ -2235,8 +2266,8 @@ document.addEventListener("click",e=>{
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     deleteDo:()=>{ closeSheet(); startOnboarding(); },
     /* Not the same thing as deleting, even though both land in the same place:
-       with no password, signing in *is* entering your number, so the way back in
-       is the screen a new account starts on. */
+       the way back in is the screen a new account starts on, because Continue with
+       Apple is both the sign-up and the sign-in. */
     signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
       <div class="body mortar mt-s">Your profile, your conversations and the people in your
         roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple
@@ -2244,21 +2275,6 @@ document.addEventListener("click",e=>{
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     signOutDo:()=>{ closeSheet(); startOnboarding(); },
-    numberOpen:()=>{ S.number={step:"number",value:"",code:""}; numberSheet(); },
-    numberNext:()=>{
-      const n=S.number, digits=n.value.replace(/\D/g,"");
-      if(n.step==="number"){
-        if(digits.length<7) return;
-        /* A design build has no carrier, so one number stands in for one already in
-           use. A real build asks the server. */
-        n.step=digits.endsWith("0000")?"taken":"code";
-      } else if(n.step==="code"){
-        if(n.code.length!==6) return;
-        S.set.phone="+1 "+n.value; n.step="done";
-      } else if(n.step==="done"){ closeSheet(); render(); return; }
-      numberSheet();
-    },
-    numberBack:()=>{ S.number.step="number"; S.number.code=""; numberSheet(); },
     setHeight:()=>{
       const v=el.dataset.o;
       if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
@@ -2303,7 +2319,27 @@ document.addEventListener("click",e=>{
     review:()=>{ if(S.set.sub) push({name:"review"}); else acts.goPremium(); },
     addPhoto:()=>openPicker("you"),
     rmPhoto:()=>{const i=+el.dataset.i;
-      S.you.photos.splice(i,1); S.you.up.splice(i,1); render();},
+      S.you.photos.splice(i,1); S.you.up.splice(i,1);
+      S.you.rej.splice(i,1); S.you.asked.splice(i,1); render();},
+    whyRejected:()=>rejectedSheet(+el.dataset.i),
+    /* Removing it first is what makes "choose another" mean anything — otherwise
+       the refused tile is still holding the slot the new photograph needs. */
+    rejChooseAnother:()=>{
+      const i=+el.dataset.i;
+      S.you.photos.splice(i,1); S.you.up.splice(i,1);
+      S.you.rej.splice(i,1); S.you.asked.splice(i,1);
+      closeSheet(); openPicker("you");
+    },
+    rejAskReview:()=>rejReviewSheet(+el.dataset.i),
+    rejSendReview:()=>{
+      const t=document.getElementById("rejNote");
+      if(!t||!t.value.trim()) return;
+      /* Deliberately does not clear the refusal. Most photographs sent back stay
+         back, and clearing it on asking would show somebody their photo restored
+         before anybody had looked. */
+      S.you.asked[+el.dataset.i]=true;
+      closeSheet(); render();
+    },
     retryPhoto:()=>retryUpload(S.you,+el.dataset.i),
     pickClose:()=>{S.picker=null; render();},
     pickTile:()=>{
@@ -2410,10 +2446,8 @@ document.addEventListener("click",e=>{
     },
     obBack:()=>{
       if(o.q!==null&&o.q!==undefined){ o.q=o.q===0?null:o.q-1; render(); return; }
-      if(o.step===0&&o.sent){ o.sent=false; o.code=""; render(); return; }
       if(o.step>0){ o.step--; render(); }
     },
-    obResend:()=>{el.textContent="Code sent again";},
     obAddPhoto:()=>openPicker("ob"),
     obRmPhoto:()=>{const i=+el.dataset.i;
       o.photos.splice(i,1); o.up.splice(i,1); render();},
@@ -2443,7 +2477,6 @@ document.addEventListener("click",e=>{
     },
     obNext:()=>{
       const step=STEPS[o.step];
-      if(step==="verify"&&!o.sent){ o.sent=true; render(); return; }
       if(step==="questions"&&(o.q===null||o.q===undefined)){ o.q=0; render(); return; }
       if(step==="notifications"){ finishOnboarding(); return; }
       o.step++; render();
@@ -2459,11 +2492,6 @@ document.addEventListener("input",e=>{
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
-  if(t.id==="numberInput"){ S.number.value=t.value; return; }
-  if(t.id==="numberCode"){
-    S.number.code=t.value.replace(/\D/g,"").slice(0,6); numberSheet();
-    document.getElementById("numberCode")?.focus(); return;
-  }
   if(t.id==="placeSearch"){
     const at=t.selectionStart;
     placeSheet(t.dataset.t,t.value);
@@ -2472,13 +2500,11 @@ document.addEventListener("input",e=>{
     return;
   }
   if(o){
-    const map={obPhone:"phone",obCode:"code",obName:"name",obEmail:"email",obAge:"age",
+    const map={obName:"name",obEmail:"email",obAge:"age",
                obWork:"work",obPronouns:"pronouns"};
     if(map[t.id]){
-      o[map[t.id]]=t.id==="obCode"?t.value.replace(/\D/g,"").slice(0,6):t.value;
-      const btn=document.querySelector('[data-a="obNext"]');
-      if(t.id==="obCode"){ render(); document.getElementById("obCode")?.focus(); return; }
-      if(btn) refreshCTA();
+      o[map[t.id]]=t.value;
+      if(document.querySelector('[data-a="obNext"]')) refreshCTA();
       return;
     }
     if(t.dataset.ob==="answer"){ o.answers[+t.dataset.i]=t.value; refreshCTA(); return; }
@@ -2488,9 +2514,7 @@ document.addEventListener("input",e=>{
 function refreshCTA(){
   const o=S.onboarding, step=STEPS[o.step];
   let ok=true;
-  if(step==="verify"&&!o.sent) ok=o.phone.replace(/\D/g,"").length>=7;
-  else if(step==="verify") ok=o.code.length===6;
-  else if(step==="identity") ok=!!o.name.trim();
+  if(step==="identity") ok=!!o.name.trim();
   else if(step==="about") ok=!!(o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender);
   else if(step==="seeking") ok=o.seeking.length>0;
   else if(step==="answers") ok=o.answers.filter((a,i)=>a.trim()&&o.questions[i]).length>=3;
@@ -2500,7 +2524,7 @@ function refreshCTA(){
 }
 
 function startOnboarding(){
-  S.onboarding={welcome:true,step:0,sent:false,phone:"",code:"",name:"",email:"",
+  S.onboarding={welcome:true,step:0,name:"",email:"",
     appleUserID:"",age:"",place:null,coord:null,height:"",work:"",gender:null,pronouns:"",seeking:[],
     photos:[],up:[],questions:["","",""],answers:["","",""],
     interests:["","",""],q:null,qa:{}};

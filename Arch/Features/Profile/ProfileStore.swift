@@ -102,15 +102,36 @@ final class ProfileStore {
     /// a photo that uploaded perfectly well. Folding the two together would mean a
     /// refusal looked like a network problem, and "Again" is exactly the wrong
     /// thing to offer somebody whose photograph was refused.
-    private(set) var rejections: [String: PhotoRejection] = [:]
+    ///
+    /// Read off the photographs rather than stored beside them. It was a separate
+    /// dictionary, which meant the server's answer had to be copied into a second
+    /// place on every load — and it never was, so a refusal that arrived from the
+    /// server was invisible no matter what the server said.
+    var rejections: [String: PhotoRejection] {
+        Dictionary(uniqueKeysWithValues: person.photos.compactMap { photo in
+            photo.rejection.map { (photo.id, $0) }
+        })
+    }
 
     var rejectedPhotos: Int { rejections.count }
 
+    /// Whether a second look has been asked for, per photograph. One each.
+    private(set) var reviewsAsked: Set<String> = []
+
     func reject(id: String, because reason: PhotoRejection) {
-        rejections[id] = reason
-        if let index = person.photos.firstIndex(where: { $0.id == id }) {
-            person.photos[index].state = .rejected
-        }
+        guard let index = person.photos.firstIndex(where: { $0.id == id }) else { return }
+        person.photos[index].state = .rejected
+        person.photos[index].rejection = reason
+    }
+
+    /// Asks a person to look at a refused photograph again.
+    ///
+    /// Deliberately does not clear the refusal. Most photographs sent back stay
+    /// back, and a screen that cleared it on asking would be showing somebody their
+    /// photo restored before anybody had looked.
+    func askForReview(id: String, note: String) {
+        reviewsAsked.insert(id)
+        persist { try await ArchBackend.askForPhotoReview(id: id, note: note) }
     }
 
     /// Adds picked photos in the order they were chosen.
