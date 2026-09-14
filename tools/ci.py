@@ -145,6 +145,16 @@ def main():
             if n.get("annotation_level") == "notice"
             and (n.get("title") or "") == "Every warning"
         ]
+        # Any other notice is a step reporting a measurement rather than a
+        # complaint -- what the screenshots looked like, for instance. Printed by
+        # title, because filtering for one known title meant every notice added
+        # later was collected and then silently dropped.
+        others = [
+            ((n.get("title") or "note"), clean(n))
+            for n in notes
+            if n.get("annotation_level") == "notice"
+            and (n.get("title") or "") != "Every warning"
+        ]
 
         if errors:
             print()
@@ -174,6 +184,12 @@ def main():
             for path, line, message in extra:
                 where = "%s:%s" % (path, line) if path else ""
                 print("    - %s %s" % (where, message[:260]))
+
+        for title, message in others:
+            print()
+            print("  %s:" % title)
+            for line in message.replace("%0A", "\n").splitlines():
+                print("    %s" % line[:300])
 
     if not failed:
         print()

@@ -255,11 +255,20 @@ def main():
               "the scan below proved nothing. Either Arch logged nothing in three "
               "minutes, or the predicate does not name the process correctly.")
 
+    # Two passes, because the first version of this matched on "Assertion" and
+    # duly reported every line mentioning BKSProcessAssertion -- a class name, in
+    # the ordinary course of a launch. Substring matching on a word that appears
+    # inside an identifier reports the identifier.
+    NOISE = ("com.apple.UIKit:BackgroundTask", "com.apple.app_launch_measurement")
+    TROUBLE = ("Fatal error", "fatal error", "Assertion failed", "assertion failed",
+               "Precondition failed", "precondition failure", "unrecognized selector",
+               "Unable to load", "unable to load", "Could not load", "could not load",
+               "Failed to load", "failed to load", "Unable to register",
+               "failed to register", "No such file")
     trouble = [
         line for line in lines
-        if any(word in line for word in
-               ("Fatal", "fatal error", "Assertion", "Precondition", "unable to",
-                "Unable to", "could not", "Could not", "failed", "Failed"))
+        if not any(subsystem in line for subsystem in NOISE)
+        and any(phrase in line for phrase in TROUBLE)
     ]
     if trouble:
         print("%d log line(s) worth a look:" % len(trouble))
