@@ -455,6 +455,15 @@ const quotedOf=c=>(isRequest(c)?S.you:c.person).prompts[c.open[1]];
 const CAP=()=>S.set.sub?7:5;
 const LIMIT=()=>S.set.sub?15:10;
 const WARN=()=>LIMIT()-2;
+/* Nine in the morning, New York time, for everybody at once — the same instant
+   DailyFiveStore.nextRefill computes. The abbreviation comes from the zone for
+   today rather than being written down, so it says EDT for the seven months a
+   fixed "EST" would be wrong. */
+function refillTime(){
+  const parts=new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",timeZoneName:"short"}).formatToParts(new Date());
+  const zone=(parts.find(x=>x.type==="timeZoneName")||{}).value||"ET";
+  return "9am "+zone;
+}
 const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"roster");
 const rosterName=()=>"your "+rosterWord();
 const rosterTitle=()=>"Your "+rosterWord();
@@ -468,7 +477,7 @@ function setSubscribed(v){
   if(S.set.sub===v) return;
   S.set.sub=v;
   while(S.slots.length<CAP())
-    S.slots.push({person:null,when:"A new person arrives tomorrow.",left:"Nine in the morning"});
+    S.slots.push({person:null,when:"A new person arrives tomorrow.",left:refillTime()});
   while(S.slots.length>CAP()){
     let i=-1;
     S.slots.forEach((sl,j)=>{ if(!sl.person) i=j; });
@@ -840,7 +849,7 @@ function dailyRoot(){
         ? "This is a connection, not your roster. Whoever is in it is still in it."
         : S.firstMorning
           ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
-          : "People arrive at nine, wherever you are. Nothing here needs fixing."}</div></div>`;
+          : "People arrive at "+refillTime()+", wherever you are. Nothing here needs fixing."}</div></div>`;
   } else if(open.length){
     h+=`<div class="hairline mt-xxxl"></div>
       <div class="footnote mortar mt-m">New people arrive in these slots.</div>
@@ -2122,7 +2131,7 @@ function removePerson(personId,alsoConversation,theirs){
   if(alsoConversation) S.convos=S.convos.filter(c=>c.person.id!==personId);
   const i=S.slots.findIndex(s=>s.person&&s.person.id===personId);
   if(i>=0) S.slots[i]={person:null,when:"A new person arrives tomorrow.",
-                       left:"Nine in the morning",theirs:!!theirs};
+                       left:refillTime(),theirs:!!theirs};
 }
 
 /* ============================ the dismissal ============================ */
@@ -2140,7 +2149,7 @@ function performDismiss(id){
   const reduce=matchMedia("(prefers-reduced-motion: reduce)").matches;
 
   const finish=()=>{
-    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:"Nine in the morning"};
+    S.slots[idx]={person:null,when:"A new person arrives tomorrow.",left:refillTime()};
     S.selected=null; render();
   };
   if(!card||reduce){ setTimeout(finish,120); return; }
