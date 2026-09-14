@@ -152,16 +152,26 @@ def main():
             for error in errors:
                 print("    - %s" % error[:300])
 
-        if full:
-            body = full[0].replace("%0A", "\n").splitlines()
+        body = full[0].replace("%0A", "\n").splitlines() if full else []
+        if body:
             print()
-            print("  %s -- %s" % (job["name"], body[0] if body else ""))
+            print("  %s -- %s" % (job["name"], body[0]))
             for line in body[1:]:
                 print("    %s" % line[:300])
-        elif warnings:
+
+        # Not `elif`. `buildwarnings.py` emits its notice on every run, including
+        # one with nothing in it, so an `elif` here hid every warning raised by any
+        # *other* step in the same job -- which is all of the ones the simulator
+        # launch reports. They come from a different step and are not in that list.
+        listed = set(body[1:])
+        extra = [
+            (path, line, message) for path, line, message in warnings
+            if not any(message in entry for entry in listed)
+        ]
+        if extra:
             print()
-            print("  %d warning(s) in %s:" % (len(warnings), job["name"]))
-            for path, line, message in warnings:
+            print("  %d other warning(s) in %s:" % (len(extra), job["name"]))
+            for path, line, message in extra:
                 where = "%s:%s" % (path, line) if path else ""
                 print("    - %s %s" % (where, message[:260]))
 

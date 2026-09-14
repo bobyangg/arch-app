@@ -169,15 +169,16 @@ jobs:
           path: build.log
           if-no-files-found: ignore
 
-      # Two frames of the app actually running, which is the only thing in this
-      # repository that has ever shown what Arch looks like rather than asserting
-      # something about it.
+      # Three frames -- the screen before Arch opened, one during its launch view,
+      # and one well after. The only thing in this repository that has ever shown
+      # what Arch looks like rather than asserting something about it.
       - name: Keep the screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: launch-screenshots
           path: |
+            before.png
             launching.png
             settled.png
           if-no-files-found: ignore

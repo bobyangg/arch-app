@@ -11,27 +11,29 @@ thousand lines of Swift had never been executed at all when this was written.
 Fails the step if the app is not running some seconds after launch, and prints the
 crash report and the simulator's log for the process when it is not.
 
-Two screenshots are kept, one during the launch view and one well after it, and
-they are the only pictures of Arch running that exist anywhere. The second is
-also checked against the first: an app that is alive and stuck on its launch
-view exits zero all day, and the way that shows up is a settled screen no
-busier than the launch screen it should have replaced.
+Three screenshots are kept -- before the launch, during it, and well after --
+and they are the only pictures of Arch running that exist anywhere. The last is
+checked against the *first*, not against the one during launch: an app that is
+alive but never came to the foreground exits zero all day, and that is the thing
+a screenshot can actually settle. Comparing against the launch view cannot be
+made to work, because the launch animation is over in 1.4 seconds and any shot
+late enough to prove the app drew is too late to catch it.
+
+Each is also averaged down to a single pixel, which separates a near-white screen
+from a dark one where a byte count cannot.
 """
 import glob
 import json
 import os
+import struct
 import subprocess
 import sys
 import time
+import zlib
 
 BUNDLE = "com.arch.arch"
-SETTLE = 14   # seconds to let the app get past launch and draw something
-FIRST_SHOT = 2  # the launch animation is about 1.4s, so this catches it mid-draw
-
-# How much busier the settled screen has to be than the launch screen before we
-# believe the app got past it. Generous on purpose: this only ever raises a
-# warning, and a warning that cries wolf is worse than no warning.
-FLAT_RATIO = 1.5
+SETTLE = 14     # seconds to let the app get past launch and draw something
+FIRST_SHOT = 2  # the launch animation is about 1.4s; this lands near the end of it
 
 
 def run(args, check=True, quiet=False):
@@ -92,6 +94,57 @@ def boot(udid):
     run(["xcrun", "simctl", "bootstatus", udid, "-b"])
 
 
+def average_colour(path):
+    """The whole screenshot averaged down to one pixel.
+
+    `sips` is stock on macOS, and scaling to 1x1 is an average of every pixel in
+    the image. A 1x1 PNG is then trivial to decode with nothing installed: one
+    filter byte and the samples, and with no left or upper neighbour every filter
+    predicts zero, so the bytes are the values whatever filter was chosen.
+
+    Cheap, and it says something a byte count cannot -- a near-white screen and a
+    dark one can compress to the same size.
+    """
+    tiny = path + ".1x1.png"
+    if run(["sips", "-z", "1", "1", path, "--out", tiny],
+           check=False, quiet=True).returncode != 0:
+        return None
+    try:
+        with open(tiny, "rb") as handle:
+            data = handle.read()
+    except OSError:
+        return None
+
+    position, idat, colour_type = 8, b"", 2
+    while position + 8 <= len(data):
+        length = struct.unpack(">I", data[position:position + 4])[0]
+        kind = data[position + 4:position + 8]
+        chunk = data[position + 8:position + 8 + length]
+        if kind == b"IHDR":
+            colour_type = chunk[9]
+        elif kind == b"IDAT":
+            idat += chunk
+        position += 12 + length
+    if not idat:
+        return None
+    raw = zlib.decompress(idat)[1:]          # drop the filter byte
+    if colour_type in (2, 6) and len(raw) >= 3:
+        return tuple(raw[:3])
+    if colour_type in (0, 4) and len(raw) >= 1:
+        return (raw[0],) * 3
+    return None
+
+
+def describe(name):
+    """Size and average colour of a screenshot, as a line for the log."""
+    if not os.path.exists(name):
+        return name, 0, None, "missing"
+    size = os.path.getsize(name)
+    colour = average_colour(name)
+    shown = "#%02x%02x%02x" % colour if colour else "unreadable"
+    return name, size, colour, "%7d bytes   average %s" % (size, shown)
+
+
 def crash_reports(since):
     """Crash logs written since we started, for our app."""
     found = []
@@ -115,6 +168,14 @@ def main():
     boot(udid)
 
     run(["xcrun", "simctl", "install", udid, app])
+
+    # Taken before the app is launched, and the whole reason the check below can
+    # work. Comparing the settled screen against the *launch view* cannot be made
+    # reliable -- the launch animation is over in 1.4 seconds, so any shot late
+    # enough to be sure the app has drawn is also too late to catch it, and the
+    # comparison collapses into "is a static roster static", which it always is.
+    # Comparing against what was on screen before Arch opened has no such race.
+    run(["xcrun", "simctl", "io", udid, "screenshot", "before.png"], check=False)
 
     launched = run(["xcrun", "simctl", "launch", "--terminate-running-process",
                     udid, BUNDLE])
@@ -162,29 +223,25 @@ def main():
         print("::error::Arch did not survive launch on the simulator.")
         return 1
 
-    # Alive is not the same as working, but the obvious test for that does not
-    # work. Diffing the two screenshots cannot tell "stuck on the launch view"
-    # from "working, and idle": the roster does not animate either, so both are a
-    # still image eight seconds apart. What *does* separate them is how much is on
-    # the screen. The launch view is one flat `ArchColor.night` field with a small
-    # wordmark on it, and a flat field compresses to almost nothing, where a
-    # roster of photographs and cards does not.
-    def shot(name):
-        if not os.path.exists(name):
-            return 0
-        return os.path.getsize(name)
+    # Alive is not the same as on screen. A process that launched, drew nothing
+    # and sat there is still a process.
+    measurements = [describe(name) for name in
+                    ("before.png", "launching.png", "settled.png")]
+    print("screenshots:")
+    for name, _, _, line in measurements:
+        print("  %-14s %s" % (name, line))
 
-    # The comparison is against `launching.png` rather than a byte count picked out
-    # of the air, because that shot *is* a known-flat screen -- it is taken while
-    # the launch view is still up. So the launch view calibrates the test for the
-    # launch view, and there is no constant here to be wrong about on a device
-    # whose screen is a different size.
-    launching, settled = shot("launching.png"), shot("settled.png")
-    print("screenshots: launching %d bytes, settled %d bytes" % (launching, settled))
-    if launching and settled and settled < launching * FLAT_RATIO:
-        print("::warning::The settled screen is no busier than the launch screen "
-              "(%d bytes against %d) -- Arch may not have got past it. The two "
-              "screenshots are on this run as an artifact." % (settled, launching))
+    before, settled = measurements[0], measurements[2]
+    if before[1] and settled[1] and before[1] == settled[1] and before[2] == settled[2]:
+        print("::warning::The screen fourteen seconds after launch is identical to "
+              "the one taken before Arch was started -- it may never have come to "
+              "the foreground. The screenshots are on this run as an artifact.")
+
+    # Reported, not judged. Two identical frames twelve seconds apart is what a
+    # working idle roster looks like as well as a stuck one, so these are evidence
+    # for a person to read rather than a threshold to trip.
+    print("::notice title=What was on screen::%s" % "%0A".join(
+        "%s  %s" % (name, line) for name, _, _, line in measurements))
 
     # Things that do not kill the process and are still worth knowing: a font that
     # did not register, an asset that would not load, an assertion that was logged
