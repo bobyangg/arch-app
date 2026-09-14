@@ -507,6 +507,18 @@ const BENEFITS=[["Seven people instead of five","Two more slots. The same care c
 /* What people picked out of your profile when they wrote to you. Not likes \u2014 Arch
    has none. This is the photo or answer somebody quoted in the composer, which is a
    signal the app genuinely has rather than one the review has to invent. */
+/* What the reviewer says about Sam. Mirrors MockData.profileNotes: photo 5 is
+   missing because it is refused, so the profile does not show it. */
+const NOTES={overall:"This reads like one person, which is rarer than it sounds: the park, the click track and the coat-on goodbye all belong to the same life. The photographs are behind the writing. Lead with a face, lose the two that say the same thing, and the profile will match its answers.",
+ items:[
+  {kind:"photo",position:1,verdict:"Change",note:"This is the one people see in their five, and you are a long way from the camera in it. It is a good photograph of a hill. Lead with the one where your face fills a third of the frame — photo 2 does — and keep this for later."},
+  {kind:"photo",position:2,verdict:"Keep",note:"Close, lit from a window, looking at whoever took it. This is the photograph the profile should open on."},
+  {kind:"photo",position:3,verdict:"Consider",note:"The desk and the racks say what you do without a caption, which is worth having. The overhead light is flattening it; the same frame by the window in photo 2 would do more."},
+  {kind:"photo",position:4,verdict:"Change",note:"Same angle and same light as photo 3, a few minutes apart. Two of these is one too many. Replace it with something outdoors, or with other people in it, so the set has more than one room."},
+  {kind:"photo",position:6,verdict:"Keep",note:"The only one where you are laughing, and the only one with anyone else in it. It belongs higher — fourth, after the desk."},
+  {kind:"answer",position:1,verdict:"Keep",note:"A specific bench at a specific hour. Somebody who knows the park can reply to this, and somebody who does not can ask. The second sentence earns its place."},
+  {kind:"answer",position:2,verdict:"Consider",note:"The coat-on goodbye is a real detail and it lands. It could stop one clause earlier: \"still be there twenty minutes later\" is the picture, and \"coat on\" is it again."},
+  {kind:"answer",position:3,verdict:"Keep",note:"The best of the three. It admits something, it is funny without trying, and \"it was me for about a year\" gives a stranger three different things to ask about."}]};
 const WRITTEN={"prompt-2":4,"photo-1":3,"prompt-0":2,"photo-0":1};
 /* A camera roll: portraits, squares, a couple of landscapes, one panorama. The
    shapes are the point — a library that was already square would make the crop step
@@ -1153,13 +1165,29 @@ function reviewRoot(){
         in them to answer.</div></div>
       <div class="v gap-xs">${quiet.map(row).join("")}</div></div>`;
   }
-  /* The half that needs a model, and does not have one. It says so. */
-  h+=`<div class="v gap-s"><div class="prompt mortar">Notes on your profile</div>
-    <div style="background:var(--stone); border-radius:20px; padding:16px">
-      <div class="body">Not running yet</div>
-      <div class="footnote mortar mt-s">This is where specific notes on your photos and
-        answers will go &mdash; what is vague, what to say instead. It is not built yet, and
-        until it is, the half above is the honest part.</div></div></div>`;
+  /* The half that needs a model. The app asks the `review` edge function; here the
+     answer is written down, in the same shape and to the same rules -- about the
+     photograph as a photograph and the writing as writing, never about the person,
+     and nowhere to put a number. */
+  const noteRow=n=>{
+    const subject=n.kind==="photo"?`Photo ${n.position}`:esc(p.prompts[n.position-1][0]);
+    const thumb=n.kind==="photo"
+      ? `<div style="width:44px;height:44px;border-radius:8px;flex:none;${tone(p.photos[n.position-1])}"></div>`:"";
+    const answer=n.kind==="answer"
+      ? `<div class="footnote mortar" style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">${esc(p.prompts[n.position-1][1])}</div>`:"";
+    return `<div class="srow" style="background:var(--stone); border-radius:var(--r-control);
+      padding:16px; align-items:flex-start">${thumb}<div class="v gap-xxs" style="flex:1; min-width:0">
+      <div class="spread"><div class="subhead">${subject}</div><div class="footnote mortar" style="white-space:nowrap">${n.verdict}</div></div>
+      ${answer}<div class="callout" style="margin-top:4px">${esc(n.note)}</div></div></div>`;
+  };
+  const notes=NOTES.items.slice().sort((a,b)=>a.kind!==b.kind?(a.kind==="photo"?-1:1):a.position-b.position);
+  h+=`<div class="v gap-s"><div class="v gap-xxs"><div class="prompt mortar">Notes on your profile</div>
+    <div class="footnote mortar">About the photographs as photographs and the answers as writing.
+      Nothing here is a score, and nothing here is about you.</div></div>
+    <div class="v gap-xs">
+      <div style="background:var(--stone); border-radius:20px; padding:16px"><div class="body">${esc(NOTES.overall)}</div></div>
+      ${notes.map(noteRow).join("")}
+      <button class="btntext">Ask again</button></div></div>`;
   return h+`</div></div>`;
 }
 
