@@ -27,8 +27,8 @@ final class DailyFiveStore {
     /// exist, and it is a great deal less to run.
     ///
     /// Everyone Arch currently serves is in and around New York, so today this *is*
-    /// the local nine. Somewhere else it is not, and the countdown is shown in the
-    /// reader's own clock rather than claiming an hour that is not theirs.
+    /// the local nine. Somewhere else it is not, and the open slot says which zone
+    /// the hour belongs to rather than claiming it is the reader's.
     static let refillHour = 9
 
     /// The zone the batch runs in.
@@ -274,9 +274,9 @@ final class DailyFiveStore {
     /// clock to watch.
     ///
     /// Computed in `refillZone` because that is where the job runs, and returned as a
-    /// `Date`, which has no timezone of its own. Whatever formats it renders it in the
-    /// reader's clock, so somebody in London is told two in the afternoon, which is
-    /// true, rather than nine in the morning, which is not.
+    /// `Date`, which has no timezone of its own. The day is then read in the reader's
+    /// calendar and the hour in the batch's zone, with its abbreviation — so somebody
+    /// in London is told "tomorrow, 9am EST", which is true and says whose nine.
     private static func nextRefill(from now: Date = Date()) -> Date {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = refillZone

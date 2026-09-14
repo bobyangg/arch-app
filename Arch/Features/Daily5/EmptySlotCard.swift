@@ -50,9 +50,9 @@ struct EmptySlotCard: View {
 
 /// Copy for the refill time.
 ///
-/// Deliberately coarse. An exact countdown would manufacture urgency around a wait
-/// the user cannot do anything about, and a ticking clock is ambient motion. Hours,
-/// then days, computed when the view appears.
+/// The day in the reader's own calendar, and the hour in the batch's own zone. No
+/// countdown: an exact one would manufacture urgency around a wait the user cannot
+/// do anything about, and a ticking clock is ambient motion.
 enum RefillCopy {
 
     static func headline(for date: Date) -> String {
@@ -67,16 +67,26 @@ enum RefillCopy {
         return "A new person arrives on \(weekday)."
     }
 
-    static func detail(for date: Date, now: Date = Date()) -> String {
-        let seconds = max(0, date.timeIntervalSince(now))
-        let hours = Int((seconds / 3600).rounded())
+    /// "9am EST", or "9am EDT" for the seven months New York is on daylight time.
+    /// The abbreviation comes from the zone for that date rather than being written
+    /// down, so the card cannot name an hour the batch does not run at.
+    static func detail(for date: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = DailyFiveStore.refillZone
+        return label(hour24: calendar.component(.hour, from: date), on: date)
+    }
 
-        if hours < 1 { return "Within the hour" }
-        if hours == 1 { return "About an hour" }
-        if hours < 48 { return "About \(hours) hours" }
+    /// The batch hour as of today, for copy that talks about the batch in general
+    /// rather than about one slot's next refill.
+    static func batchHour(now: Date = Date()) -> String {
+        label(hour24: DailyFiveStore.refillHour, on: now)
+    }
 
-        let days = Int((seconds / 86_400).rounded())
-        return "About \(days) days"
+    private static func label(hour24: Int, on date: Date) -> String {
+        let hour12 = hour24 % 12 == 0 ? 12 : hour24 % 12
+        let meridiem = hour24 < 12 ? "am" : "pm"
+        let abbreviation = DailyFiveStore.refillZone.abbreviation(for: date) ?? "ET"
+        return "\(hour12)\(meridiem) \(abbreviation)"
     }
 }
 

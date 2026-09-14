@@ -193,7 +193,7 @@ struct DailyFiveView: View {
                  ? "This is a connection, not your roster. Whoever is in it is still in it."
                  : roster.isFirstMorning
                    ? "Arch is choosing them overnight. There is nothing to do until then — it is not a queue and there is no way to hurry it."
-                   : "Everyone's five arrive at the same moment, first thing. Nothing here needs fixing.")
+                   : "People arrive at \(RefillCopy.batchHour()), wherever you are. Nothing here needs fixing.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
