@@ -190,6 +190,14 @@ def main():
     # did not register, an asset that would not load, an assertion that was logged
     # rather than trapped. None of these fail the step -- this is the first time
     # any of it has run, and a first read should report, not gate.
+    # A scan that matched nothing and a scan that had nothing to match look exactly
+    # the same from out here, and the second one is a check quietly testing
+    # nothing. Say which it was.
+    if not lines:
+        print("::warning::The simulator log predicate matched no lines at all, so "
+              "the scan below proved nothing. Either Arch logged nothing in three "
+              "minutes, or the predicate does not name the process correctly.")
+
     trouble = [
         line for line in lines
         if any(word in line for word in
