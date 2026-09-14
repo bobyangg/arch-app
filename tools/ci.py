@@ -19,7 +19,14 @@ import json
 import subprocess
 import sys
 import time
+import urllib.error
 import urllib.request
+
+# A macOS build takes about seven minutes. Forty-five seconds is roughly ten
+# calls to watch one, which fits inside the anonymous hourly allowance with room
+# to read the result afterwards; fifteen seconds did not, and spent the whole
+# quota watching a build it then could not report on.
+POLL = 45
 
 REPO = "bobyangg/arch-app"
 API = "https://api.github.com/repos/" + REPO
@@ -29,8 +36,24 @@ def get(path):
     request = urllib.request.Request(
         API + path, headers={"Accept": "application/vnd.github+json"}
     )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            remaining = response.headers.get("X-RateLimit-Remaining")
+            if remaining is not None and int(remaining) < 8:
+                print("  (%s API calls left this hour)" % remaining)
+            return json.load(response)
+    except urllib.error.HTTPError as error:
+        if error.code != 403:
+            raise
+        # Anonymous is sixty calls an hour for the whole machine, which a poll
+        # every few seconds eats in minutes -- hence POLL below. Saying when it
+        # comes back is more use than a stack trace.
+        reset = error.headers.get("X-RateLimit-Reset")
+        wait = max(0, int(reset) - int(time.time())) if reset else 0
+        raise SystemExit(
+            "GitHub is rate-limiting this machine (anonymous: 60/hour).\n"
+            "It resets in %d minute(s). The run itself is unaffected." % (wait // 60 + 1)
+        )
 
 
 def head_sha():
@@ -54,8 +77,8 @@ def run_for(sha, wait=True):
             return None
         else:
             print("  no run yet (%ds)" % waited)
-        time.sleep(15)
-        waited += 15
+        time.sleep(POLL)
+        waited += POLL
         if waited > 900:
             raise SystemExit("gave up waiting after fifteen minutes")
 
