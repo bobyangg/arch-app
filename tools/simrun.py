@@ -7,6 +7,7 @@ crash in `ArchSession.start()` are all clean compiles and a dead app. Sixteen
 thousand lines of Swift had never been executed at all when this was written.
 
     python3 tools/simrun.py build/Build/Products/Debug-iphonesimulator/Arch.app
+    python3 tools/simrun.py --device      # just the udid, for `xcodebuild test`
 
 Fails the step if the app is not running some seconds after launch, and prints the
 crash report and the simulator's log for the process when it is not.
@@ -60,7 +61,7 @@ def version_of(runtime_id):
     return tuple(numbers) or (0,)
 
 
-def pick_device():
+def pick_device(announce=True):
     """The newest iOS runtime on the image, and an iPhone inside it."""
     listing = json.loads(
         run(["xcrun", "simctl", "list", "devices", "available", "-j"], quiet=True).stdout
@@ -77,8 +78,9 @@ def pick_device():
     # Newest runtime, and within it whichever iPhone the image happens to carry.
     candidates.sort(key=lambda item: item[0], reverse=True)
     _, runtime, device = candidates[0]
-    print("runtime  %s" % runtime.rsplit(".", 1)[-1])
-    print("device   %s  %s" % (device["name"], device["udid"]))
+    if announce:
+        print("runtime  %s" % runtime.rsplit(".", 1)[-1])
+        print("device   %s  %s" % (device["name"], device["udid"]))
     return device["udid"]
 
 
@@ -158,7 +160,15 @@ def crash_reports(since):
 
 def main():
     if len(sys.argv) < 2:
-        raise SystemExit("usage: simrun.py <path to Arch.app>")
+        raise SystemExit("usage: simrun.py <path to Arch.app> | --device")
+
+    # `--device` prints one udid and nothing else, so the UI test step can pick a
+    # simulator with the same logic this does rather than hardcoding an iPhone
+    # model that the runner image may stop carrying.
+    if sys.argv[1] == "--device":
+        print(pick_device(announce=False))
+        return 0
+
     app = sys.argv[1]
     if not os.path.isdir(app):
         raise SystemExit("no app bundle at %s" % app)
