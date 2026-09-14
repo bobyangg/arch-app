@@ -279,7 +279,7 @@ struct YouProfileView: View {
 
     private var reviewDetail: String {
         settings.isSubscribed
-        ? "Which of your photos and answers people write about."
+        ? "Which of your photos and answers people write about, and notes on what to change."
         : "Part of Arch Premium. Which of your photos and answers people write about, and notes on what to change."
     }
 
