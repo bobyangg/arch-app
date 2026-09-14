@@ -82,12 +82,37 @@ targets:
         # — see the note there. They still have to be in the bundle, which the
         # `sources` entry above takes care of.
 
+  # Tapping the app, as opposed to starting it.
+  #
+  # `tools/simrun.py` answers "does it launch and draw". This answers "does it do
+  # anything when you touch it", which is a different question and the one that
+  # covers dead buttons, crashes on opening a profile, and navigation routes that
+  # push nothing -- the last of which is a mistake this project has actually made.
+  ArchUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: ArchUITests
+    dependencies:
+      - target: Arch
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.arch.arch.uitests
+        TEST_TARGET_NAME: Arch
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGN_IDENTITY: ""
+
 schemes:
   Arch:
     build:
       targets:
         Arch: all
+        ArchUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - ArchUITests
     archive:
       config: Release

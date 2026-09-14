@@ -24,9 +24,9 @@ jobs:
     name: Cross-reference checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -53,7 +53,7 @@ jobs:
     name: Build for the simulator
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The newest Xcode on the image, not a pinned one.
       #
@@ -161,12 +161,57 @@ jobs:
       - name: Launch it on a simulator
         run: python3 tools/simrun.py build/Build/Products/Debug-iphonesimulator/Arch.app
 
+      # Launching is not using.
+      #
+      # The step above proves Arch starts and draws. A dead button, a crash on
+      # opening a profile and a navigation route that pushes nothing all look
+      # exactly like a healthy launch from outside -- and this project has shipped
+      # the third of those, four times over, in routes that compiled and went
+      # nowhere. `ArchUITests` taps the tab bar, opens somebody, and comes back.
+      #
+      # The device comes from `simrun.py --device`, the same logic that picks one
+      # for the launch, rather than a hardcoded iPhone model the runner image may
+      # stop carrying.
+      - name: Tap through it
+        run: |
+          set -o pipefail
+          udid=$(python3 tools/simrun.py --device)
+          echo "Testing on $udid"
+          xcodebuild test \
+            -project Arch.xcodeproj \
+            -scheme Arch \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$udid" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            | tee test.log
+
+      # Same reasoning as the build errors: annotations are readable on a public
+      # repository without signing in, and logs are not.
+      - name: What failed, and in which test
+        if: failure()
+        run: |
+          [ -f test.log ] || exit 0
+          echo "## Test failures" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E "error:|failed \(|Failing tests:" test.log | sort -u | head -60 \
+            >> "$GITHUB_STEP_SUMMARY" || true
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+          grep -E "error:|^Testing failed:|^\s+-\[Arch" test.log | sort -u | head -20 \
+            | while IFS= read -r line; do
+            printf '::error::%s\n' "$line"
+          done
+
       - name: Keep the log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-log
-          path: build.log
+          path: |
+            build.log
+            test.log
           if-no-files-found: ignore
 
       # Three frames -- the screen before Arch opened, one during its launch view,
@@ -174,7 +219,7 @@ jobs:
       # what Arch looks like rather than asserting something about it.
       - name: Keep the screenshots
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: launch-screenshots
           path: |
