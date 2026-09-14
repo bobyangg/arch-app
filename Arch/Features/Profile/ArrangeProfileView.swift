@@ -101,6 +101,7 @@ struct ArrangeProfileView: View {
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.mortar)
             }
+            .accessibilityIdentifier("arrange.done")
             .buttonStyle(PressScaleStyle(scale: 1))
         }
         .padding(.leading, ArchSpacing.xs)
