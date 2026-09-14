@@ -110,7 +110,7 @@ def main():
             for n in notes
             if n.get("annotation_level") == "warning"
         ]
-        # `warnings.py` puts the complete list in one notice, because GitHub shows
+        # `buildwarnings.py` puts the complete list in one notice, because GitHub shows
         # only ten annotations of each level per step and a long warning list would
         # otherwise be silently cut off at ten.
         full = [
