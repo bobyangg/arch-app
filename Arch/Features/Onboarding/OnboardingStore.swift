@@ -10,8 +10,16 @@ import SwiftUI
 @Observable
 final class OnboardingStore {
 
+    /// There is no phone step.
+    ///
+    /// There was one, behind a flag, and the flag was off: an account is tied to
+    /// an Apple ID and a device, which is what Safety says and what actually
+    /// happens. Sign in with Apple replaced the number, `delete_account` keeps the
+    /// Apple id claimed so a removed account cannot start again, and DeviceCheck
+    /// carries the rest. A number would have verified nothing that was not already
+    /// verified, so the two screens and the change-number sheet are gone rather
+    /// than parked.
     enum Step: Int, CaseIterable {
-        case verify
         case identity
         case about
         case seeking
@@ -22,36 +30,13 @@ final class OnboardingStore {
         case notifications
     }
 
-    /// Phone verification, on or off.
+    /// The steps, in order.
     ///
-    /// Off while there is no backend to verify against and no SMS to receive, so
-    /// the flow can be walked end to end without inventing a code. **Nothing is
-    /// deleted**: `OnboardingPhone` and `OnboardingCode` are untouched, their
-    /// previews still build them, and setting this back to `true` puts both
-    /// screens back at the front of the flow exactly as they were.
-    ///
-    /// **It is a change of mind now.** This said the design still promised a
-    /// verified number because Safety said so in as many words. Safety no longer
-    /// does: it says an account is tied to an Apple ID and a device, which is what
-    /// actually happens. Sign in with Apple replaced the number, `delete_account`
-    /// keeps the Apple id claimed so a removed user cannot start again, and
-    /// DeviceCheck carries the rest.
-    ///
-    /// So `OnboardingPhone`, `OnboardingCode` and `ChangeNumberSheet` are about
-    /// 170 lines describing an exchange that will not happen. They are left in
-    /// place rather than deleted here because that is a decision worth taking
-    /// deliberately rather than as a side effect of wiring the backend — but
-    /// nothing is waiting on them, and this flag is no longer a pause.
-    static let isVerificationOn = false
-
-    /// The steps actually in the flow, in order.
-    ///
-    /// Everything that used to do arithmetic on `Step.rawValue` now walks this
-    /// instead, so switching a step off cannot leave the rule counting a screen
-    /// nobody sees or the back button reaching one.
-    static var steps: [Step] {
-        isVerificationOn ? Step.allCases : Step.allCases.filter { $0 != .verify }
-    }
+    /// Kept as a list rather than read off `Step.rawValue`, because everything
+    /// that used to do arithmetic on the raw value walks this instead — so a step
+    /// added or removed cannot leave the progress rule counting a screen nobody
+    /// sees or the back button reaching one.
+    static var steps: [Step] { Step.allCases }
 
     static var firstStep: Step { steps.first ?? .identity }
 
@@ -59,11 +44,6 @@ final class OnboardingStore {
     let profile = ProfileStore(person: .empty)
 
     var step: Step = OnboardingStore.firstStep
-
-    /// Verification is two screens under one step: the number, then the code.
-    var hasSentCode = false
-    var phone = ""
-    var code = ""
 
     var name = ""
     /// From Apple, and only ever on the first authorization. Never shown to
@@ -114,8 +94,6 @@ final class OnboardingStore {
 
     var canContinue: Bool {
         switch step {
-        case .verify:
-            return hasSentCode ? code.count == 6 : phone.filter(\.isNumber).count >= 7
         case .identity:
             return !name.isBlank
         case .about:
@@ -164,13 +142,11 @@ final class OnboardingStore {
     // MARK: Moving
 
     var canGoBack: Bool {
-        step != Self.firstStep || hasSentCode
+        step != Self.firstStep
     }
 
     func advance() {
         switch step {
-        case .verify where !hasSentCode:
-            hasSentCode = true
         case .about:
             commitDetails()
             step = .seeking
@@ -195,11 +171,6 @@ final class OnboardingStore {
     }
 
     func back() {
-        if step == .verify {
-            hasSentCode = false
-            code = ""
-            return
-        }
         if step == .questions, let index = questionIndex {
             questionIndex = index == 0 ? nil : index - 1
             return

@@ -76,7 +76,6 @@ struct SettingsDetailView: View {
 
     var body: some View {
         switch row.id {
-        case "a-phone":    PhoneSetting(store: store)
         case "a-email":    EmailSetting(store: store)
         case "a-premium":  PremiumSetting(store: store, onOpen: onOpenPremium)
         case "a-delete":   DeleteAccountSetting(store: store, onDelete: onDeleteAccount)

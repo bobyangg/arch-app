@@ -10,7 +10,6 @@ import SwiftUI
 final class SettingsStore {
 
     // Account
-    var phone = "+1 (917) 555 0142"
     var email = "sam@example.com"
     var isSubscribed = false
 
@@ -149,7 +148,6 @@ final class SettingsStore {
 
         return [
             SettingsSection(id: "account", title: "Account", rows: [
-                .init(id: "a-phone", title: "Phone number", detail: phone, control: .push),
                 .init(id: "a-email", title: "Email", detail: email, control: .push),
                 .init(id: "a-premium", title: "Arch Premium", detail: premiumText, control: .push),
                 .init(id: "a-delete", title: "Delete your account", control: .push)

@@ -164,7 +164,6 @@ struct OnboardingFlowView: View {
 
     private var continueTitle: String {
         switch store.step {
-        case .verify:        return store.hasSentCode ? "Verify" : "Send a code"
         case .questions:     return "Start"
         case .notifications: return "Allow notifications"
         default:             return "Continue"
@@ -176,12 +175,6 @@ struct OnboardingFlowView: View {
     @ViewBuilder
     private var content: some View {
         switch store.step {
-        case .verify:
-            if store.hasSentCode {
-                OnboardingCode(store: store)
-            } else {
-                OnboardingPhone(store: store)
-            }
         case .identity:
             OnboardingIdentity(store: store)
         case .about:
