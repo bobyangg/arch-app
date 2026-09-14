@@ -21,6 +21,8 @@ struct ArrangeProfileView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var isPicking = false
+    /// The refused photograph being read about, if any.
+    @State private var reading: Photo?
 
     private var person: Person { store.person }
 
@@ -42,6 +44,28 @@ struct ArrangeProfileView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isPicking) {
             PhotoLibraryPicker(slotsLeft: store.slotsLeft) { store.addPhotos($0) }
+        }
+        // A sheet rather than a push: it is about one photograph rather than a
+        // place in the profile, and it has its own way out.
+        .sheet(item: $reading) { photo in
+            PhotoRejectedView(
+                photo: photo,
+                reason: photo.rejection ?? .quality,
+                remaining: person.photos.count - store.rejectedPhotos,
+                review: store.reviewsAsked.contains(photo.id) ? .sent : .notSent,
+                onChooseAnother: {
+                    reading = nil
+                    // Removing it first is what makes "choose another" mean
+                    // anything -- otherwise the refused tile is still holding the
+                    // slot the new photograph needs.
+                    store.removePhoto(id: photo.id)
+                    isPicking = true
+                },
+                onAskForReview: { note in
+                    store.askForReview(id: photo.id, note: note)
+                    reading = nil
+                }
+            )
         }
     }
 
@@ -93,14 +117,20 @@ struct ArrangeProfileView: View {
                 canAdd: store.canAddPhoto,
                 canRemove: store.canRemovePhoto,
                 uploads: store.uploads,
+                rejections: store.rejections,
                 onMove: { store.movePhoto(id: $0, to: $1) },
                 onAdd: { isPicking = true },
                 onRemove: { store.removePhoto(id: $0) },
+                onOpenRejection: { id in
+                    reading = person.photos.first { $0.id == id }
+                },
                 onFinishUpload: { store.finishUpload(id: $0) },
                 onRetryUpload: { store.retryUpload(id: $0) }
             )
 
-            PhotoGridCaption(count: person.photos.count, failed: store.failedUploads)
+            PhotoGridCaption(count: person.photos.count,
+                             failed: store.failedUploads,
+                             rejected: store.rejectedPhotos)
                 .padding(.top, ArchSpacing.xxs)
         }
     }

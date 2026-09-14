@@ -23,9 +23,18 @@ struct PhotoGrid: View {
     var canRemove: Bool
     /// Keyed by photo id. Empty for every photo that is simply there.
     var uploads: [String: PhotoUpload] = [:]
+    /// Photographs moderation would not take, keyed by photo id.
+    ///
+    /// Separate from `uploads` all the way down to the tile, because the two must
+    /// not look alike: a failed upload offers "Again", and offering "Again" to
+    /// somebody whose photograph was refused would send the same bytes back to be
+    /// refused a second time.
+    var rejections: [String: PhotoRejection] = [:]
     let onMove: (String, Int) -> Void
     let onAdd: () -> Void
     let onRemove: (String) -> Void
+    /// Tapping a refused tile opens the screen that says which one and why.
+    var onOpenRejection: (String) -> Void = { _ in }
     /// Called by the tile once its bar has run, which is the design build's stand-in
     /// for the upload finishing.
     var onFinishUpload: (String) -> Void = { _ in }
@@ -53,6 +62,7 @@ struct PhotoGrid: View {
         return PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
             .aspectRatio(1, contentMode: .fit)
             .overlay { if upload == .failed { failedFace(photo) } }
+            .overlay { if upload == nil && rejections[photo.id] != nil { rejectedFace(photo) } }
             .overlay(alignment: .bottom) {
                 if upload == .uploading {
                     UploadBar { onFinishUpload(photo.id) }
@@ -103,6 +113,30 @@ struct PhotoGrid: View {
         }
         .buttonStyle(PressScaleStyle(scale: 0.97))
         .accessibilityLabel("This photo did not upload. Try again.")
+    }
+
+    /// A refused photograph. **Not the failed-upload tile**, and deliberately not
+    /// offering "Again" — the bytes arrived perfectly well, and sending them back
+    /// would only have them refused a second time. It says the photo is not on the
+    /// profile and opens the screen that says why.
+    ///
+    /// The photograph stays visible underneath rather than being covered: it is the
+    /// reader's own property, and hiding it would make "which one?" unanswerable.
+    private func rejectedFace(_ photo: Photo) -> some View {
+        Button { onOpenRejection(photo.id) } label: {
+            VStack(spacing: ArchSpacing.xxs) {
+                Text("Not shown")
+                    .archText(.badge)
+                Text("Why")
+                    .archText(.caption)
+            }
+            .foregroundStyle(ArchColor.limestone)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(ArchColor.night.opacity(0.72))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleStyle(scale: 0.97))
+        .accessibilityLabel("This photo is not on your profile. Tap to read why.")
     }
 
     private func slotLabel(index: Int, upload: PhotoUpload?) -> String {
@@ -174,6 +208,10 @@ private struct UploadBar: View {
 struct PhotoGridCaption: View {
     let count: Int
     var failed: Int = 0
+    /// Photographs on the profile that moderation would not take. They still
+    /// occupy a tile, so the count above includes them and this is what says the
+    /// count is not the number of photos anybody can see.
+    var rejected: Int = 0
 
     var body: some View {
         Text(text)
@@ -187,6 +225,14 @@ struct PhotoGridCaption: View {
             return failed == 1
                 ? "One photo did not upload. It is not on your profile until it does."
                 : "\(ArchCopy.capitalisedWord(failed)) photos did not upload. They are not on your profile until they do."
+        }
+        // Before the floor line, because a refused photo is usually *why* somebody
+        // is under the floor, and naming the cause before the rule is the order a
+        // person can act on.
+        if rejected > 0 {
+            return rejected == 1
+                ? "One photo is not on your profile. Tap it to read why."
+                : "\(ArchCopy.capitalisedWord(rejected)) photos are not on your profile. Tap one to read why."
         }
         if count <= Person.requiredPhotos {
             return "The first photo is what people see in their five. "

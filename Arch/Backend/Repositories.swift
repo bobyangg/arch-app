@@ -135,6 +135,21 @@ enum ArchBackend {
         )
     }
 
+    /// Asking a person to look at a refused photograph again.
+    ///
+    /// `photo_reviews` mirrors `appeals` in shape and in its unique constraint —
+    /// one ask per photograph, because a second is not a second chance. The table
+    /// was in the database with nothing in the app able to write to it.
+    static func askForPhotoReview(id: String, note: String) async throws {
+        struct NewPhotoReview: Encodable {
+            let photoId: String
+            let body: String
+        }
+        try await SupabaseClient.shared.insert(
+            "photo_reviews", NewPhotoReview(photoId: id, body: note)
+        )
+    }
+
     // MARK: Your own profile
 
     static func ownProfile() async throws -> Person? {

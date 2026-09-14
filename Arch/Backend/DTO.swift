@@ -180,7 +180,17 @@ extension VisibleProfileRow {
                     // between the signing and the fetch -- keeps it and goes
                     // quietly, which is the right failure for a photo you are no
                     // longer allowed to see.
-                    Photo(id: row.id, toneIndex: index, url: urls[row.id])
+                    //
+                    // `state` and `rejectedReason` were being dropped here. The
+                    // moderation tables record a refusal and make the reason
+                    // compulsory, `PhotoRow` carries both across the wire, and this
+                    // line threw them away -- so a photograph could be refused on
+                    // the server and look approved in the app forever.
+                    Photo(id: row.id,
+                          toneIndex: index,
+                          url: urls[row.id],
+                          state: PhotoState(rawValue: row.state) ?? .approved,
+                          rejection: row.rejectedReason.flatMap(PhotoRejection.init(rawValue:)))
                 },
             prompts: prompts.sorted { $0.position < $1.position }
                 .map { Prompt(id: $0.id,
