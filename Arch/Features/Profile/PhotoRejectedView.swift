@@ -36,12 +36,13 @@ struct PhotoRejectedView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Text("One of your photos is not on your profile")
+                Text(title)
                     .archText(.titleL)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("photo.rejected.title")
 
-                Text("Arch could not use it because \(reason.sentence).")
+                Text(opening)
                     .archText(.body)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
@@ -85,8 +86,35 @@ struct PhotoRejectedView: View {
         }
     }
 
+    /// Two different pieces of news, and only one of them is bad.
+    ///
+    /// A main-photo rule does not take the photograph down — it says this one
+    /// cannot be the one people meet you with. Saying "not on your profile" there
+    /// would be false, and would send somebody off to delete a photograph that is
+    /// fine.
+    private var title: String {
+        reason.isMainPhotoRule
+            ? "This cannot be your first photo"
+            : "One of your photos is not on your profile"
+    }
+
+    private var opening: String {
+        reason.isMainPhotoRule
+            ? "Your first photo is what people see in their five, so it has to be one "
+              + "clear photograph of you on your own — and \(reason.sentence)."
+            : "Arch could not use it because \(reason.sentence)."
+    }
+
     /// Three at most, and the third only when it is true.
     private var consequences: [String] {
+        if reason.isMainPhotoRule {
+            return [
+                "It is still on your profile, exactly where it is.",
+                "Only the first one has to be of you on your own. The rest are "
+                    + "yours — where you were, what you made, who you were with.",
+                "Drag another photo to the front and this one moves down."
+            ]
+        }
         var lines = [
             "It was not shown to anyone, and never has been.",
             "Your other photos are on your profile as normal."
@@ -104,12 +132,17 @@ struct PhotoRejectedView: View {
 
     /// Both quiet. The app is not pushing the reader toward either one — replacing
     /// the photograph is usually faster, and asking for a second look is legitimate.
+    /// "Choose another" is wrong when the photograph is not going anywhere.
+    private var chooseTitle: String {
+        reason.isMainPhotoRule ? "Rearrange my photos" : "Choose another"
+    }
+
     @ViewBuilder
     private var reviewSection: some View {
         switch review {
         case .notSent:
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
-                ArchButton(title: "Choose another", kind: .quiet, action: onChooseAnother)
+                ArchButton(title: chooseTitle, kind: .quiet, action: onChooseAnother)
                 ArchButton(title: "Ask us to look again", kind: .quiet) { isAsking = true }
                 Text("One person looks at every photo that is sent back. It usually takes a day.")
                     .archText(.footnote)
@@ -119,7 +152,7 @@ struct PhotoRejectedView: View {
 
         case .sent:
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
-                ArchButton(title: "Choose another", kind: .quiet, action: onChooseAnother)
+                ArchButton(title: chooseTitle, kind: .quiet, action: onChooseAnother)
                 VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
                     Text("A person is looking at it")
                         .archText(.subhead)
@@ -133,7 +166,7 @@ struct PhotoRejectedView: View {
 
         case .answered:
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
-                ArchButton(title: "Choose another", kind: .quiet, action: onChooseAnother)
+                ArchButton(title: chooseTitle, kind: .quiet, action: onChooseAnother)
                 VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
                     Text("A person looked at it again")
                         .archText(.subhead)

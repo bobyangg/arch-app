@@ -26,6 +26,17 @@ enum ArchBackend {
         )
     }
 
+    /// Send a six-digit code to an email address.
+    static func sendEmailCode(to email: String) async throws {
+        try await SupabaseClient.shared.sendEmailCode(to: email)
+    }
+
+    /// Exchange that code for a session.
+    @discardableResult
+    static func signInWithEmail(_ email: String, code: String) async throws -> Session {
+        try await SupabaseClient.shared.verifyEmailCode(email: email, code: code)
+    }
+
     enum Registration {
         case ok(isNewAccount: Bool, needsOnboarding: Bool, attested: Bool)
         case removed

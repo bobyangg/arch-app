@@ -15,7 +15,7 @@ struct OnboardingPhotos: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Photos",
-                detail: "At least \(Person.requiredPhotos), up to \(Person.photoLimit). The first one is what people see in their five."
+                detail: "At least \(Person.requiredPhotos), up to \(Person.photoLimit). The first one is what people see in their five, so make it a clear photograph of you on your own. The rest are yours."
             )
 
             VStack(alignment: .leading, spacing: ArchSpacing.s) {

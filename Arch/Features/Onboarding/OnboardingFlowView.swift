@@ -39,7 +39,19 @@ struct OnboardingFlowView: View {
                         )
                         showingWelcome = false
                     },
-                    externalProblem: problem
+                    externalProblem: problem,
+                    onEmailSignIn: { address in
+                        guard ArchConfig.isConfigured else {
+                            // Same reasoning as `demoSignIn` above: with nothing to
+                            // register against, walk straight into the flow.
+                            store.apply(AppleIdentity(
+                                userID: "", name: nil, email: address, identityToken: nil
+                            ))
+                            showingWelcome = false
+                            return
+                        }
+                        Task { await signedInByEmail(address) }
+                    }
                 )
                     .transition(.opacity)
             } else {
@@ -48,6 +60,40 @@ struct OnboardingFlowView: View {
             }
         }
         .animation(ArchMotion.standard, value: showingWelcome)
+    }
+
+    /// The email path, after `EmailSignInSheet` already has a session.
+    ///
+    /// It goes through exactly the same `register` call as Apple, which matters
+    /// more here than there: `register` is where DeviceCheck runs, and with an
+    /// email address costing nothing to invent, the device is the only thing left
+    /// making a throwaway account expensive. An email signup that skipped
+    /// attestation would be the cheap door Safety says does not exist.
+    ///
+    /// Apple hands over a name on the first authorization; email hands over
+    /// nothing, so the identity carries the address alone and onboarding asks for
+    /// the name on the very next screen — which it does for Apple users too
+    /// whenever Apple declines to share one.
+    private func signedInByEmail(_ address: String) async {
+        let identity = AppleIdentity(
+            userID: "", name: nil, email: address, identityToken: nil
+        )
+        do {
+            let outcome = try await ArchBackend.register(identity: identity)
+            switch outcome {
+            case .ok(_, let needsOnboarding, _):
+                guard needsOnboarding else {
+                    onFinish(ProfileStore(), true)
+                    return
+                }
+                store.apply(identity)
+                showingWelcome = false
+            case .removed:
+                problem = "This account is not available."
+            }
+        } catch {
+            problem = "Arch could not reach the network just now."
+        }
     }
 
     /// Apple has said who somebody is. Two things still have to happen before the

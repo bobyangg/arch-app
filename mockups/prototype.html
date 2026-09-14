@@ -654,6 +654,8 @@ const S={
        theme:"Match my phone"},
   edit:null,
   report:{reason:null,block:true,sent:false},
+  /* null, or {address, code, sent}. */
+  emailSignIn:null,
   /* A design build has no network to lose. A real one watches the system and
      writes here; everything else reads it. */
   offline:false,
@@ -676,10 +678,11 @@ const S={
 S.you.up=S.you.photos.map(()=>null);
 /* Parallel to photos again: null, or a reason key. One is seeded so the state is
    reachable at all — in the app the server sends it, and without a seed here the
-   screen could only ever be seen by someone who went looking for it. The fifth
-   rather than the first: a refused main photo would make every other screen look
-   broken, and five remain visible, which is above the floor of four. */
-S.you.rej=S.you.photos.map((_,i)=>i===4?"more_than_one_person":null);
+   screen could only ever be seen by someone who went looking for it.
+   The *first* photo, because that is the one the rule is about: it is fine as a
+   photograph and simply cannot be the one people meet you with. A fifth photo with
+   two people in it is no longer anything at all. */
+S.you.rej=S.you.photos.map((_,i)=>i===0?"more_than_one_person":null);
 S.you.asked=S.you.photos.map(()=>false);
 let UID=0;
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -1177,11 +1180,17 @@ function photoSlots(target,acts){
        so "Again" would send the same photograph back to be refused a second time.
        The photograph stays visible underneath rather than being covered: it is the
        reader's own, and hiding it would make "which one?" unanswerable. */
-    if(rej[i]&&!loading&&!failed){
+    /* A main-photo rule is about the *slot*, not the photograph: once it is not
+       first any more the problem is solved. */
+    if(rej[i]&&!loading&&!failed&&(!isMainRule(rej[i])||i===0)){
+      /* "Not shown" would be a lie about a photograph that is still on the
+         profile and simply cannot be the first one. */
+      const staying=isMainRule(rej[i]);
       h+=`<div class="slot" style="${tone(t)}">
         <button class="rejface" data-a="${acts.why||"whyRejected"}" data-i="${i}"
-          aria-label="This photo is not on your profile. Tap to read why.">
-          Not shown<span>Why</span></button>
+          aria-label="${staying?"This photo cannot be your first one. Tap to read why."
+                               :"This photo is not on your profile. Tap to read why."}">
+          ${staying?"Not first":"Not shown"}<span>Why</span></button>
         ${x}</div>`;
       return;
     }
@@ -1213,6 +1222,15 @@ const REJECTION_REASONS={
   screenshot:"it is a screenshot rather than a photograph",
   quality:"it is too small or too blurred to show well"
 };
+/* **Only one photo has to be of you.** The first one is what people see in their
+   five, so that is the one that has to be a clear photograph of you on your own —
+   the other five are yours: where you were, what you made, who you were with. A
+   profile of six careful portraits tells somebody far less than one portrait and
+   five photographs of a life.
+   So these three do not take a photograph down. They say it cannot be the first
+   one, and it stays on the profile exactly where it is. */
+const MAIN_PHOTO_RULES=["not_you","more_than_one_person","no_face"];
+const isMainRule=r=>MAIN_PHOTO_RULES.indexOf(r)>=0;
 
 /* ============================ the photo picker ============================ */
 function openPicker(target){
@@ -1344,7 +1362,8 @@ function arrange(){
   const p=S.you;
   const slots=photoSlots(p,{rm:"rmPhoto",add:"addPhoto",retry:"retryPhoto"});
   const failed=(p.up||[]).filter(u=>u&&u.state==="failed").length;
-  const refused=(p.rej||[]).filter(Boolean).length;
+  const refused=(p.rej||[]).filter(r=>r&&!isMainRule(r)).length;
+  const notFirst=isMainRule((p.rej||[])[0])?1:0;
   /* Before the floor line, because a refused photo is usually *why* somebody is
      under the floor, and naming the cause before the rule is the order a person
      can act on. */
@@ -1352,13 +1371,15 @@ function arrange(){
     ? (refused===1
         ? "One photo is not on your profile. Tap it to read why."
         : capWord(refused)+" photos are not on your profile. Tap one to read why.")
+    : notFirst
+    ? "Your first photo has to be one clear photograph of you on your own. Tap it to read why, or drag another to the front."
     : failed
     ? (failed===1
         ? "One photo did not upload. It is not on your profile until it does."
         : capWord(failed)+" photos did not upload. They are not on your profile until they do.")
     : p.photos.length<=4
-      ? "The first photo is what people see in their five. You need at least 4 photos, so add one before removing another."
-      : "The first photo is what people see in their five. Drag to reorder.";
+      ? "The first photo is the one that has to be of you on your own. You need at least 4 photos, so add one before removing another."
+      : "The first photo is the one that has to be of you on your own &mdash; the rest can be anywhere you were or anyone you were with. Drag to reorder.";
   let h=navbar("Arrange",`<button class="subhead mortar" data-a="back" style="padding:8px">Done</button>`);
   h+=`<div class="screen"><div class="pad pb-xxxl mt-l">
     <div class="prompt mortar">Photos</div>
@@ -1575,7 +1596,7 @@ function settingDetail(id){
      +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
      +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
   } else if(id==="h-safety"){
-    b=sect("Every account is tied to an Apple ID and a device","It is not a guarantee that somebody is who they say. It does mean that starting again after being removed costs a new Apple ID and usually a new phone, rather than thirty seconds &mdash; and making throwaway accounts expensive is most of the problem.")
+    b=sect("Every account is tied to a device","It is not a guarantee that somebody is who they say. Signing in with Apple ties an account to an Apple ID as well, and an email address ties it to nothing on its own &mdash; but both are checked against the device, so starting again after being removed usually costs a new phone rather than thirty seconds. Making throwaway accounts expensive is most of the problem.")
      +sect("Blocking is silent and complete","A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told.")
      +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
      +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
@@ -1607,6 +1628,10 @@ function onboarding(){
         actually like. You read them properly, you decide, and then you are done until tomorrow.</div>
       <div style="flex:1"></div>
       <button class="applebtn" data-a="obStart">Continue with Apple</button>
+      <!-- Second, and quiet. Apple is the shorter path and the one that makes a
+           throwaway account expensive, so it leads — but an address is a real way
+           in, not a fallback for people Apple failed. -->
+      <button class="btntext" data-a="obEmailOpen">Use an email address instead</button>
       <div class="footnote mortar center mt-s">Arch does not post anything, and never sees
         your Apple password. Your email stays hidden if you want it to.</div></div></div>`;
   }
@@ -1669,7 +1694,8 @@ function onboarding(){
     const bad=o.up.filter(u=>u&&u.state==="failed").length;
     const short=Math.max(0,4-(o.photos.length-bad));
     body=`<div class="titleL">Photos</div>
-      <div class="body mortar mt-s">At least 4, up to 6. The first one is what people see in their five.</div>
+      <div class="body mortar mt-s">At least 4, up to 6. The first one is what people see in their
+        five, so make it a clear photograph of you on your own. The rest are yours.</div>
       <div class="grid3 mt-xl">${slots}</div>
       <div class="footnote mortar mt-s">${bad>0
         ?(bad===1?"One photo did not upload. Tap it to try again."
@@ -1820,6 +1846,41 @@ function removedRoot(){
       Prototype only: back to the app</button></div></div>`;
 }
 
+/* Signing in with an email address.
+   **A code, not a password.** Arch has never had one — the Apple path has no
+   password to fall back on either — and adding one would mean a password field, a
+   reset flow, a strength rule and somewhere to store it, all to identify somebody
+   an emailed code identifies just as well.
+   **One door.** An address that has not been here before becomes an account; one
+   that has signs in. There is no sign-up screen and no sign-in screen, so there is
+   no wrong one to pick — and this screen never says which it was, because
+   answering that is an enumeration oracle anybody could point at anybody. */
+function emailSignInSheet(){
+  const e=S.emailSignIn;
+  const looksReal=a=>{const at=a.indexOf("@"); if(at<1) return false;
+    const d=a.slice(at+1); return d.indexOf(".")>0 && !d.endsWith(".");};
+  const ok=e.sent ? e.code.length===6 : looksReal(e.address.trim());
+  const body=e.sent
+    ? `<div class="titleM" style="padding-top:8px">Check your email</div>
+       <div class="body mortar mt-s">We sent a six-digit code to ${esc(e.address)}. It is good
+         for about an hour.</div>
+       <div class="field mt-m"><input id="emailCode" inputmode="numeric" maxlength="6"
+         placeholder="123456" value="${esc(e.code)}"></div>`
+    : `<div class="titleM" style="padding-top:8px">Your email</div>
+       <div class="body mortar mt-s">Arch will email you a six-digit code. There is no password
+         to make or forget.</div>
+       <div class="field mt-m"><input id="emailAddress" inputmode="email"
+         placeholder="sam@example.com" value="${esc(e.address)}"></div>`;
+  openSheet(body
+    +`<button class="btn primary mt-m"${ok?"":" disabled"} data-a="obEmailNext">${
+        e.sent?"Sign in":"Email me a code"}</button>`
+    +(e.sent
+      ? `<button class="btntext" data-a="obEmailBack">Use a different address</button>`
+      : `<div class="footnote mortar mt-s">Your address is never shown to anyone and never
+           appears on your profile.</div>`));
+  setTimeout(()=>document.getElementById(e.sent?"emailCode":"emailAddress")?.focus(),320);
+}
+
 /* A photograph moderation would not take.
    Built on `removedRoot`'s skeleton, because it is the same job in miniature: bad
    news, delivered plainly, without the app performing its own disapproval. Title,
@@ -1831,12 +1892,28 @@ function removedRoot(){
    changes the moment anybody reorders, and "your third photo" is a puzzle rather
    than an answer. */
 function rejectedSheet(i){
-  const p=S.you, why=REJECTION_REASONS[p.rej[i]]||REJECTION_REASONS.quality;
-  const remaining=p.photos.length-(p.rej||[]).filter(Boolean).length;
+  const p=S.you, reason=p.rej[i], why=REJECTION_REASONS[reason]||REJECTION_REASONS.quality;
+  const staying=isMainRule(reason);
+  /* Only photographs actually taken down come off the count. One that cannot be
+     first is still on the profile and still counts towards the four. */
+  const remaining=p.photos.length-(p.rej||[]).filter(r=>r&&!isMainRule(r)).length;
   const asked=(p.asked||[])[i];
-  const lines=["It was not shown to anyone, and never has been.",
-               "Your other photos are on your profile as normal."];
-  if(remaining<4) lines.push("A profile needs four photos, so adding another is the quickest way back.");
+
+  const title=staying?"This cannot be your first photo"
+                     :"One of your photos is not on your profile";
+  const opening=staying
+    ? "Your first photo is what people see in their five, so it has to be one clear photograph of you on your own &mdash; and "+why+"."
+    : "Arch could not use it because "+why+".";
+  let lines;
+  if(staying){
+    lines=["It is still on your profile, exactly where it is.",
+           "Only the first one has to be of you on your own. The rest are yours &mdash; where you were, what you made, who you were with.",
+           "Drag another photo to the front and this one moves down."];
+  } else {
+    lines=["It was not shown to anyone, and never has been.",
+           "Your other photos are on your profile as normal."];
+    if(remaining<4) lines.push("A profile needs four photos, so adding another is the quickest way back.");
+  }
 
   /* Both quiet. The app is not pushing the reader toward either one — replacing the
      photograph is usually faster, and asking for a second look is legitimate. */
@@ -1848,12 +1925,13 @@ function rejectedSheet(i){
        <div class="footnote mortar mt-s">One person looks at every photo that is sent back.
          It usually takes a day.</div>`;
 
-  openSheet(`<div class="titleM" style="padding-top:8px">One of your photos is not on your profile</div>
-    <div class="body mortar mt-s">Arch could not use it because ${why}.</div>
+  openSheet(`<div class="titleM" style="padding-top:8px">${title}</div>
+    <div class="body mortar mt-s">${opening}</div>
     <div class="mt-l" style="width:132px; border-radius:var(--r-control); overflow:hidden;
       aspect-ratio:1; ${tone(p.photos[i])}"></div>
     <div class="v gap-s mt-xl">${lines.map(l=>`<div class="body">${l}</div>`).join("")}</div>
-    <button class="btn quiet mt-xxl" data-a="rejChooseAnother" data-i="${i}">Choose another</button>
+    <button class="btn quiet mt-xxl" data-a="rejChooseAnother" data-i="${i}">${
+      staying?"Rearrange my photos":"Choose another"}</button>
     ${foot}`);
 }
 
@@ -2326,6 +2404,11 @@ document.addEventListener("click",e=>{
        the refused tile is still holding the slot the new photograph needs. */
     rejChooseAnother:()=>{
       const i=+el.dataset.i;
+      /* A photograph that cannot be first is not going anywhere: the button says
+         "Rearrange my photos", and closing the sheet puts the reader back on the
+         grid, which is where rearranging happens. Deleting it would throw away a
+         perfectly good photo. */
+      if(isMainRule(S.you.rej[i])){ closeSheet(); return; }
       S.you.photos.splice(i,1); S.you.up.splice(i,1);
       S.you.rej.splice(i,1); S.you.asked.splice(i,1);
       closeSheet(); openPicker("you");
@@ -2444,6 +2527,18 @@ document.addEventListener("click",e=>{
       if(!o.email) o.email="sam@privaterelay.appleid.com";
       o.welcome=false; render();
     },
+    obEmailOpen:()=>{ S.emailSignIn={address:"",code:"",sent:false}; emailSignInSheet(); },
+    obEmailBack:()=>{ S.emailSignIn.sent=false; S.emailSignIn.code=""; emailSignInSheet(); },
+    obEmailNext:()=>{
+      const e=S.emailSignIn;
+      if(!e.sent){ e.address=e.address.trim().toLowerCase(); e.sent=true; emailSignInSheet(); return; }
+      if(e.code.length!==6) return;
+      /* Apple hands over a name on the first authorization; email hands over
+         nothing, so the address is all that carries across and onboarding asks for
+         the name on the very next screen. */
+      o.email=e.address; o.name="";
+      S.emailSignIn=null; closeSheet(); o.welcome=false; render();
+    },
     obBack:()=>{
       if(o.q!==null&&o.q!==undefined){ o.q=o.q===0?null:o.q-1; render(); return; }
       if(o.step>0){ o.step--; render(); }
@@ -2492,6 +2587,16 @@ document.addEventListener("input",e=>{
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
+  if(t.id==="emailAddress"){ S.emailSignIn.address=t.value;
+    const b=document.querySelector('[data-a="obEmailNext"]');
+    if(b){const a=t.value.trim(), at=a.indexOf("@"), d=a.slice(at+1);
+      b.disabled=!(at>0 && d.indexOf(".")>0 && !d.endsWith("."));}
+    return; }
+  if(t.id==="emailCode"){
+    S.emailSignIn.code=t.value.replace(/\D/g,"").slice(0,6);
+    const b=document.querySelector('[data-a="obEmailNext"]');
+    if(b) b.disabled=S.emailSignIn.code.length!==6;
+    return; }
   if(t.id==="placeSearch"){
     const at=t.selectionStart;
     placeSheet(t.dataset.t,t.value);

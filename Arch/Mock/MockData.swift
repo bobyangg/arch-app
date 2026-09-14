@@ -106,6 +106,24 @@ enum PhotoRejection: String, Hashable, CaseIterable {
         case .quality:            return "it is too small or too blurred to show well"
         }
     }
+
+    /// Whether this is about the *first* photo rather than about the photograph
+    /// being usable at all.
+    ///
+    /// **Only one photo has to be of you.** The first one is what people see in
+    /// their five, so that is the one that has to be a clear photograph of you on
+    /// your own — the other five are yours: where you were, what you made, who you
+    /// were with. A profile of six careful portraits tells somebody far less than
+    /// one portrait and five photographs of a life.
+    ///
+    /// So these three do not take a photograph down. They say it cannot be the
+    /// first one, and it stays on the profile exactly where it is.
+    var isMainPhotoRule: Bool {
+        switch self {
+        case .notYou, .moreThanOnePerson, .noFace: return true
+        case .explicit, .contactDetails, .screenshot, .quality: return false
+        }
+    }
 }
 
 /// One photo in the phone's library, as far as a design build can know about it.
@@ -1026,17 +1044,15 @@ enum MockData {
         gender: .woman,
         pronouns: "she/her",
         photos: [
-            Photo(id: "you-p1", toneIndex: 3),
+            // The first photo, and the one the rule is about: it is fine as a
+            // photograph and simply cannot be the one people meet you with. Seeded
+            // here because this is the state that needed a rule change to exist —
+            // a fifth photo with two people in it is no longer anything at all.
+            Photo(id: "you-p1", toneIndex: 3, state: .approved, rejection: .moreThanOnePerson),
             Photo(id: "you-p2", toneIndex: 1),
             Photo(id: "you-p3", toneIndex: 4),
             Photo(id: "you-p4", toneIndex: 0),
-            // One refused, so the state is reachable in a design build. Without it
-            // `PhotoRejectedView` could only ever be seen in its own `#Preview` —
-            // which is how it came to be written, wired to nothing, and never
-            // noticed. The fifth rather than the first: a refused main photo would
-            // make every other screen in the design build look broken, and five
-            // remain visible, which is above the floor of four.
-            Photo(id: "you-p5", toneIndex: 2, state: .rejected, rejection: .moreThanOnePerson),
+            Photo(id: "you-p5", toneIndex: 2),
             Photo(id: "you-p6", toneIndex: 5)
         ],
         prompts: [

@@ -289,6 +289,47 @@ actor SupabaseClient {
         return new
     }
 
+    /// Send a six-digit code to an email address.
+    ///
+    /// `shouldCreateUser` is on: Arch has one door, and an address that has not
+    /// been here before is a new account rather than an error. The alternative is
+    /// a sign-up screen and a sign-in screen that differ only in which one refuses
+    /// you, and people do not remember which they used.
+    ///
+    /// Nothing comes back but success. Whether the address is already an account is
+    /// deliberately not said — answering that question is an account-enumeration
+    /// oracle, and anybody could ask it about anybody.
+    func sendEmailCode(to email: String) async throws {
+        let url = ArchConfig.authURL.appendingPathComponent("otp")
+        _ = try await request(
+            url: url, method: "POST",
+            body: try JSONSerialization.data(
+                withJSONObject: ["email": email, "create_user": true]
+            ),
+            authenticated: false
+        )
+    }
+
+    /// Exchange the code for a session.
+    ///
+    /// `type: "email"` is the one-time-code grant rather than the magic-link one.
+    /// Supabase checks the code against what it sent and how long ago, so the
+    /// client is not trusted to say the code was right.
+    func verifyEmailCode(email: String, code: String) async throws -> Session {
+        let url = ArchConfig.authURL.appendingPathComponent("verify")
+        let data = try await request(
+            url: url, method: "POST",
+            body: try JSONSerialization.data(
+                withJSONObject: ["email": email, "token": code, "type": "email"]
+            ),
+            authenticated: false
+        )
+        let token = try decoder.decode(TokenResponse.self, from: data)
+        let new = token.session
+        store(new)
+        return new
+    }
+
     // MARK: Storage
 
     /// Put an image in the bucket.
