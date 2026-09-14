@@ -16,6 +16,22 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
         case .you:      return "You"
         }
     }
+
+    /// What a UI test addresses this tab by.
+    ///
+    /// Deliberately not the title. Two screens already put their own name on a
+    /// heading — Messages and You — so a test looking for a control called
+    /// "Messages" finds the tab and the heading and cannot say which it meant.
+    /// The title is also the one thing here anybody might reword, and a test that
+    /// breaks when a word improves teaches people to stop improving words.
+    var identifier: String {
+        switch self {
+        case .premium:  return "tab.premium"
+        case .daily:    return "tab.daily"
+        case .messages: return "tab.messages"
+        case .you:      return "tab.you"
+        }
+    }
 }
 
 /// Four tabs, no more. The icons are drawn rather than borrowed: SF Symbols would
@@ -88,6 +104,7 @@ private struct TabBarItem: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier(tab.identifier)
         .accessibilityLabel(tab.title)
         .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
