@@ -187,6 +187,14 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             | tee test.log
 
+      # A test target that executes *zero* tests exits zero, and the step goes
+      # green -- the same silent success as a check that tests nothing, which this
+      # project has now shipped three times. So the count is read back and an
+      # empty run is failed on purpose.
+      - name: How many tests ran
+        if: always()
+        run: python3 tools/testreport.py test.log
+
       # Same reasoning as the build errors: annotations are readable on a public
       # repository without signing in, and logs are not.
       - name: What failed, and in which test
