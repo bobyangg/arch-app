@@ -51,10 +51,17 @@ struct ArrangeProfileView: View {
             PhotoRejectedView(
                 photo: photo,
                 reason: photo.rejection ?? .quality,
-                remaining: person.photos.count - store.rejectedPhotos,
+                // Only photographs actually taken down come off the count. One
+                // that cannot be first is still on the profile and still counts.
+                remaining: person.photos.count - store.refusedPhotos,
                 review: store.reviewsAsked.contains(photo.id) ? .sent : .notSent,
                 onChooseAnother: {
                     reading = nil
+                    // A photograph that cannot be first is not going anywhere: the
+                    // button says "Rearrange my photos", and closing the sheet puts
+                    // the reader back on the grid, which is where rearranging
+                    // happens. Deleting it here would throw away a good photo.
+                    guard photo.rejection?.isMainPhotoRule != true else { return }
                     // Removing it first is what makes "choose another" mean
                     // anything -- otherwise the refused tile is still holding the
                     // slot the new photograph needs.
@@ -130,7 +137,8 @@ struct ArrangeProfileView: View {
 
             PhotoGridCaption(count: person.photos.count,
                              failed: store.failedUploads,
-                             rejected: store.rejectedPhotos)
+                             rejected: store.refusedPhotos,
+                             notFirst: store.mainPhotoProblems)
                 .padding(.top, ArchSpacing.xxs)
         }
     }

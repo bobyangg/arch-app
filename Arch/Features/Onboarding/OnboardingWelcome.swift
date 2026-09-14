@@ -19,8 +19,13 @@ struct OnboardingWelcome: View {
     /// network being gone. Shown in the same place and the same register as one
     /// from the button itself.
     var externalProblem: String?
+    /// Called once an emailed code has been accepted and a session exists. Apple
+    /// hands over a name and a relay address; email hands over neither, so
+    /// onboarding asks for the name on the very next screen either way.
+    var onEmailSignIn: ((String) -> Void)?
 
     @State private var problem: String?
+    @State private var isUsingEmail = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -64,6 +69,15 @@ struct OnboardingWelcome: View {
                     }
                 }
 
+                // Second, and quiet. Apple is the shorter path and the one that
+                // makes a throwaway account expensive, so it leads -- but an
+                // address is a real way in, not a fallback for people Apple failed.
+                ArchTextButton(title: "Use an email address instead") {
+                    problem = nil
+                    isUsingEmail = true
+                }
+                .accessibilityIdentifier("welcome.email")
+
                 Text(problem ?? externalProblem ?? "Arch does not post anything, and never sees your Apple password. Your email stays hidden if you want it to.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
@@ -76,6 +90,18 @@ struct OnboardingWelcome: View {
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.xxl)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .sheet(isPresented: $isUsingEmail) {
+            EmailSignInSheet(
+                onSignedIn: { address in
+                    isUsingEmail = false
+                    onEmailSignIn?(address)
+                },
+                // Same rule as the Apple button above: which path appears is
+                // decided by whether there is a backend to sign in to, not by a
+                // flag somebody has to remember to flip.
+                demoMode: !ArchConfig.isConfigured
+            )
+        }
     }
 }
 

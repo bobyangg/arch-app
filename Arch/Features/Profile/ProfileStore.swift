@@ -119,6 +119,17 @@ final class ProfileStore {
 
     var rejectedPhotos: Int { rejections.count }
 
+    /// Photographs taken down. A main-photo rule is not one of these — that photo
+    /// is still on the profile and still counts towards the four.
+    var refusedPhotos: Int { rejections.values.filter { !$0.isMainPhotoRule }.count }
+
+    /// Whether the photograph currently in the first slot is one that cannot be
+    /// there. Zero or one, and only ever about slot 0 — the rule is about the
+    /// position, so a photo carrying it anywhere else is simply a photo.
+    var mainPhotoProblems: Int {
+        (person.photos.first?.rejection?.isMainPhotoRule == true) ? 1 : 0
+    }
+
     /// Whether a second look has been asked for, per photograph. One each.
     private(set) var reviewsAsked: Set<String> = []
 

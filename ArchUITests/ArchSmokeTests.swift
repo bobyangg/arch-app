@@ -167,4 +167,57 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertGreaterThan(app.staticTexts.count, 0, "The You tab drew no text at all.")
         XCTAssertEqual(app.state, .runningForeground)
     }
+
+    // MARK: The profile editor
+
+    /// Into Arrange and back.
+    ///
+    /// The first test that leaves the tab bar. Everything above this walks four
+    /// root screens; a push that went nowhere would pass all of them.
+    func testArrangeOpensAndComesBack() {
+        let app = launch()
+        app.buttons["tab.you"].tap()
+
+        let arrange = app.buttons["profile.arrange"]
+        XCTAssertTrue(arrange.waitForExistence(timeout: 5), "No way into Arrange from the You tab.")
+        arrange.tap()
+
+        // The grid is the thing Arrange exists for, so its add button standing in
+        // for "we got there" is the least copy-dependent check available.
+        XCTAssertTrue(
+            app.buttons["Add a photo"].waitForExistence(timeout: 5),
+            "Arrange opened onto something without a photo grid on it."
+        )
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    /// The refused photograph, opened and read.
+    ///
+    /// This is the test that would have caught `PhotoRejectedView` being dead
+    /// code. It was written, previewed, and wired to nothing — the chain from the
+    /// moderation tables to the screen was broken in four separate places, and
+    /// every check in this repository passed the whole time, because nothing ever
+    /// tapped anything inside the profile editor.
+    ///
+    /// `MockData` seeds one refusal on the first photo, so the design build can
+    /// reach this at all.
+    func testARefusedPhotoOpensTheScreenThatSaysWhy() {
+        let app = launch()
+        app.buttons["tab.you"].tap()
+        app.buttons["profile.arrange"].tap()
+
+        let tile = app.buttons["photo.rejected"]
+        XCTAssertTrue(
+            tile.waitForExistence(timeout: 5),
+            "No refused photo in the grid, so nothing here tested the rejection screen. "
+                + "MockData is meant to seed one."
+        )
+        tile.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["photo.rejected.title"].waitForExistence(timeout: 5),
+            "Tapping a refused photo opened nothing."
+        )
+        XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the rejection screen.")
+    }
 }

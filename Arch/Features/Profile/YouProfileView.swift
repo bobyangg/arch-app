@@ -105,6 +105,7 @@ struct YouProfileView: View {
                     .foregroundStyle(ArchColor.mortar)
             }
             .buttonStyle(PressScaleStyle(scale: 1))
+            .accessibilityIdentifier("profile.arrange")
 
             // The gear is the rightmost thing on the screen, so nothing competes
             // with it for "this is settings".

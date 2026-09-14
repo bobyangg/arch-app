@@ -62,7 +62,15 @@ struct PhotoGrid: View {
         return PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
             .aspectRatio(1, contentMode: .fit)
             .overlay { if upload == .failed { failedFace(photo) } }
-            .overlay { if upload == nil && rejections[photo.id] != nil { rejectedFace(photo) } }
+            .overlay {
+                // A main-photo rule is about the *slot*, not the photograph. Once
+                // it is not first any more the problem is solved, and leaving the
+                // badge on would make "drag another to the front" a lie.
+                if upload == nil, let reason = rejections[photo.id],
+                   !reason.isMainPhotoRule || index == 0 {
+                    rejectedFace(photo)
+                }
+            }
             .overlay(alignment: .bottom) {
                 if upload == .uploading {
                     UploadBar { onFinishUpload(photo.id) }
@@ -123,9 +131,12 @@ struct PhotoGrid: View {
     /// The photograph stays visible underneath rather than being covered: it is the
     /// reader's own property, and hiding it would make "which one?" unanswerable.
     private func rejectedFace(_ photo: Photo) -> some View {
-        Button { onOpenRejection(photo.id) } label: {
+        let staying = rejections[photo.id]?.isMainPhotoRule == true
+        return Button { onOpenRejection(photo.id) } label: {
             VStack(spacing: ArchSpacing.xxs) {
-                Text("Not shown")
+                // "Not shown" would be a lie about a photograph that is still on
+                // the profile and simply cannot be the first one.
+                Text(staying ? "Not first" : "Not shown")
                     .archText(.badge)
                 Text("Why")
                     .archText(.caption)
@@ -136,7 +147,10 @@ struct PhotoGrid: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleStyle(scale: 0.97))
-        .accessibilityLabel("This photo is not on your profile. Tap to read why.")
+        .accessibilityIdentifier("photo.rejected")
+        .accessibilityLabel(staying
+            ? "This photo cannot be your first one. Tap to read why."
+            : "This photo is not on your profile. Tap to read why.")
     }
 
     private func slotLabel(index: Int, upload: PhotoUpload?) -> String {
@@ -212,6 +226,9 @@ struct PhotoGridCaption: View {
     /// occupy a tile, so the count above includes them and this is what says the
     /// count is not the number of photos anybody can see.
     var rejected: Int = 0
+    /// Photographs that are fine and simply cannot be the first one. Counted apart
+    /// from `rejected` because saying these are "not on your profile" is false.
+    var notFirst: Int = 0
 
     var body: some View {
         Text(text)
@@ -234,11 +251,18 @@ struct PhotoGridCaption: View {
                 ? "One photo is not on your profile. Tap it to read why."
                 : "\(ArchCopy.capitalisedWord(rejected)) photos are not on your profile. Tap one to read why."
         }
+        if notFirst > 0 {
+            return "Your first photo has to be one clear photograph of you on your own. "
+                + "Tap it to read why, or drag another to the front."
+        }
         if count <= Person.requiredPhotos {
-            return "The first photo is what people see in their five. "
+            return "The first photo is the one that has to be of you on your own. "
                 + "You need at least \(Person.requiredPhotos) photos, so add one before removing another."
         }
-        return "The first photo is what people see in their five. Drag to reorder."
+        // The rule and the permission in one line, because the permission is the
+        // half people do not expect: five of the six can be anything.
+        return "The first photo is the one that has to be of you on your own — "
+            + "the rest can be anywhere you were or anyone you were with. Drag to reorder."
     }
 }
 

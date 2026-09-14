@@ -72,9 +72,13 @@ struct HelpPage: View {
 
     @ViewBuilder
     private var safety: some View {
+        // Rewritten when email sign-in arrived, because the old line stopped
+        // being true the moment it did: an email address costs nothing, so
+        // "a new Apple ID and usually a new phone" was no longer the price. The
+        // device is what still costs something, and that is what this now says.
         section(
-            "Every account is tied to an Apple ID and a device",
-            "It is not a guarantee that somebody is who they say. It does mean that starting again after being removed costs a new Apple ID and usually a new phone, rather than thirty seconds — and making throwaway accounts expensive is most of the problem."
+            "Every account is tied to a device",
+            "It is not a guarantee that somebody is who they say. Signing in with Apple ties an account to an Apple ID as well, and an email address ties it to nothing on its own — but both are checked against the device, so starting again after being removed usually costs a new phone rather than thirty seconds. Making throwaway accounts expensive is most of the problem."
         )
         section(
             "Blocking is silent and complete",
