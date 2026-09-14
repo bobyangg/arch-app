@@ -107,6 +107,12 @@ def main():
     print(run["html_url"])
     print()
 
+    # Before anything else. A run that has not finished has proved nothing, and
+    # every report below it is about a job still in flight -- which is how this
+    # printed "nothing failed" for a build that was ten minutes from telling us
+    # whether it worked. Same bug as the cancelled case, one state along.
+    still_going = run["status"] != "completed"
+
     jobs = get("/actions/runs/%s/jobs" % run["id"])["jobs"]
     failed, unfinished = [], []
     for job in jobs:
@@ -195,6 +201,11 @@ def main():
             print("  %s:" % title)
             for line in message.replace("%0A", "\n").splitlines():
                 print("    %s" % line[:300])
+
+    if still_going:
+        print()
+        print("  Still running. Nothing here is a result yet.")
+        return 3
 
     if unfinished and not failed:
         print()

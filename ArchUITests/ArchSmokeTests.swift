@@ -182,13 +182,27 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertTrue(arrange.waitForExistence(timeout: 5), "No way into Arrange from the You tab.")
         arrange.tap()
 
-        // The grid is the thing Arrange exists for, so its add button standing in
-        // for "we got there" is the least copy-dependent check available.
+        // Not the add slot. That was the first version of this test and it failed
+        // for a reason that had nothing to do with Arrange: `MockData.you` holds
+        // exactly `photoLimit` photographs, so `canAdd` is false and there is
+        // correctly no add button to find. The test was wrong, the screen was
+        // fine, and the assertion message blamed the screen.
+        //
+        // "Done" is on the header whatever the grid contains, and it is also the
+        // way back — so one control proves both halves of what this test is named
+        // after.
+        let done = app.buttons["arrange.done"]
         XCTAssertTrue(
-            app.buttons["Add a photo"].waitForExistence(timeout: 5),
-            "Arrange opened onto something without a photo grid on it."
+            done.waitForExistence(timeout: 5),
+            "Arrange did not open — its header never appeared."
         )
         XCTAssertEqual(app.state, .runningForeground)
+
+        done.tap()
+        XCTAssertTrue(
+            app.buttons["profile.arrange"].waitForExistence(timeout: 5),
+            "Done did not come back to the profile."
+        )
     }
 
     /// The refused photograph, opened and read.
