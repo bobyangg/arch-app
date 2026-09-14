@@ -599,7 +599,11 @@ enum ArchBackend {
     /// Writing to somebody. This is the positive action in Arch: there are no
     /// likes, and sending spends a slot at both ends.
     static func startConversation(with person: Person, body: String) async throws -> String {
-        guard let session = await SupabaseClient.shared.restore() else {
+        // Only that there *is* a session. Unlike the calls that read `session`
+        // themselves, this one goes through `rpc`, which takes its token from
+        // `validToken()` -- so binding it here would be a second and staler copy of
+        // something nothing reads.
+        guard await SupabaseClient.shared.restore() != nil else {
             throw ArchAPIError.notSignedIn
         }
         // One function call, because opening a conversation and sending its first

@@ -73,16 +73,21 @@ final class DailyFiveStore {
 
     /// Persist in the background. The local change has already happened, because
     /// dismissing somebody should not wait on a round trip.
+    ///
+    /// `@MainActor` on the task, not three `MainActor.run` closures inside it:
+    /// `[weak self]` captures a mutable optional, and reading it from a closure
+    /// nested inside the task is a data race that Swift 6 rejects outright.
+    /// Isolating the continuation removes the inner closure entirely.
     private func persist(_ work: @escaping () async throws -> Void) {
         guard ArchConfig.isConfigured else { return }
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             do {
                 try await work()
-                await MainActor.run { self?.lastError = nil }
+                self?.lastError = nil
             } catch let error as ArchAPIError {
-                await MainActor.run { self?.lastError = error }
+                self?.lastError = error
             } catch {
-                await MainActor.run { self?.lastError = .transport }
+                self?.lastError = .transport
             }
         }
     }

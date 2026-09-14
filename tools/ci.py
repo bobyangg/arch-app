@@ -67,7 +67,10 @@ def run_for(sha, wait=True):
     waited = 0
     while True:
         runs = get("/actions/runs?per_page=10")["workflow_runs"]
-        mine = [r for r in runs if sha is None or r["head_sha"] == sha]
+        # Prefix, not equality: a short sha is what `git log` prints and what
+        # anybody types, and matching only the full forty characters made this
+        # report "no run found" for a run that was sitting right there.
+        mine = [r for r in runs if sha is None or r["head_sha"].startswith(sha)]
         if mine:
             run = mine[0]
             if run["status"] == "completed" or not wait:

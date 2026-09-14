@@ -74,7 +74,11 @@ actor SupabaseClient {
 
         if let refreshTask { return try await refreshTask.value.accessToken }
         let task = Task<Session, Error> { [held] in
-            defer { Task { await self.finishRefresh() } }
+            // No `await`: both tasks are made in an actor-isolated context and
+            // inherit this actor's executor, so `finishRefresh` is already running
+            // on it. The `await` that used to be here suspended nothing and only
+            // suggested a hop that does not happen.
+            defer { Task { self.finishRefresh() } }
             return try await self.performRefresh(held.refreshToken)
         }
         refreshTask = task

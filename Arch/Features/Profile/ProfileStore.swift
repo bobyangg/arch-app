@@ -43,16 +43,23 @@ final class ProfileStore {
     /// reported afterwards rather than prevented.
     ///
     /// Does nothing in a design build, where there is nowhere to write.
+    /// The task is `@MainActor` rather than three `MainActor.run` closures inside a
+    /// plain one. `[weak self]` captures a *mutable* optional, and reading it from
+    /// a closure nested inside the task is a data race the compiler will refuse
+    /// outright in Swift 6 -- it warns about it today. Isolating the whole
+    /// continuation instead means the assignment is a direct main-actor access with
+    /// no inner closure to smuggle `self` into. `work()` is nonisolated and async,
+    /// so awaiting it still leaves the main actor for the duration of the request.
     private func persist(_ work: @escaping () async throws -> Void) {
         guard ArchConfig.isConfigured else { return }
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             do {
                 try await work()
-                await MainActor.run { self?.lastError = nil }
+                self?.lastError = nil
             } catch let error as ArchAPIError {
-                await MainActor.run { self?.lastError = error }
+                self?.lastError = error
             } catch {
-                await MainActor.run { self?.lastError = .transport }
+                self?.lastError = .transport
             }
         }
     }
@@ -140,7 +147,10 @@ final class ProfileStore {
     /// reader is still looking at.
     private func upload(id: String, position: Int, item: PickedPhoto) {
         guard ArchConfig.isConfigured else { return }
-        Task { [weak self] in
+        // `@MainActor` on the task for the same reason as in `persist` above. The
+        // rendering still happens off it: `Task.detached` below takes no isolation
+        // from here, which is the whole point of it.
+        Task { @MainActor [weak self] in
             // Hoisted out of the `guard` rather than written inline. A trailing
             // closure is not allowed in a control-flow condition -- Swift reads the
             // `{` as the start of the guard body, and the error it gives is about
@@ -149,16 +159,16 @@ final class ProfileStore {
                 PhotoExport.jpeg(from: item.photo, crop: item.crop)
             }
             guard let jpeg = await rendered.value else {
-                await MainActor.run { self?.failUpload(id: id) }
+                self?.failUpload(id: id)
                 return
             }
             do {
                 try await ArchBackend.addPhoto(id: id, position: position, jpeg: jpeg)
-                await MainActor.run { self?.finishUpload(id: id) }
+                self?.finishUpload(id: id)
             } catch {
                 // The row stays, which is what lets the grid offer "Again" -- and
                 // what makes a lost upload survive the app being closed.
-                await MainActor.run { self?.failUpload(id: id) }
+                self?.failUpload(id: id)
             }
         }
     }
