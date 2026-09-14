@@ -108,7 +108,7 @@ def main():
     print()
 
     jobs = get("/actions/runs/%s/jobs" % run["id"])["jobs"]
-    failed = []
+    failed, unfinished = [], []
     for job in jobs:
         print("  %-28s %s" % (job["name"], job.get("conclusion")))
         if job.get("conclusion") == "failure":
@@ -116,6 +116,11 @@ def main():
             for step in job.get("steps", []):
                 if step.get("conclusion") == "failure":
                     print("      failed at: %s" % step["name"])
+        elif job.get("conclusion") not in ("success", "skipped", None):
+            # Cancelled, timed out, neutral. None of these are failures and none
+            # of them are a pass -- and reporting "nothing failed" for a run that
+            # never finished is the same quiet lie this tool exists to prevent.
+            unfinished.append(job)
 
     prefix = "/Users/runner/work/arch-app/arch-app/"
 
@@ -190,6 +195,14 @@ def main():
             print("  %s:" % title)
             for line in message.replace("%0A", "\n").splitlines():
                 print("    %s" % line[:300])
+
+    if unfinished and not failed:
+        print()
+        print("  This run did not finish: %s." %
+              ", ".join("%s was %s" % (j["name"], j.get("conclusion")) for j in unfinished))
+        print("  Nothing was proved either way. A newer push usually explains it —")
+        print("  the workflow cancels an in-progress run when another lands.")
+        return 2
 
     if not failed:
         print()

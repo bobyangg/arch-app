@@ -12,6 +12,7 @@ promises. Everything here runs fine from Windows.
 | `003_functions.sql` | `start_conversation` and `delete_account` |
 | `004_rls_test.sql` | 18 security checks, run in the SQL Editor, rolls back |
 | `013_profile_review.sql` | `profile_reviews`: the reviewer's notes, written by the `review` function only |
+| `014_photo_reviews.sql` | `photo_reviews`: one ask per refused photograph. Was live with no file behind it |
 | `lint.py` | Cross-references the SQL before it ever reaches a database |
 
 ## Status
