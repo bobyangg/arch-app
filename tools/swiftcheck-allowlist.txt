@@ -34,6 +34,7 @@ NavigationPath
 NavigationStack
 Path
 Preview
+ProgressView
 Rectangle
 RoundedRectangle
 Slider
