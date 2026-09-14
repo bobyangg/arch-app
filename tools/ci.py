@@ -91,26 +91,58 @@ def main():
                 if step.get("conclusion") == "failure":
                     print("      failed at: %s" % step["name"])
 
+    prefix = "/Users/runner/work/arch-app/arch-app/"
+
+    def clean(note):
+        return note.get("message", "").strip().replace(prefix, "")
+
+    # Annotations are fetched for every job, not only failed ones: a green build
+    # still carries its warnings, and those are the whole reason this reads
+    # annotations rather than logs.
+    for job in jobs:
+        notes = get("/check-runs/%s/annotations" % job["id"])
+        errors = [clean(n) for n in notes if n.get("annotation_level") == "failure"]
+        # The workflow's own "process completed with exit code" line is the shell
+        # reporting that something failed, which is already obvious from the job.
+        errors = [e for e in errors if "Process completed with exit code" not in e]
+        warnings = [
+            (n.get("path"), n.get("start_line"), clean(n))
+            for n in notes
+            if n.get("annotation_level") == "warning"
+        ]
+        # `warnings.py` puts the complete list in one notice, because GitHub shows
+        # only ten annotations of each level per step and a long warning list would
+        # otherwise be silently cut off at ten.
+        full = [
+            clean(n)
+            for n in notes
+            if n.get("annotation_level") == "notice"
+            and (n.get("title") or "") == "Every warning"
+        ]
+
+        if errors:
+            print()
+            print("  %d error(s) in %s:" % (len(errors), job["name"]))
+            for error in errors:
+                print("    - %s" % error[:300])
+
+        if full:
+            body = full[0].replace("%0A", "\n").splitlines()
+            print()
+            print("  %s -- %s" % (job["name"], body[0] if body else ""))
+            for line in body[1:]:
+                print("    %s" % line[:300])
+        elif warnings:
+            print()
+            print("  %d warning(s) in %s:" % (len(warnings), job["name"]))
+            for path, line, message in warnings:
+                where = "%s:%s" % (path, line) if path else ""
+                print("    - %s %s" % (where, message[:260]))
+
     if not failed:
         print()
         print("  nothing failed.")
         return 0
-
-    prefix = "/Users/runner/work/arch-app/arch-app/"
-    for job in failed:
-        notes = get("/check-runs/%s/annotations" % job["id"])
-        errors = [
-            n.get("message", "").strip().replace(prefix, "")
-            for n in notes
-            if n.get("annotation_level") == "failure"
-        ]
-        # The workflow's own "process completed with exit code" line is the shell
-        # reporting that something failed, which is already obvious from the job.
-        errors = [e for e in errors if "Process completed with exit code" not in e]
-        print()
-        print("  %d error(s) in %s:" % (len(errors), job["name"]))
-        for error in errors:
-            print("    - %s" % error[:300])
     return 1
 
 

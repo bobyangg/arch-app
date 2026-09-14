@@ -85,7 +85,11 @@ jobs:
 
       # `-destination generic/platform=iOS Simulator` builds without booting a
       # simulator, which is faster and does not depend on which runtimes the
-      # runner image happens to carry.
+      # runner image happens to carry. The bundle it produces is installable on any
+      # of them, which is what the launch step below needs.
+      #
+      # `-derivedDataPath` is here only so that the .app has a known address;
+      # Xcode's default is a hashed directory under ~/Library.
       - name: Build
         run: |
           set -o pipefail
@@ -95,8 +99,21 @@ jobs:
             -configuration Debug \
             -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             | tee build.log
+
+      # Warnings are gathered whether the build passed or failed.
+      #
+      # They are the only feedback this project has ever had, and a *successful*
+      # build used to throw them away entirely -- the summary below is `if:
+      # failure()`, so going green meant nobody knew whether there were two
+      # warnings or two hundred. `SWIFT_TREAT_WARNINGS_AS_ERRORS` stays NO, and
+      # this is the other half of that bargain: they do not stop the build, but
+      # they do get counted and read.
+      - name: The warnings, gathered
+        if: always()
+        run: python3 tools/warnings.py build.log
 
       # The first build of this project will not pass, so the error list is the
       # deliverable until it does.
@@ -130,10 +147,37 @@ jobs:
             printf '::error::%s\n' "$line"
           done
 
+      # Compiling is not running.
+      #
+      # Everything above this proves the types line up. A force-unwrapped nil, a
+      # font that is not in the bundle, a precondition in a store's `init`, a hang
+      # in `ArchSession.start()` -- every one of those compiles perfectly and gives
+      # you a dead app. Until this step existed, no line of Arch's Swift had ever
+      # been executed.
+      #
+      # CI has no Supabase keys, so this is the design build on `MockData`: no
+      # network, no sign-in, no notification prompt. That is the whole app's view
+      # tree drawn from real code, which is the part worth knowing about.
+      - name: Launch it on a simulator
+        run: python3 tools/simrun.py build/Build/Products/Debug-iphonesimulator/Arch.app
+
       - name: Keep the log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log
           path: build.log
+          if-no-files-found: ignore
+
+      # Two frames of the app actually running, which is the only thing in this
+      # repository that has ever shown what Arch looks like rather than asserting
+      # something about it.
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-screenshots
+          path: |
+            launching.png
+            settled.png
           if-no-files-found: ignore
