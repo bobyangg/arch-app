@@ -31,7 +31,11 @@ final class ProfileStore {
     func adopt(_ person: Person) {
         self.person = person
         uploads.removeAll()
-        rejections.removeAll()
+        // Refusals are not cleared here, and no longer can be: they are read off
+        // the photographs, so replacing the person replaces them. Clearing them
+        // separately is what the old dictionary made possible and what threw the
+        // server's answer away on every load.
+        reviewsAsked.removeAll()
         lastError = nil
     }
 
@@ -202,7 +206,8 @@ final class ProfileStore {
         guard canRemovePhoto else { return }
         person.photos.removeAll { $0.id == id }
         uploads[id] = nil
-        rejections[id] = nil
+        // The refusal goes with the photograph, because it lives on it.
+        reviewsAsked.remove(id)
         persist { try await ArchBackend.removePhoto(id: id) }
     }
 
