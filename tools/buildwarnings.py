@@ -11,7 +11,7 @@ thing readable on a public repository without signing in -- **job summaries are
 not**, which was checked against the API rather than assumed -- so this is the only
 way the numbers reach anybody who is not holding a GitHub session.
 
-    python3 tools/warnings.py build.log
+    python3 tools/buildwarnings.py build.log
 
 Run locally against a downloaded log and it just prints the table.
 """

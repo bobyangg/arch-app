@@ -113,7 +113,7 @@ jobs:
       # they do get counted and read.
       - name: The warnings, gathered
         if: always()
-        run: python3 tools/warnings.py build.log
+        run: python3 tools/buildwarnings.py build.log
 
       # The first build of this project will not pass, so the error list is the
       # deliverable until it does.
