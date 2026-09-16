@@ -79,6 +79,12 @@ targets:
         # as `apikey`, and that position expects a JWT.
         Release:
           CODE_SIGN_STYLE: Automatic
+          # **Not the default.** Xcode's default for an iOS target is
+          # "Apple Development", and with it the first archive went looking for an
+          # iOS App Development profile -- which needs registered devices, and
+          # failed with "your team has no devices". An App Store build wants a
+          # distribution identity, which needs no devices at all.
+          CODE_SIGN_IDENTITY: "Apple Distribution"
           ARCH_SUPABASE_URL: https://bxuzpbzidrmoeietjnem.supabase.co
           ARCH_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dXpwYnppZHJtb2VpZXRqbmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjkyODUsImV4cCI6MjEwNDg0NTI4NX0.zf8e9gAyZiJJxkpU2qtsD0Qk3_IYvD_Xq_13E1HlkaE"
 
