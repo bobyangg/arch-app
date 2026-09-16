@@ -357,6 +357,12 @@ jobs:
       # The run number as the build number. Apple refuses a build number it has
       # seen before for the same version, and a counter that never repeats is the
       # cheapest way never to think about it again.
+      # **Manual signing, deliberately.** Automatic was tried three times and chose
+      # a development profile every time -- even once a distribution certificate
+      # existed for it to use -- because `xcodebuild` does not infer distribution
+      # from `archive` the way the Xcode application does. The certificate and the
+      # profile are both made a few steps above, so there is nothing left to infer
+      # and nothing left to get wrong.
       - name: Archive
         env:
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
@@ -369,12 +375,11 @@ jobs:
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath build/Arch.xcarchive \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8 \
-            -authenticationKeyID "$APPSTORE_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
             DEVELOPMENT_TEAM=${{ steps.team.outputs.team }} \
             CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Apple Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="${{ steps.cert.outputs.profile }}" \
             | tee archive.log
 
       # Confirms the Release build really did get the keys, without printing the
@@ -407,7 +412,12 @@ jobs:
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>upload</string>
             <key>teamID</key><string>${{ steps.team.outputs.team }}</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Apple Distribution</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.arch.arch</key><string>${{ steps.cert.outputs.profile }}</string>
+            </dict>
             <key>uploadSymbols</key><true/>
           </dict>
           </plist>
