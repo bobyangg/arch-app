@@ -49,6 +49,32 @@ jobs:
         # Prints the two fingerprints. Compare against the database with:
         #   select digest, source_digest from compatibility_digest;
 
+  # Whether CI can reach App Store Connect at all, on a runner that costs a tenth
+  # of a macOS one.
+  #
+  # Everything about signing and TestFlight depends on three secrets being right,
+  # and each of them fails differently and unhelpfully twenty minutes into a macOS
+  # build. Asking Apple directly, first, turns four possible mysteries into one
+  # plain answer -- and it does it in about fifteen seconds.
+  signing:
+    name: App Store Connect reachable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - run: pip install "pyjwt[crypto]"
+
+      - name: Ask Apple whether these credentials work
+        env:
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: python tools/ascheck.py
+
   build:
     name: Build for the simulator
     runs-on: macos-15
