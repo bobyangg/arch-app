@@ -167,6 +167,46 @@ def main():
     print("Found %s -- \"%s\" (id %s)." % (
         BUNDLE_ID, found["attributes"].get("name"), found["id"]))
 
+    # What the account actually holds. Automatic signing picked *development*
+    # twice and refused a distribution identity as "conflicting", and the usual
+    # cause of that is that there is no distribution certificate for it to use --
+    # so rather than guess a third time, ask.
+    print()
+    try:
+        certs = get("/certificates?limit=200", bearer).get("data", [])
+        print("certificates on the account: %d" % len(certs))
+        for row in certs:
+            a = row.get("attributes", {})
+            print("    %-28s %s  expires %s" % (
+                a.get("certificateType"), a.get("name", "")[:32],
+                (a.get("expirationDate") or "")[:10]))
+        kinds = {row.get("attributes", {}).get("certificateType") for row in certs}
+        if not any(k and "DISTRIBUTION" in k for k in kinds):
+            print("    -> no distribution certificate. Automatic signing cannot make")
+            print("       one for an App Store archive, which is why it falls back")
+            print("       to development and then needs a registered device.")
+    except urllib.error.HTTPError as problem:
+        print("could not list certificates: HTTP %d" % problem.code)
+
+    print()
+    try:
+        profiles = get("/profiles?limit=200", bearer).get("data", [])
+        print("provisioning profiles: %d" % len(profiles))
+        for row in profiles:
+            a = row.get("attributes", {})
+            print("    %-24s %-22s %s" % (
+                a.get("profileType"), a.get("profileState"), a.get("name", "")[:40]))
+    except urllib.error.HTTPError as problem:
+        print("could not list profiles: HTTP %d" % problem.code)
+
+    print()
+    try:
+        devices = get("/devices?limit=200", bearer).get("data", [])
+        print("registered devices: %d" % len(devices))
+    except urllib.error.HTTPError as problem:
+        print("could not list devices: HTTP %d" % problem.code)
+
+    print()
     team = team_id(bearer)
     if team:
         # Printed so the release build needs no fourth secret for it.
