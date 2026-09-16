@@ -319,6 +319,38 @@ jobs:
           chmod 600 ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8
           echo "wrote $(wc -c < ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8) bytes"
 
+      # A distribution certificate, made through the API because there is no Mac
+      # to make one on and `-allowProvisioningUpdates` will only ever make a
+      # development one. See tools/makecert.py for why it is created and thrown
+      # away every run rather than kept.
+      - name: Make a distribution certificate
+        id: cert
+        env:
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: python tools/makecert.py build/signing
+
+      # Its own keychain, not the login one. The runner is thrown away afterwards,
+      # but a build that quietly depends on the state of a shared keychain is the
+      # kind that works until the image changes underneath it.
+      - name: Import it into a keychain
+        env:
+          P12_PASS: ${{ steps.cert.outputs.pass }}
+        run: |
+          KEYCHAIN=$RUNNER_TEMP/arch.keychain-db
+          PASSWORD=$(python -c "import secrets;print(secrets.token_urlsafe(20))")
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security import build/signing/dist.p12 -k "$KEYCHAIN" -P "$P12_PASS"             -T /usr/bin/codesign -T /usr/bin/security
+          # Without this, codesign stops to ask for permission and the job hangs
+          # until it times out rather than failing.
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          echo "identities now available:"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
       - name: Generate the project
         run: xcodegen generate
 
