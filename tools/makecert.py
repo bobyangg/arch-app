@@ -101,6 +101,21 @@ def main():
         call("DELETE", "/certificates/%s" % row["id"], bearer)
         print("revoked a previous %s certificate" % LABEL)
 
+    # The development certificates `-allowProvisioningUpdates` made while automatic
+    # signing was being tried and failing. Their private keys died with the runners
+    # that made them, so they can sign nothing and are pure clutter against the
+    # account's limits.
+    #
+    # Matched on "Created via API" rather than on type alone, so a certificate a
+    # person made in Xcode is never touched. Nothing here depends on them: there
+    # are no profiles bound to them, which the survey confirms before this runs.
+    for row in existing:
+        attributes = row.get("attributes", {})
+        if (attributes.get("certificateType") == "DEVELOPMENT"
+                and "Created via API" in (attributes.get("name") or "")):
+            call("DELETE", "/certificates/%s" % row["id"], bearer)
+            print("revoked an orphaned development certificate from a failed run")
+
     others = [
         row for row in existing
         if row.get("attributes", {}).get("certificateType") == "DISTRIBUTION"

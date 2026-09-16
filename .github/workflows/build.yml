@@ -432,6 +432,16 @@ jobs:
             -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
             | tee export.log
 
+      # Uploading is not arriving. `-exportArchive` exiting zero means Apple
+      # accepted the bytes; processing happens afterwards and fails on its own for
+      # reasons that never reach this runner.
+      - name: Did it actually arrive
+        env:
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: python tools/tfcheck.py ${{ github.run_number }}
+
       - name: What went wrong
         if: failure()
         run: |
