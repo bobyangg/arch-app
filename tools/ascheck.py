@@ -62,11 +62,32 @@ def get(path, bearer):
         return json.load(response)
 
 
+def team_id(bearer):
+    """The Team ID, discovered rather than configured.
+
+    `seedId` on a registered bundle id is the ten-character team prefix, which is
+    exactly what `DEVELOPMENT_TEAM` wants. Reading it from Apple means the release
+    build needs no fourth secret, and cannot drift from the account it is actually
+    signing against.
+    """
+    for row in get("/bundleIds?limit=200", bearer).get("data", []):
+        attributes = row.get("attributes", {})
+        if attributes.get("identifier") == BUNDLE_ID:
+            return attributes.get("seedId")
+    return None
+
+
 def main():
+    # `--team-id` prints one value and nothing else, for `$(...)` in a workflow.
+    quiet = "--team-id" in sys.argv
+
     missing = [name for name in NEEDED if not os.environ.get(name)]
     if missing:
         # Not a pass, and not silently skipped. A check that says nothing when it
         # cannot run is the failure this repository keeps finding in itself.
+        if quiet:
+            print("MISSING:" + ",".join(missing), file=sys.stderr)
+            return 1
         print("These secrets are not set on the repository:")
         for name in missing:
             print("    %s" % name)
@@ -78,6 +99,18 @@ def main():
     issuer = os.environ["APPSTORE_ISSUER_ID"].strip()
     key_id = os.environ["APPSTORE_KEY_ID"].strip()
     key = os.environ["APPSTORE_PRIVATE_KEY"]
+
+    if quiet:
+        try:
+            found = team_id(token(issuer, key_id, key))
+        except Exception as problem:
+            print("could not reach App Store Connect: %s" % problem, file=sys.stderr)
+            return 1
+        if not found:
+            print("no bundle id %s on the account" % BUNDLE_ID, file=sys.stderr)
+            return 1
+        print(found)
+        return 0
 
     print("issuer  %s" % issuer)
     print("key id  %s" % key_id)
@@ -133,6 +166,16 @@ def main():
 
     print("Found %s -- \"%s\" (id %s)." % (
         BUNDLE_ID, found["attributes"].get("name"), found["id"]))
+
+    team = team_id(bearer)
+    if team:
+        # Printed so the release build needs no fourth secret for it.
+        print("Team ID (seedId on the bundle id): %s" % team)
+    else:
+        print("The bundle id is not registered in the developer portal, which the")
+        print("release build needs for signing.")
+        annotate("error", "No registered bundle id " + BUNDLE_ID)
+        return 1
     print("All three secrets work and the app record exists.")
     annotate("notice", "App Store Connect reachable; %s is registered as \"%s\""
              % (BUNDLE_ID, found["attributes"].get("name")))

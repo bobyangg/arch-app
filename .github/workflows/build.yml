@@ -261,3 +261,157 @@ jobs:
             launching.png
             settled.png
           if-no-files-found: ignore
+
+  # Arch, signed, on a phone.
+  #
+  # Only after everything above has passed, and only for main -- a pull request
+  # has no business uploading a build to TestFlight.
+  #
+  # **Release is a different app from the one the tests just ran.** Debug is the
+  # design build on MockData, which is what the UI tests need; Release carries the
+  # Supabase URL and anon key and talks to the real project. So this is the first
+  # time each commit's *real* configuration is built at all.
+  testflight:
+    name: TestFlight
+    needs: [checks, signing, build]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - run: pip install "pyjwt[crypto]"
+
+      - name: Use the newest Xcode on the image
+        run: |
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -switch "$newest"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      # The Team ID is read from Apple rather than kept as a fourth secret, so it
+      # cannot drift from the account actually being signed against.
+      - name: Work out the Team ID
+        id: team
+        env:
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          team=$(python tools/ascheck.py --team-id)
+          echo "Team ID: $team"
+          echo "team=$team" >> "$GITHUB_OUTPUT"
+
+      # xcodebuild wants the key as a file. ~/private_keys is the directory it
+      # looks in by default, and the name has to be AuthKey_<KEYID>.p8.
+      - name: Put the API key where xcodebuild looks
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "$APPSTORE_PRIVATE_KEY" > ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8
+          chmod 600 ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8
+          echo "wrote $(wc -c < ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8) bytes"
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      # The run number as the build number. Apple refuses a build number it has
+      # seen before for the same version, and a counter that never repeats is the
+      # cheapest way never to think about it again.
+      - name: Archive
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project Arch.xcodeproj \
+            -scheme Arch \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/Arch.xcarchive \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8 \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            DEVELOPMENT_TEAM=${{ steps.team.outputs.team }} \
+            CURRENT_PROJECT_VERSION=${{ github.run_number }} \
+            | tee archive.log
+
+      # Confirms the Release build really did get the keys, without printing the
+      # key. A Release build that silently shipped as the design build would look
+      # perfect right up until somebody tried to sign in.
+      - name: Check the archive is the real build, not the design build
+        run: |
+          plist=build/Arch.xcarchive/Products/Applications/Arch.app/Info.plist
+          url=$(/usr/libexec/PlistBuddy -c "Print :ARCH_SUPABASE_URL" "$plist" 2>/dev/null || echo "")
+          key=$(/usr/libexec/PlistBuddy -c "Print :ARCH_SUPABASE_ANON_KEY" "$plist" 2>/dev/null || echo "")
+          echo "ARCH_SUPABASE_URL = $url"
+          echo "anon key is ${#key} characters"
+          if [ -z "$url" ] || [ ${#key} -lt 40 ]; then
+            echo "::error::The Release archive has no Supabase config -- it would run as the design build."
+            exit 1
+          fi
+          printf '::notice title=Archive::Real build, pointed at %s\n' "$url"
+
+      - name: Export and upload to TestFlight
+        env:
+          APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+          APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+        run: |
+          set -o pipefail
+          cat > ExportOptions.plist <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${{ steps.team.outputs.team }}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath build/Arch.xcarchive \
+            -exportOptionsPlist ExportOptions.plist \
+            -exportPath build/export \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$APPSTORE_KEY_ID.p8 \
+            -authenticationKeyID "$APPSTORE_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID" \
+            | tee export.log
+
+      - name: What went wrong
+        if: failure()
+        run: |
+          for log in archive.log export.log; do
+            [ -f "$log" ] || continue
+            echo "## $log" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:|error |Provisioning|No profiles|not available|failed" "$log" \
+              | sort -u | head -40 >> "$GITHUB_STEP_SUMMARY" || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -E "error:|^Provisioning|No profiles|Code Signing Error" "$log" \
+              | sort -u | head -15 | while IFS= read -r line; do
+              printf '::error::%s\n' "$line"
+            done
+          done
+
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-logs
+          path: |
+            archive.log
+            export.log
+          if-no-files-found: ignore
