@@ -22,11 +22,17 @@ import time
 import urllib.error
 import urllib.request
 
-# A macOS build takes about seven minutes. Forty-five seconds is roughly ten
-# calls to watch one, which fits inside the anonymous hourly allowance with room
-# to read the result afterwards; fifteen seconds did not, and spent the whole
-# quota watching a build it then could not report on.
-POLL = 45
+# A macOS build takes about seven minutes, and one with a TestFlight upload after
+# it takes twenty. Ninety seconds is about fourteen calls to watch the long one,
+# which leaves room inside the anonymous sixty-an-hour to read the result
+# afterwards.
+#
+# Fifteen seconds was the first guess and spent the whole quota watching a build
+# it could then not report on. Forty-five was the second, and was fine until a job
+# ran for twenty minutes -- and a *second* watcher polling jobs and annotations
+# alongside it emptied the budget again. The lesson both times: the cost is not
+# the poll interval, it is calls-per-minute across everything running at once.
+POLL = 90
 
 REPO = "bobyangg/arch-app"
 API = "https://api.github.com/repos/" + REPO
