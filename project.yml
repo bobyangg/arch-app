@@ -47,11 +47,40 @@ targets:
         PRODUCT_NAME: Arch
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: "1.0"
-        # Nothing here is signed. The simulator does not ask, and the whole reason
-        # this builds without a developer account is that it never tries.
-        CODE_SIGNING_ALLOWED: NO
-        CODE_SIGN_IDENTITY: ""
         TARGETED_DEVICE_FAMILY: "1"   # iPhone only, as the design has always been.
+
+        # Empty by default, which makes every build that does not say otherwise the
+        # design build on `MockData`. `Info.plist` reads these through `$(...)`, so
+        # a configuration can fill them in without a code change.
+        ARCH_SUPABASE_URL: ""
+        ARCH_SUPABASE_ANON_KEY: ""
+
+      configs:
+        # **Debug is deliberately still the design build.** CI builds and tests
+        # Debug, and all seven UI tests depend on `ArchConfig.isConfigured` being
+        # false: with real keys the app would open on the signed-out screen instead
+        # of the roster and every one of them would fail. Nothing is signed here
+        # either -- the simulator does not ask, and never trying is the whole reason
+        # this builds without a developer account.
+        Debug:
+          CODE_SIGNING_ALLOWED: NO
+          CODE_SIGN_IDENTITY: ""
+
+        # Release is the real app: signed, and pointed at Supabase.
+        #
+        # **The anon key is not a secret.** It identifies the project and nothing
+        # more; every row it can reach is decided by row-level security on the
+        # server. It is designed to ship inside clients, so it is in this file
+        # rather than in a build secret. The key that *is* secret is the service
+        # key, which bypasses RLS and must never appear in this target.
+        #
+        # The legacy JWT rather than the newer `sb_publishable_` key, because
+        # `SupabaseClient` sends it in the `Authorization: Bearer` position as well
+        # as `apikey`, and that position expects a JWT.
+        Release:
+          CODE_SIGN_STYLE: Automatic
+          ARCH_SUPABASE_URL: https://bxuzpbzidrmoeietjnem.supabase.co
+          ARCH_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dXpwYnppZHJtb2VpZXRqbmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjkyODUsImV4cCI6MjEwNDg0NTI4NX0.zf8e9gAyZiJJxkpU2qtsD0Qk3_IYvD_Xq_13E1HlkaE"
 
     info:
       path: Arch/Info.plist
@@ -70,13 +99,11 @@ targets:
         # applied at the root, so the system is never left to pick.
         UIUserInterfaceStyle: Automatic
 
-        # **Empty on purpose.** `ArchConfig.isConfigured` is false without both,
-        # and the app then runs as the design build on MockData — which is exactly
-        # what CI should build, since CI has no business holding project keys.
-        # Fill these in locally, or in a build setting, to point a build at
-        # Supabase.
-        ARCH_SUPABASE_URL: ""
-        ARCH_SUPABASE_ANON_KEY: ""
+        # Read from the build settings above rather than written here, so that
+        # Debug stays the design build and Release is the real one. Xcode expands
+        # `$(...)` in Info.plist values when it processes the file.
+        ARCH_SUPABASE_URL: "$(ARCH_SUPABASE_URL)"
+        ARCH_SUPABASE_ANON_KEY: "$(ARCH_SUPABASE_ANON_KEY)"
 
         # The fonts are registered at runtime by `ArchTypography`, not listed here
         # — see the note there. They still have to be in the bundle, which the
