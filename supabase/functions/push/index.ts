@@ -115,7 +115,31 @@ Deno.serve(async (request) => {
     .limit(BATCH);
 
   if (error) return refuse(500, "could not read the outbox", error);
-  if (!queued?.length) return json({ status: "ok", sent: 0 });
+  if (!queued?.length) {
+    // An empty outbox used to return here, which meant the key was never touched
+    // until there was something to send -- so a truncated paste or the wrong file
+    // looked exactly like a working setup, and the first person to find out would
+    // have been a real user whose message never arrived.
+    //
+    // **This branch is for a direct call, not for the sweep.** `private.sweep_push`
+    // counts the outbox first and does not make the request at all when it is
+    // empty, which is right -- a minute-by-minute job should not be a
+    // minute-by-minute HTTP call. So this costs nothing in normal running and
+    // exists so that a person, or `tools/checkpush.py`, can ask whether the key
+    // Apple issued is the key that actually got pasted into the secret.
+    try {
+      await providerToken();
+      return json({ status: "ok", sent: 0, key: "usable" });
+    } catch (problem) {
+      console.error("APNs key will not import", problem);
+      return json({
+        status: "ok",
+        sent: 0,
+        key: "unusable",
+        why: String(problem),
+      });
+    }
+  }
 
   const topic = Deno.env.get("APP_BUNDLE_ID")!;
   const jwt = await providerToken();
