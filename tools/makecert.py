@@ -71,7 +71,14 @@ def call(method, path, bearer, body=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as problem:
         detail = problem.read().decode("utf-8", "replace")[:600]
-        raise SystemExit("%s %s -> HTTP %d\n%s" % (method, path, problem.code, detail))
+        message = "%s %s -> HTTP %d\n%s" % (method, path, problem.code, detail)
+        # **As an annotation as well.** This step failed once with nothing but
+        # "process completed with exit code 1" visible, because the detail went to
+        # stderr and GitHub gates the log behind a sign-in. Annotations are the
+        # readable channel; a diagnostic nobody can read is not a diagnostic.
+        if os.environ.get("GITHUB_ACTIONS"):
+            print("::error::makecert: " + message.replace("\n", "%0A"))
+        raise SystemExit(message)
 
 
 def run(args, **kwargs):
@@ -88,45 +95,45 @@ def main():
     os.makedirs(out, exist_ok=True)
     bearer = token()
 
-    # Clear out anything this tool made on a previous run. Apple allows three
-    # distribution certificates and every one of ours is already useless -- its
-    # private key existed only inside that run's machine.
-    existing = call("GET", "/certificates?limit=200", bearer).get("data", [])
-    mine = [
-        row for row in existing
-        if row.get("attributes", {}).get("certificateType") == "DISTRIBUTION"
-        and LABEL in (row.get("attributes", {}).get("name") or "")
-    ]
-    for row in mine:
-        call("DELETE", "/certificates/%s" % row["id"], bearer)
-        print("revoked a previous %s certificate" % LABEL)
-
-    # The development certificates `-allowProvisioningUpdates` made while automatic
-    # signing was being tried and failing. Their private keys died with the runners
-    # that made them, so they can sign nothing and are pure clutter against the
-    # account's limits.
+    # Clear out the previous run's certificates.
     #
-    # Matched on "Created via API" rather than on type alone, so a certificate a
-    # person made in Xcode is never touched. Nothing here depends on them: there
-    # are no profiles bound to them, which the survey confirms before this runs.
-    for row in existing:
-        attributes = row.get("attributes", {})
-        if (attributes.get("certificateType") == "DEVELOPMENT"
-                and "Created via API" in (attributes.get("name") or "")):
-            call("DELETE", "/certificates/%s" % row["id"], bearer)
-            print("revoked an orphaned development certificate from a failed run")
+    # **Not matched by name, because Apple ignores the one we ask for.** The CSR
+    # says "Arch CI" and Apple names the certificate after the account holder --
+    # "Apple Distribution: Alwin Ning" -- so a name test matched nothing, revoked
+    # nothing, and would have let them pile up until the limit of three stopped
+    # the build with something obscure.
+    #
+    # So: every distribution certificate goes before a new one is made. That is
+    # safe here for a specific reason rather than by luck -- the private key never
+    # leaves the runner that made it, so every certificate at Apple can already
+    # sign nothing. Revoking them destroys nothing that works.
+    #
+    # If a Mac ever joins this project and somebody makes a certificate they
+    # actually hold the key for, set KEEP_CERTS=1 and this stops.
+    existing = call("GET", "/certificates?limit=200", bearer).get("data", [])
 
-    others = [
-        row for row in existing
-        if row.get("attributes", {}).get("certificateType") == "DISTRIBUTION"
-        and LABEL not in (row.get("attributes", {}).get("name") or "")
-    ]
-    if len(others) >= 3:
-        raise SystemExit(
-            "There are already three distribution certificates that this tool did "
-            "not make, and Apple allows no more. Revoke one in the developer "
-            "portal, or the archive cannot be signed."
-        )
+    if os.environ.get("KEEP_CERTS"):
+        print("KEEP_CERTS is set; leaving existing certificates alone")
+    else:
+        for row in existing:
+            attributes = row.get("attributes", {})
+            kind = attributes.get("certificateType")
+            name = attributes.get("name") or ""
+            # Development certificates too: `-allowProvisioningUpdates` made two
+            # while automatic signing was being tried, and their keys are equally
+            # gone. "Created via API" keeps this away from anything Xcode made on
+            # somebody's own machine.
+            if kind == "DISTRIBUTION" or (
+                kind == "DEVELOPMENT" and "Created via API" in name
+            ):
+                try:
+                    call("DELETE", "/certificates/%s" % row["id"], bearer)
+                    print("revoked %s (%s)" % (kind, name[:40]))
+                except SystemExit as problem:
+                    # One that will not delete is not worth stopping for -- the
+                    # limit is three and we are clearing several.
+                    print("could not revoke %s: %s" % (name[:40], problem))
+
 
     key = os.path.join(out, "dist.key")
     csr = os.path.join(out, "dist.csr")
