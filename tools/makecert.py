@@ -25,6 +25,7 @@ files in the output directory, and the passphrase is random per run.
 import base64
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -37,6 +38,8 @@ AUDIENCE = "appstoreconnect-v1"
 # The name this tool puts on its own certificates, so it can recognise and revoke
 # them later without touching one a person made.
 LABEL = "Arch CI"
+PROFILE_NAME = "Arch CI App Store"
+BUNDLE_ID = "com.arch.arch"
 
 
 def token():
@@ -177,10 +180,66 @@ def main():
     subject = run(["openssl", "x509", "-noout", "-subject", "-in", pem]).stdout.strip()
     print("subject: %s" % subject)
 
+    # ---- and the provisioning profile ------------------------------------
+    #
+    # Automatic signing was asked three times and chose a *development* profile
+    # every time, even with a distribution certificate sitting right there:
+    # `xcodebuild` does not infer "this archive is for the App Store" the way the
+    # Xcode application does. So the profile is made here too, and the build signs
+    # manually — which takes the guessing out of it entirely.
+    cert_id = created["data"]["id"]
+
+    bundles = call("GET", "/bundleIds?limit=200", bearer).get("data", [])
+    bundle = next((row for row in bundles
+                   if row.get("attributes", {}).get("identifier") == BUNDLE_ID), None)
+    if not bundle:
+        raise SystemExit("No registered bundle id %s to attach a profile to." % BUNDLE_ID)
+
+    # A profile is bound to the certificates it was made with, so last run's is
+    # useless the moment its certificate is revoked. Clear ours out by name.
+    for row in call("GET", "/profiles?limit=200", bearer).get("data", []):
+        if row.get("attributes", {}).get("name") == PROFILE_NAME:
+            call("DELETE", "/profiles/%s" % row["id"], bearer)
+            print("removed the previous %s profile" % PROFILE_NAME)
+
+    profile = call("POST", "/profiles", bearer, {
+        "data": {
+            "type": "profiles",
+            "attributes": {"name": PROFILE_NAME, "profileType": "IOS_APP_STORE"},
+            "relationships": {
+                "bundleId": {"data": {"id": bundle["id"], "type": "bundleIds"}},
+                "certificates": {"data": [{"id": cert_id, "type": "certificates"}]},
+            },
+        }
+    })
+    content = base64.b64decode(profile["data"]["attributes"]["profileContent"])
+
+    # The UUID sits in the plist inside the CMS envelope. Read with a regex rather
+    # than `security cms`, which exists only on a Mac — this way the tool can be
+    # run and reasoned about anywhere.
+    match = re.search(rb"<key>UUID</key>\s*<string>([0-9A-Fa-f-]+)</string>", content)
+    if not match:
+        raise SystemExit("Could not find the UUID inside the profile.")
+    uuid = match.group(1).decode()
+
+    # Both locations: the second is where Xcode 16 and later look, and which Xcode
+    # is newest is decided by the runner image rather than by us.
+    for folder in [
+        os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+        os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+    ]:
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, uuid + ".mobileprovision"), "wb") as handle:
+            handle.write(content)
+
+    print("profile: %s  (%s)" % (PROFILE_NAME, uuid))
+
     if os.environ.get("GITHUB_OUTPUT"):
         with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
             handle.write("p12=%s\n" % p12)
             handle.write("pass=%s\n" % passphrase)
+            handle.write("profile=%s\n" % PROFILE_NAME)
+            handle.write("uuid=%s\n" % uuid)
     return 0
 
 
