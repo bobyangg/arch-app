@@ -161,6 +161,18 @@ enum ArchBackend {
         )
     }
 
+    /// Everything Arch holds about you, as JSON.
+    ///
+    /// The server function takes no account id — there is nothing to point at
+    /// anybody else — and it already withholds what the app promises never to
+    /// reveal: who dismissed whom, who blocked whom, the pairing scores, the
+    /// reports. So this is a fetch and nothing more; the careful part is on the
+    /// other side of the wire where it can be tested.
+    static func myData() async throws -> Data {
+        struct NoArguments: Encodable {}
+        return try await SupabaseClient.shared.rpcRaw("my_data", NoArguments())
+    }
+
     // MARK: Your own profile
 
     /// Notes on your profile, from the reviewer.

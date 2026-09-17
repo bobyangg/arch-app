@@ -84,7 +84,18 @@ struct BlockedSetting: View {
 /// not your data.
 struct DataSetting: View {
     let store: SettingsStore
-    @State private var requested = false
+
+    /// What has happened so far. Four states rather than a boolean, because
+    /// "asked", "working", "here" and "did not work" all need different words and
+    /// a boolean would have to pick two of them.
+    private enum Stage: Equatable {
+        case ready
+        case working
+        case made(URL)
+        case failed(String)
+    }
+
+    @State private var stage: Stage = .ready
 
     var body: some View {
         SettingsPage(title: "Download your data") {
@@ -99,37 +110,66 @@ struct DataSetting: View {
                 line("Who has been in \(store.rosterName), and when.")
             }
 
-            SettingNote(store.email.isEmpty
-                // Apple sends the address on the first authorization only, and
-                // deleting an account clears it. Promising delivery to an address
-                // that is not on file would be a lie the screen tells confidently.
-                ? "Arch has no email address for you, so there is nowhere to send this. Adding one in Account makes it possible."
-                : "A zip, sent to \(store.email): a page you can read, the same thing as JSON, and your photos. It usually takes a few minutes and never more than 30 days.")
+            // **The file is made here and handed straight over.** It was going to
+            // be emailed, which needed a mail provider that does not exist yet --
+            // so the button sat there setting a flag and doing nothing at all.
+            // Building it on the phone needs no provider, and arrives in seconds
+            // rather than "never more than 30 days".
+            SettingNote("Built on your phone and handed to you. Nothing is emailed "
+                        + "and nothing is kept — close the share sheet and it is gone.")
 
-            ArchButton(title: requested ? "Requested" : "Request my data",
-                       kind: .quiet,
-                       isEnabled: !requested && !store.email.isEmpty) {
-                requested = true
-            }
+            switch stage {
+            case .ready:
+                ArchButton(title: "Build my file", kind: .quiet, action: build)
 
-            if requested {
-                // One live request at a time, which the server enforces with a
-                // partial unique index rather than trusting this flag.
-                Text("One person’s data is built at a time. Asking again before it arrives does not make it faster.")
+            case .working:
+                ArchButton(title: "Building…", kind: .quiet, isEnabled: false) {}
+
+            case .made(let url):
+                // ShareLink rather than a save button: where a file should go is
+                // the reader's business, and the share sheet already knows every
+                // answer including "into Files".
+                ShareLink(item: url) {
+                    Text("Save or send it")
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.onLamp)
+                        .frame(maxWidth: .infinity, minHeight: ArchSpacing.minimumTapTarget)
+                        .background(
+                            RoundedRectangle(cornerRadius: ArchRadius.control,
+                                             style: .continuous)
+                                .fill(ArchColor.lamp)
+                        )
+                }
+                ArchTextButton(title: "Build it again", action: build)
+
+            case .failed(let why):
+                Text(why)
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                ArchButton(title: "Try again", kind: .quiet, action: build)
             }
         }
     }
 
-    private func line(_ text: String) -> some View {
-        Text(text)
-            .archText(.body)
-            .foregroundStyle(ArchColor.limestone)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    private func build() {
+        stage = .working
+        Task { @MainActor in
+            do {
+                let data = try await ArchBackend.myData()
+                // Written where the share sheet can reach it. A temporary
+                // directory is right: this is a copy of what the server already
+                // holds, and leaving copies of somebody's messages lying around
+                // the device is the opposite of what this screen is for.
+                let url = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("arch-my-data.json")
+                try data.write(to: url, options: .atomic)
+                stage = .made(url)
+            } catch {
+                stage = .failed("Arch could not build the file just now. "
+                                + "It needs a connection, and nothing was sent.")
+            }
+        }
     }
 }
 
