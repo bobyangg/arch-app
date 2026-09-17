@@ -9,7 +9,11 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    # `alwin_testing` as well as main, and this is the half I forgot the first
+    # time: the TestFlight job's own `if` already allowed the branch, but a job
+    # condition is never evaluated if the workflow does not start. Pushing to the
+    # branch produced no run at all, and therefore no check to look at.
+    branches: [main, alwin_testing]
   pull_request:
   workflow_dispatch:
 
