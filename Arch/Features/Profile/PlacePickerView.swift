@@ -29,6 +29,7 @@ struct PlacePickerView: View {
     /// Asks the system. The result comes back as a coordinate, already coarsened,
     /// or nil if it was refused.
     var onUseLocation: () -> Void = {}
+    let onCancel: () -> Void
     /// What happened last time it was tapped, when what happened needs saying.
     ///
     /// **Silence was the whole problem.** The button asked for permission, was
@@ -36,7 +37,6 @@ struct PlacePickerView: View {
     /// all — so it read as a dead control, and tapping it again did the same
     /// nothing. A screen that cannot succeed quietly should not fail quietly.
     var locationNote: String? = nil
-    let onCancel: () -> Void
 
     @State private var search = ""
     /// Asks the device's geocoder, which knows every town in the United States
