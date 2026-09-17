@@ -48,6 +48,7 @@ struct YouProfileView: View {
             }
             .background(ArchColor.night)
             .toolbar(.hidden, for: .navigationBar)
+            .archBackSwipe()
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .arrange:  ArrangeProfileView(store: store)

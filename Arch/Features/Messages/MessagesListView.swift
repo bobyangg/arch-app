@@ -37,6 +37,7 @@ struct MessagesListView: View {
             }
             .background(ArchColor.night)
             .toolbar(.hidden, for: .navigationBar)
+            .archBackSwipe()
             .navigationDestination(for: Conversation.self) { conversation in
                 MessageThreadView(
                     conversation: conversation,
