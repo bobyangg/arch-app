@@ -12,6 +12,12 @@ import SwiftUI
 struct OnboardingIdentity: View {
     let store: OnboardingStore
 
+    /// Held by the view rather than made inside the button, because
+    /// `CLLocationManager` answers through a delegate — one created inside a
+    /// closure is deallocated before iOS calls back, and the callback never
+    /// arrives. The symptom is a button that does nothing, intermittently.
+    @State private var location = DeviceLocation()
+
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
@@ -117,12 +123,31 @@ struct OnboardingAbout: View {
                 permission: store.locationPermission,
                 current: store.place,
                 onChoose: { store.place = $0; isPickingPlace = false },
-                // The design build has no CoreLocation, so this stands in for a
-                // fix arriving: a point in Fort Greene, coarsened on the way in.
+                // Real in a real build, stood in for in a design one.
+                //
+                // The design build keeps the stub for two reasons rather than
+                // laziness: a simulator has no location to give, and the UI tests
+                // run there -- a permission prompt they cannot answer would hang
+                // them. The fix it invents is Fort Greene, which is where the mock
+                // profile lives.
                 onUseLocation: {
-                    store.useDeviceLocation(
-                        Coordinate(latitude: 40.6913, longitude: -73.9742)
-                    )
+                    guard ArchConfig.isConfigured else {
+                        store.useDeviceLocation(
+                            Coordinate(latitude: 40.6913, longitude: -73.9742)
+                        )
+                        return
+                    }
+                    location.request { outcome in
+                        switch outcome {
+                        case .fix(let point):
+                            store.useDeviceLocation(point)
+                        case .refused, .unavailable:
+                            // Not an error and not worth a screen. The list under
+                            // the button is the same list either way, and it was
+                            // always the path rather than the fallback.
+                            store.refuseDeviceLocation()
+                        }
+                    }
                 },
                 onCancel: { isPickingPlace = false }
             )
