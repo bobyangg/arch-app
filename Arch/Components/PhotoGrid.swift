@@ -59,7 +59,8 @@ struct PhotoGrid: View {
     private func slot(_ photo: Photo, at index: Int) -> some View {
         let upload = uploads[photo.id]
 
-        return PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
+        return PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url,
+                                data: photo.local)
             .aspectRatio(1, contentMode: .fit)
             .overlay { if upload == .failed { failedFace(photo) } }
             .overlay {

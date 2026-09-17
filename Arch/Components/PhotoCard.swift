@@ -93,7 +93,7 @@ struct PhotoCard: View {
     }
 
     private var card: some View {
-        PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
+        PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url, data: photo.local)
             .aspectRatio(aspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
             .overlay(

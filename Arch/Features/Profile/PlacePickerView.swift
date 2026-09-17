@@ -29,6 +29,13 @@ struct PlacePickerView: View {
     /// Asks the system. The result comes back as a coordinate, already coarsened,
     /// or nil if it was refused.
     var onUseLocation: () -> Void = {}
+    /// What happened last time it was tapped, when what happened needs saying.
+    ///
+    /// **Silence was the whole problem.** The button asked for permission, was
+    /// granted it, failed to turn the fix into a name, and then said nothing at
+    /// all — so it read as a dead control, and tapping it again did the same
+    /// nothing. A screen that cannot succeed quietly should not fail quietly.
+    var locationNote: String? = nil
     let onCancel: () -> Void
 
     @State private var search = ""
@@ -68,6 +75,7 @@ struct PlacePickerView: View {
                     if permission != .denied && !isSearching {
                         useLocation
                     }
+                    locationNoteRow
 
                     if isTooShort {
                         suggestions
@@ -157,6 +165,16 @@ struct PlacePickerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleStyle(scale: 0.99))
+    }
+
+    @ViewBuilder
+    private var locationNoteRow: some View {
+        if let locationNote {
+            Text(locationNote)
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     /// What is offered before anybody types: the bundled list, grouped.
