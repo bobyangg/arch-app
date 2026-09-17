@@ -61,8 +61,9 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// How far a scroll has to travel, in one direction, before the bar reacts.
-    /// Below this a thumb resting on the screen would flicker it.
-    private static let threshold: CGFloat = 4
+    /// Below this a thumb resting on the screen would flicker it. An instance
+    /// property, because a generic type cannot hold a static stored one.
+    private let threshold: CGFloat = 4
 
     var body: some View {
         VStack(spacing: 0) {
@@ -101,9 +102,9 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
             return
         }
         let delta = offset - lastOffset
-        if delta < -Self.threshold {
+        if delta < -threshold {
             isHidden = true
-        } else if delta > Self.threshold {
+        } else if delta > threshold {
             isHidden = false
         }
     }
