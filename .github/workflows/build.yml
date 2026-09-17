@@ -21,6 +21,11 @@ concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: true
 
+# Two of these job names are required status checks in the `main` ruleset:
+# "Cross-reference checks" and "Build for the simulator". A ruleset matches the
+# check by its exact name, so renaming either job here does not fail loudly -- it
+# leaves every pull request "Expected -- Waiting for status" forever. Rename the
+# job and the ruleset together, or not at all.
 jobs:
   # The checks that need no Xcode run first and separately, so a Swift failure
   # never hides a schema failure or the other way round.
