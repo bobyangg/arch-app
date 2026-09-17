@@ -104,3 +104,6 @@ UIApplicationDelegateAdaptor
 
 # CoreLocation, added with the real location fix
 CLLocationManager
+
+# SwiftUI, added with the in-app data export
+ShareLink

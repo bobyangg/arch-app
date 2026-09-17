@@ -265,6 +265,18 @@ actor SupabaseClient {
         return try decoder.decode(T.self, from: data)
     }
 
+    /// An RPC whose answer is kept as bytes rather than decoded.
+    ///
+    /// `my_data` returns the whole export, and the point of it is to hand a person
+    /// a file. Decoding that into Swift types and encoding it back would be work
+    /// done to arrive where it started, and every round trip is a chance to drop a
+    /// field nobody notices is missing.
+    func rpcRaw<Body: Encodable>(_ name: String, _ arguments: Body) async throws -> Data {
+        let url = ArchConfig.restURL.appendingPathComponent("rpc").appendingPathComponent(name)
+        return try await request(url: url, method: "POST",
+                                 body: try encoder.encode(arguments))
+    }
+
     // MARK: Auth and functions
 
     /// Exchange Apple's identity token for a Supabase session.
