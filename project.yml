@@ -107,6 +107,16 @@ targets:
         # applied at the root, so the system is never left to pick.
         UIUserInterfaceStyle: Automatic
 
+        # **Answered here so Apple never asks.** Without this key every build
+        # arrives in TestFlight as "Missing Compliance" and sits there, uninstall-
+        # able, until somebody opens App Store Connect and answers the encryption
+        # question by hand -- once per build, forever.
+        #
+        # `false` is the accurate answer, not a convenient one: Arch uses HTTPS and
+        # Apple's own keychain and nothing else. Both are exempt. It contains no
+        # cryptography of its own, and there is none to declare.
+        ITSAppUsesNonExemptEncryption: false
+
         # **Its absence is a crash, not a warning.** iOS terminates an app that
         # asks for a location without a reason string, so this has to be here
         # before `DeviceLocation` is ever called.
