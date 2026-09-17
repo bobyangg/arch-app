@@ -69,14 +69,14 @@ struct OnboardingWelcome: View {
                     }
                 }
 
-                // Second, and quiet. Apple is the shorter path and the one that
-                // makes a throwaway account expensive, so it leads -- but an
-                // address is a real way in, not a fallback for people Apple failed.
-                ArchTextButton(title: "Use an email address instead") {
-                    problem = nil
-                    isUsingEmail = true
-                }
-                .accessibilityIdentifier("welcome.email")
+                // **The email door is closed for v1**, not removed. Everything
+                // behind it still exists and compiles -- `EmailSignInSheet`, the
+                // OTP calls, the sheet below -- because the only thing missing is
+                // an SMTP provider, and putting the button back is one line.
+                //
+                // Shut rather than left open because Supabase will not send a code
+                // without custom SMTP, so the button led to a screen that asked for
+                // a code nobody would ever receive.
 
                 Text(problem ?? externalProblem ?? "Arch does not post anything, and never sees your Apple password. Your email stays hidden if you want it to.")
                     .archText(.footnote)
