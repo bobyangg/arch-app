@@ -38,7 +38,7 @@ struct DailyFiveView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            ScrollView {
+            TopBarScroll {
                 VStack(alignment: .leading, spacing: 0) {
                     header
                     if isHeld {
@@ -59,8 +59,6 @@ struct DailyFiveView: View {
                 .padding(.bottom, ArchSpacing.sectionGap)
             }
             .background(ArchColor.night)
-            .scrollIndicators(.hidden)
-            .safeAreaInset(edge: .top) { TopBar() }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
@@ -112,13 +110,11 @@ struct DailyFiveView: View {
             // Left-aligned, not centred: the header reads as one block, and the
             // stones fill from the same edge the text starts at.
             ArchSlotIndicator(filled: roster.filledCount, capacity: roster.capacity)
-
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
         }
         .padding(.top, ArchSpacing.m)
-        .padding(.bottom, ArchSpacing.xl)
+        // The gap does what a rule used to: the header is one block, the people
+        // are another, and the air between them says so.
+        .padding(.bottom, ArchSpacing.xxl)
     }
 
     private var isHeld: Bool { conversationCount >= conversationLimit }
@@ -153,12 +149,6 @@ struct DailyFiveView: View {
     /// thing you chose on purpose.
     private var pausedNotice: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
-                .padding(.bottom, ArchSpacing.m)
-                .padding(.top, roster.people.isEmpty ? 0 : ArchSpacing.sectionGap)
-
             Text("Your profile is paused")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
@@ -171,6 +161,7 @@ struct DailyFiveView: View {
             ArchButton(title: "Unpause", kind: .quiet, action: onUnpause)
                 .padding(.top, ArchSpacing.m)
         }
+        .padding(.top, roster.people.isEmpty ? 0 : ArchSpacing.sectionGap)
     }
 
     /// Nothing here at all.
@@ -238,11 +229,6 @@ struct DailyFiveView: View {
         let slots = roster.openSlots
         if !slots.isEmpty {
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                Rectangle()
-                    .fill(ArchColor.hairline)
-                    .frame(height: ArchSpacing.hairline)
-                    .padding(.top, roster.people.isEmpty ? 0 : ArchSpacing.sectionGap)
-
                 Text("New people arrive in these slots.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
@@ -259,6 +245,7 @@ struct DailyFiveView: View {
                     }
                 }
             }
+            .padding(.top, roster.people.isEmpty ? 0 : ArchSpacing.sectionGap)
             .animation(
                 ArchMotion.honouring(reduceMotion, ArchMotion.slotOpens),
                 value: roster.openSlots

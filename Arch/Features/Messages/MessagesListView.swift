@@ -36,7 +36,6 @@ struct MessagesListView: View {
                 }
             }
             .background(ArchColor.night)
-            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Conversation.self) { conversation in
                 MessageThreadView(
@@ -59,7 +58,7 @@ struct MessagesListView: View {
     }
 
     private var list: some View {
-        ScrollView {
+        TopBarScroll {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Messages")
                     .archText(.titleL)
@@ -86,7 +85,6 @@ struct MessagesListView: View {
             .padding(.horizontal, ArchSpacing.screenMargin)
             .padding(.bottom, ArchSpacing.sectionGap)
         }
-        .scrollIndicators(.hidden)
     }
 
     /// Requests sit above the conversations rather than mixed into them. Somebody
@@ -120,6 +118,10 @@ struct MessagesListView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            // Nothing to scroll, so nothing to hide behind: the lock-up simply
+            // sits at the top.
+            TopBar()
+                .padding(.horizontal, -ArchSpacing.screenMargin)
             Spacer()
             Text("No conversations yet")
                 .archText(.titleM)

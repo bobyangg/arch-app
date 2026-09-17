@@ -43,12 +43,10 @@ struct YouProfileView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                header
-                scroll
+            TopBarScroll(pinned: { header }) {
+                scrollContent
             }
             .background(ArchColor.night)
-            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
                 switch route {
@@ -128,18 +126,15 @@ struct YouProfileView: View {
 
     // MARK: Scroll
 
-    private var scroll: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                leadPhoto
-                identity
-                completeness
-                rows
-                reviewRow
-            }
-            .padding(.bottom, ArchSpacing.sectionGap)
+    private var scrollContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            leadPhoto
+            identity
+            completeness
+            rows
+            reviewRow
         }
-        .scrollIndicators(.hidden)
+        .padding(.bottom, ArchSpacing.sectionGap)
     }
 
     @ViewBuilder
@@ -239,10 +234,6 @@ struct YouProfileView: View {
     /// same way the paywall itself refuses to sell with colour.
     private var reviewRow: some View {
         VStack(spacing: 0) {
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
-
             Button {
                 if settings.isSubscribed {
                     path.append(Route.review)

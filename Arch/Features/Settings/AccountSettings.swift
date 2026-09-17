@@ -143,7 +143,7 @@ struct DeleteConfirmSheet: View {
         .presentationDetents([.height(300)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 }
 
@@ -208,7 +208,7 @@ struct SignOutConfirmSheet: View {
         .presentationDetents([.height(320)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 }
 

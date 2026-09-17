@@ -82,7 +82,7 @@ struct EditDetailsSheet: View {
         .presentationDetents([.height(720)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
         .sheet(isPresented: $isPickingHeight) {
             HeightPickerSheet(current: height) { height = $0 }
         }
@@ -143,7 +143,7 @@ struct EditDetailsSheet: View {
             .background(ArchColor.stone)
             .presentationDetents([.large])
             .presentationCornerRadius(ArchRadius.sheet)
-            .presentationBackground(ArchColor.stone)
+            .archSheetBackground()
         }
         .onAppear {
             let details = person.details

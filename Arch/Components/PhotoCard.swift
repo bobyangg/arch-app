@@ -96,15 +96,11 @@ struct PhotoCard: View {
         PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url, data: photo.local)
             .aspectRatio(aspectRatio, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous)
-                    .strokeBorder(isSelected ? ArchColor.lampQuiet : Color.clear, lineWidth: 1)
-            )
             .overlay(alignment: .bottomTrailing) {
                 CardAffordanceView(affordance: affordance, subject: "photo \(position)")
                     .padding(ArchSpacing.xs)
             }
-            .animation(ArchMotion.quick, value: isSelected)
+            .archSelected(isSelected, radius: ArchRadius.photo)
     }
 }
 

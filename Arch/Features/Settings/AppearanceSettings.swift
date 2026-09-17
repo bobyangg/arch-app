@@ -81,14 +81,7 @@ private struct AppearanceSpecimen: View {
         }
         .padding(ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
-                .fill(ArchColor.stone)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
-                .strokeBorder(ArchColor.hairline, lineWidth: 1)
-        )
+        .archGlassCard()
         .accessibilityHidden(true)
     }
 }
