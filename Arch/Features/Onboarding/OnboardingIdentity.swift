@@ -131,15 +131,23 @@ struct OnboardingAbout: View {
                 // profile lives.
                 onUseLocation: {
                     guard ArchConfig.isConfigured else {
+                        let fix = Coordinate(latitude: 40.6913, longitude: -73.9742)
                         store.useDeviceLocation(
-                            Coordinate(latitude: 40.6913, longitude: -73.9742)
+                            fix, place: PlaceLibrary.nearest(to: fix)
                         )
                         return
                     }
                     location.request { outcome in
                         switch outcome {
                         case .fix(let point):
-                            store.useDeviceLocation(point)
+                            // The name for the point comes from the geocoder, so
+                            // this is a second round trip and has to be awaited.
+                            // The position is applied either way -- a nameless
+                            // fix still places you for the distance filter.
+                            Task { @MainActor in
+                                let found = await PlaceSearch.place(at: point)
+                                store.useDeviceLocation(point, place: found)
+                            }
                         case .refused, .unavailable:
                             // Not an error and not worth a screen. The list under
                             // the button is the same list either way, and it was

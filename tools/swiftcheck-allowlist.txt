@@ -107,3 +107,12 @@ CLLocationManager
 
 # SwiftUI, added with the in-app data export
 ShareLink
+
+# MapKit and CoreLocation, added when the picker grew past one metro
+MKLocalSearch
+MKCoordinateRegion
+MKCoordinateSpan
+CLLocationCoordinate2D
+CLLocation
+CLGeocoder
+CLPlacemark

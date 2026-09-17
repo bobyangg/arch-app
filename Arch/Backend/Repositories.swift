@@ -298,7 +298,15 @@ enum ArchBackend {
         // otherwise. Either way it is coarsened before it leaves the phone -- the
         // CHECK constraint on the column refuses anything finer, so this is belt
         // and braces.
-        let centre = (coordinate ?? place.centre).coarsened
+        //
+        // Both can be absent, now that a place can be one rebuilt from a stored id
+        // rather than one just picked. On this path it means the picker was never
+        // opened, and a profile with no position at all would be invisible to the
+        // distance filter in both directions -- so it is refused rather than
+        // written with a zero.
+        guard let centre = (coordinate ?? place.centre)?.coarsened else {
+            throw ArchAPIError.conflict
+        }
         try await SupabaseClient.shared.insert(
             "profiles",
             NewProfile(
@@ -348,22 +356,55 @@ enum ArchBackend {
         guard let gender = details.gender else { throw ArchAPIError.conflict }
         guard let place = details.place else { throw ArchAPIError.conflict }
 
+        /// **The position is written only when there is a new one.**
+        ///
+        /// A place loaded back from the server carries no coordinate — the id
+        /// holds the words and nothing else, by design. So editing your work or
+        /// your height, without touching where you live, arrives here with
+        /// `place.centre == nil`, and the right thing is to leave the stored
+        /// position exactly as it is.
+        ///
+        /// That is not only a nil-check dodge: it is also what stops a routine
+        /// edit from overwriting a precise device fix with the centre of a city.
+        /// Somebody who tapped "Use my location" in Calgary is placed to a
+        /// kilometre; re-saving their job title should not move them to downtown.
+        ///
+        /// Hand-written rather than an optional field because PostgREST reads a
+        /// `null` as "set this column to null", and the column is `not null` —
+        /// the key has to be absent, not empty.
         struct Update: Encodable {
             let name: String
             let birthdate: String
             let gender: String
             let pronouns: String?
             let placeId: String
-            let coarseLat: Double
-            let coarseLon: Double
+            /// Coarsened before it leaves the phone, not after it arrives. The
+            /// CHECK constraint on the column refuses anything finer, so this is
+            /// belt and braces on purpose.
+            let centre: Coordinate?
             let heightCm: Int?
             let work: String?
-        }
 
-        // Coarsened before it leaves the phone, not after it arrives. The precise
-        // fix is used to pick the square and is then gone; the CHECK constraint on
-        // the column refuses anything finer, so this is belt and braces on purpose.
-        let centre = place.centre.coarsened
+            enum CodingKeys: String, CodingKey {
+                case name, birthdate, gender, pronouns, placeId
+                case coarseLat, coarseLon, heightCm, work
+            }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(name, forKey: .name)
+                try container.encode(birthdate, forKey: .birthdate)
+                try container.encode(gender, forKey: .gender)
+                try container.encode(pronouns, forKey: .pronouns)
+                try container.encode(placeId, forKey: .placeId)
+                try container.encode(heightCm, forKey: .heightCm)
+                try container.encode(work, forKey: .work)
+                if let centre {
+                    try container.encode(centre.latitude, forKey: .coarseLat)
+                    try container.encode(centre.longitude, forKey: .coarseLon)
+                }
+            }
+        }
 
         try await SupabaseClient.shared.update(
             "profiles",
@@ -373,8 +414,7 @@ enum ArchBackend {
                 gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
-                coarseLat: centre.latitude,
-                coarseLon: centre.longitude,
+                centre: place.centre?.coarsened,
                 heightCm: ArchUnits.centimetres(fromHeight: details.height),
                 work: details.work.isEmpty ? nil : details.work
             ),
