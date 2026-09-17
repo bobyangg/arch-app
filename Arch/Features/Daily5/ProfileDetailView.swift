@@ -178,12 +178,7 @@ struct ProfileDetailView: View {
                 .padding(.horizontal, ArchSpacing.screenMargin)
                 .padding(.bottom, ArchSpacing.xxs)
         }
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.bottom)
     }
 
     private func toggle(_ item: ProfileItem) {

@@ -61,11 +61,7 @@ struct PromptCard: View {
             RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
                 .fill(ArchColor.stone)
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
-                .strokeBorder(isSelected ? ArchColor.lampQuiet : Color.clear, lineWidth: 1)
-        )
-        .animation(ArchMotion.quick, value: isSelected)
+        .archSelected(isSelected, radius: ArchRadius.card)
     }
 
     private var hasAffordance: Bool {

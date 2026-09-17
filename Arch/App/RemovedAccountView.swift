@@ -241,7 +241,7 @@ struct AppealSheet: View {
         .presentationDetents([.height(560)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
         .onAppear { isWriting = true }
     }
 }

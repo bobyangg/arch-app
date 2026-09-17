@@ -56,7 +56,7 @@ struct HeightPickerSheet: View {
         .presentationDetents([.height(520)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 }
 

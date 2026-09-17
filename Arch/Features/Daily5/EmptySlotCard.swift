@@ -36,14 +36,9 @@ struct EmptySlotCard: View {
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity)
         .frame(height: 112)
-        .background(
-            RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous)
-                .fill(ArchColor.stone)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous)
-                .strokeBorder(ArchColor.hairline, lineWidth: 1)
-        )
+        // Frosted rather than filled: a slot with nobody in it is see-through,
+        // which is what it is.
+        .archGlassCard(radius: ArchRadius.photo)
         .accessibilityElement(children: .combine)
     }
 }

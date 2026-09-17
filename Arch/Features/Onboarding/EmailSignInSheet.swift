@@ -91,8 +91,10 @@ struct EmailSignInSheet: View {
         }
         .padding(ArchSpacing.screenMargin)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ArchColor.stone)
         .presentationDetents([.height(sent ? 380 : 360)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(ArchRadius.sheet)
+        .archSheetBackground()
     }
 
     private var emailField: some View {

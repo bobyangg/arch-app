@@ -97,13 +97,7 @@ struct PromptPickerView: View {
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
                     .fill(isCurrent ? ArchColor.stoneRaised : ArchColor.stone)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .strokeBorder(
-                        isCurrent ? ArchColor.limestone.opacity(0.30) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
+            .archSelected(isCurrent, radius: ArchRadius.control, tint: ArchColor.limestone)
         }
         .buttonStyle(PressScaleStyle(scale: isTaken ? 1 : 0.99))
         .disabled(isTaken)
