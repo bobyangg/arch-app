@@ -199,6 +199,13 @@ extension Place {
             // Beacon, New York. Or Moose Jaw, Saskatchewan.
             name = town
             city = region ?? ""
+        } else if let area = placemark.administrativeArea {
+            // No town of any kind: a rural address that sits between places. The
+            // state or province is a poor chip and an honest one, and it beats
+            // failing outright — a nil here is a button that did nothing, and
+            // this screen has already been that once.
+            name = area
+            city = placemark.country ?? ""
         } else {
             return nil
         }
