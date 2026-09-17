@@ -12,12 +12,6 @@ import SwiftUI
 struct OnboardingIdentity: View {
     let store: OnboardingStore
 
-    /// Held by the view rather than made inside the button, because
-    /// `CLLocationManager` answers through a delegate — one created inside a
-    /// closure is deallocated before iOS calls back, and the callback never
-    /// arrives. The symptom is a button that does nothing, intermittently.
-    @State private var location = DeviceLocation()
-
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
@@ -56,6 +50,11 @@ struct OnboardingAbout: View {
 
     @State private var isPickingHeight = false
     @State private var isPickingPlace = false
+    /// Held by the view rather than made inside the button, because
+    /// `CLLocationManager` answers through a delegate — one created inside a
+    /// closure is deallocated before iOS calls back, and the callback never
+    /// arrives. The symptom is a button that does nothing, intermittently.
+    @State private var location = DeviceLocation()
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
@@ -159,7 +158,6 @@ struct OnboardingAbout: View {
             .presentationBackground(ArchColor.stone)
         }
     }
-
 }
 
 #Preview("Your name") {
