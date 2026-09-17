@@ -152,6 +152,19 @@ struct DataSetting: View {
         }
     }
 
+    /// One of the four things Arch holds, as a line.
+    ///
+    /// Restored after I replaced this struct's body and took its helper with it.
+    /// Swift does not say "no such function" for this one: `line` collides with
+    /// the `#line` macro, so the error is "expansion of macro 'line()' requires
+    /// leading '#'", which points at the call rather than the deletion.
+    private func line(_ text: String) -> some View {
+        Text(text)
+            .archText(.body)
+            .foregroundStyle(ArchColor.limestone)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private func build() {
         stage = .working
         Task { @MainActor in
