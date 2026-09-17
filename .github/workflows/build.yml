@@ -274,7 +274,11 @@ jobs:
   testflight:
     name: TestFlight
     needs: [checks, signing, build]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # `alwin_testing` uploads too, because a branch you cannot install is not a
+    # branch you can test on a phone.
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/alwin_testing')
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7

@@ -90,6 +90,24 @@ targets:
           ARCH_SUPABASE_URL: https://bxuzpbzidrmoeietjnem.supabase.co
           ARCH_SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dXpwYnppZHJtb2VpZXRqbmVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkyNjkyODUsImV4cCI6MjEwNDg0NTI4NX0.zf8e9gAyZiJJxkpU2qtsD0Qk3_IYvD_Xq_13E1HlkaE"
 
+    # **Without these, Sign in with Apple does not work.** The App ID has the
+    # capability and the provisioning profile carries it, but the *app* has to
+    # claim it too -- and this project had no entitlements file at all, so the
+    # button had nothing to authorise against and failed every time.
+    #
+    # `aps-environment: production` because TestFlight and the App Store both use
+    # production APNs. A development build would want `development`, and sending
+    # to the wrong one is a token Apple accepts and a notification nobody gets.
+    #
+    # App Attest needs no key here: without one it takes its environment from the
+    # provisioning profile, which is production for these builds.
+    entitlements:
+      path: Arch/Arch.entitlements
+      properties:
+        com.apple.developer.applesignin:
+          - Default
+        aps-environment: production
+
     info:
       path: Arch/Info.plist
       properties:
