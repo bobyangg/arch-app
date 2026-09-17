@@ -21,6 +21,11 @@ struct EditDetailsSheet: View {
     @State private var work = ""
     @State private var isPickingHeight = false
     @State private var isPickingPlace = false
+    /// Held by the view, not made inside the button: `CLLocationManager` answers
+    /// through a delegate, and one created inside a closure is deallocated
+    /// before iOS calls back. The symptom is a button that does nothing.
+    @State private var location = DeviceLocation()
+    @State private var locationPermission = LocationPermission.notAsked
     @Environment(\.dismiss) private var dismiss
 
     private var isValid: Bool {
@@ -82,8 +87,40 @@ struct EditDetailsSheet: View {
         }
         .sheet(isPresented: $isPickingPlace) {
             PlacePickerView(
+                permission: locationPermission,
                 current: place,
                 onChoose: { place = $0; isPickingPlace = false },
+                // **This was a dead button.** The picker draws "Use my location"
+                // whenever permission is not `.denied`, and `onUseLocation`
+                // defaults to doing nothing — so on this screen, unlike in
+                // onboarding, tapping it did exactly that. Nothing said so.
+                //
+                // The place that comes back carries the device fix as its
+                // centre, so saving moves your stored position as well as the
+                // words -- which is the point of tapping it. A place loaded from
+                // the server has no centre, and that is what keeps an edit you
+                // made to your job title from moving you.
+                onUseLocation: {
+                    guard ArchConfig.isConfigured else {
+                        let fix = Coordinate(latitude: 40.6913, longitude: -73.9742)
+                        place = PlaceLibrary.nearest(to: fix)
+                        locationPermission = .granted
+                        return
+                    }
+                    location.request { outcome in
+                        switch outcome {
+                        case .fix(let point):
+                            locationPermission = .granted
+                            Task { @MainActor in
+                                if let found = await PlaceSearch.place(at: point) {
+                                    place = found
+                                }
+                            }
+                        case .refused, .unavailable:
+                            locationPermission = .denied
+                        }
+                    }
+                },
                 onCancel: { isPickingPlace = false }
             )
             .padding(.horizontal, ArchSpacing.screenMargin)

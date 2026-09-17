@@ -47,9 +47,16 @@ struct PlacePickerView: View {
     private var results: [Place] {
         isOffline ? PlaceLibrary.search(search) : searcher.results
     }
-    private var isSearching: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var typed: String { search.trimmingCharacters(in: .whitespaces) }
+    private var isSearching: Bool { !typed.isEmpty }
     private var isWaiting: Bool { !isOffline && searcher.state == .searching }
     private var isUnreachable: Bool { !isOffline && searcher.state == .unreachable }
+
+    /// **One character is not a failed search, and saying so was the bug.**
+    /// `PlaceSearch` does not ask the geocoder below two characters, so the
+    /// results were empty and the screen read "Nothing by that name" — which,
+    /// after typing the C of Calgary, says the app does not have Canada in it.
+    private var isTooShort: Bool { !isOffline && typed.count < 2 }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -62,7 +69,9 @@ struct PlacePickerView: View {
                         useLocation
                     }
 
-                    if isWaiting && results.isEmpty {
+                    if isTooShort {
+                        suggestions
+                    } else if isWaiting && results.isEmpty {
                         note("Looking…", nil)
                     } else if isUnreachable {
                         note("Arch could not reach the map just now.",
@@ -108,8 +117,14 @@ struct PlacePickerView: View {
         .padding(.top, ArchSpacing.l)
     }
 
+    /// **The placeholder is the only thing that says what this can do.**
+    /// The list underneath is the same thirty-two New York rows it has always
+    /// been, so a picker that said "Search" looked exactly like the one that
+    /// could only find those thirty-two. Somebody would open it, see the same
+    /// screen, and conclude the app is still only in New York — which is what
+    /// happened.
     private var field: some View {
-        ArchField(text: $search, placeholder: "Search")
+        ArchField(text: $search, placeholder: "Any town in the US or Canada")
             .padding(.top, ArchSpacing.m)
     }
 
@@ -150,6 +165,13 @@ struct PlacePickerView: View {
     /// either country can be typed into the field above.
     @ViewBuilder
     private var suggestions: some View {
+        if !isOffline {
+            Text("Search for anywhere in the United States or Canada. These are "
+                 + "just a starting point.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
         ForEach(PlaceLibrary.groups, id: \.city) { group in
             VStack(alignment: .leading, spacing: ArchSpacing.xs) {
                 Text(group.city)
