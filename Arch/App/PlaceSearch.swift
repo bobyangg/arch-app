@@ -124,7 +124,9 @@ final class PlaceSearch {
 
     /// The plain geocoder, for a town the map search did not think to offer.
     private static func geocode(_ needle: String) async -> [Place]? {
-        guard let marks = try? await CLGeocoder().geocodeAddressString(needle) else {
+        let geocoder = CLGeocoder()
+        defer { withExtendedLifetime(geocoder) {} }
+        guard let marks = try? await geocoder.geocodeAddressString(needle) else {
             return nil
         }
         return reduce(marks)
@@ -150,9 +152,19 @@ final class PlaceSearch {
     /// `nearest` searched the bundled list, so a device fix in Vancouver came
     /// back as the closest of thirty-two New York neighbourhoods — Bay Ridge,
     /// two and a half thousand miles away, stated as fact on a profile.
+    /// **The geocoder is held in a local on purpose, and `CLGeocoder()` written
+    /// inline was the bug.** A temporary geocoder is released as soon as the call
+    /// expression finishes, which is *before* the await resumes; `CLGeocoder`
+    /// cancels its pending request on deinit, so the answer came back as a
+    /// cancellation every time. On screen that was "Use my location" asking for
+    /// permission, being granted it, and then finding nothing — twice, because
+    /// tapping again did exactly the same thing. Apple's own documentation says
+    /// to keep a strong reference for the life of the request; this is that.
     static func place(at coordinate: Coordinate) async -> Place? {
         let point = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        guard let marks = try? await CLGeocoder().reverseGeocodeLocation(point) else {
+        let geocoder = CLGeocoder()
+        defer { withExtendedLifetime(geocoder) {} }
+        guard let marks = try? await geocoder.reverseGeocodeLocation(point) else {
             return nil
         }
         return marks.lazy.compactMap { Place($0) }.first

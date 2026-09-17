@@ -26,6 +26,18 @@ struct Photo: Identifiable, Hashable {
     /// photograph to somebody who has been blocked, which is the whole reason the
     /// bucket is private.
     var url: URL?
+    /// The photograph itself, while it is only on this phone.
+    ///
+    /// **Without this a just-chosen photo is a flat colour.** `url` is a signed
+    /// link to the bucket and does not exist until the upload finishes and the
+    /// profile is fetched again, so between choosing a photograph and that
+    /// happening there was nothing to draw and the tile fell back to its tone.
+    /// `ProfileStore` renders the crop for the upload anyway; this keeps the
+    /// result instead of throwing it away, and `PhotoPlaceholder` already
+    /// preferred it over a URL.
+    ///
+    /// Only ever set for your own photographs, and only for the session.
+    var local: Data? = nil
     /// Moderation. Defaulted so the ten mock people and every `#Preview` keep
     /// working without carrying a field that only matters to a live profile.
     var state: PhotoState = .approved

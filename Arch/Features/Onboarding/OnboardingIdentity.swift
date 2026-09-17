@@ -50,6 +50,7 @@ struct OnboardingAbout: View {
 
     @State private var isPickingHeight = false
     @State private var isPickingPlace = false
+    @State private var locationNote: String?
     /// Held by the view rather than made inside the button, because
     /// `CLLocationManager` answers through a delegate — one created inside a
     /// closure is deallocated before iOS calls back, and the callback never
@@ -130,11 +131,13 @@ struct OnboardingAbout: View {
                 // them. The fix it invents is Fort Greene, which is where the mock
                 // profile lives.
                 onUseLocation: {
+                    locationNote = nil
                     guard ArchConfig.isConfigured else {
                         let fix = Coordinate(latitude: 40.6913, longitude: -73.9742)
                         store.useDeviceLocation(
                             fix, place: PlaceLibrary.nearest(to: fix)
                         )
+                        isPickingPlace = false
                         return
                     }
                     location.request { outcome in
@@ -147,16 +150,35 @@ struct OnboardingAbout: View {
                             Task { @MainActor in
                                 let found = await PlaceSearch.place(at: point)
                                 store.useDeviceLocation(point, place: found)
+                                if found == nil {
+                                    locationNote = "Arch found where you are but "
+                                        + "could not name it. Search for your town "
+                                        + "— it is exact either way."
+                                } else {
+                                    // **Closing is the feedback.** A place from a
+                                    // geocoder is not in the list below, so on
+                                    // success nothing on this screen changed and
+                                    // the button looked broken. The chip on the
+                                    // step behind now says where you are.
+                                    isPickingPlace = false
+                                }
                             }
-                        case .refused, .unavailable:
+                        case .refused:
                             // Not an error and not worth a screen. The list under
                             // the button is the same list either way, and it was
                             // always the path rather than the fallback.
                             store.refuseDeviceLocation()
+                        case .unavailable:
+                            // Distinct from a refusal: they did not say no, the
+                            // device could not answer. Hiding the button here
+                            // would read as "you denied this", which is a lie.
+                            locationNote = "Arch could not get a position just "
+                                + "now. Search for your town instead."
                         }
                     }
                 },
-                onCancel: { isPickingPlace = false }
+                onCancel: { isPickingPlace = false },
+                locationNote: locationNote
             )
             .padding(.horizontal, ArchSpacing.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

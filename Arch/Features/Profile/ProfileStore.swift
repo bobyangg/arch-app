@@ -182,7 +182,6 @@ final class ProfileStore {
     /// original is tens of milliseconds, which is a visible stutter in a grid the
     /// reader is still looking at.
     private func upload(id: String, position: Int, item: PickedPhoto) {
-        guard ArchConfig.isConfigured else { return }
         // `@MainActor` on the task for the same reason as in `persist` above. The
         // rendering still happens off it: `Task.detached` below takes no isolation
         // from here, which is the whole point of it.
@@ -194,7 +193,23 @@ final class ProfileStore {
             let rendered = Task.detached(priority: .userInitiated) {
                 PhotoExport.jpeg(from: item.photo, crop: item.crop)
             }
-            guard let jpeg = await rendered.value else {
+            let jpeg = await rendered.value
+
+            // **Kept, rather than rendered and thrown away.** The grid drew from
+            // `url`, which is a signed link that does not exist until the upload
+            // has finished *and* the profile has been fetched again -- so a photo
+            // you had just chosen and cropped showed as a flat tone, on the
+            // onboarding step and on your profile. These are the same bytes that
+            // are about to be uploaded, so keeping them costs a reference.
+            if let jpeg, let index = self?.person.photos.firstIndex(where: { $0.id == id }) {
+                self?.person.photos[index].local = jpeg
+            }
+
+            // Unchanged, and it has to stay here rather than at the top of the
+            // function: a design build has nowhere to send a photograph, but the
+            // render above is what puts it on screen.
+            guard ArchConfig.isConfigured else { return }
+            guard let jpeg else {
                 self?.failUpload(id: id)
                 return
             }

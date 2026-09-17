@@ -26,6 +26,7 @@ struct EditDetailsSheet: View {
     /// before iOS calls back. The symptom is a button that does nothing.
     @State private var location = DeviceLocation()
     @State private var locationPermission = LocationPermission.notAsked
+    @State private var locationNote: String?
     @Environment(\.dismiss) private var dismiss
 
     private var isValid: Bool {
@@ -101,10 +102,12 @@ struct EditDetailsSheet: View {
                 // the server has no centre, and that is what keeps an edit you
                 // made to your job title from moving you.
                 onUseLocation: {
+                    locationNote = nil
                     guard ArchConfig.isConfigured else {
                         let fix = Coordinate(latitude: 40.6913, longitude: -73.9742)
                         place = PlaceLibrary.nearest(to: fix)
                         locationPermission = .granted
+                        isPickingPlace = false
                         return
                     }
                     location.request { outcome in
@@ -114,14 +117,26 @@ struct EditDetailsSheet: View {
                             Task { @MainActor in
                                 if let found = await PlaceSearch.place(at: point) {
                                     place = found
+                                    // Closing is the feedback: a geocoded place
+                                    // is not in the list below, so a successful
+                                    // tap changed nothing visible on this screen.
+                                    isPickingPlace = false
+                                } else {
+                                    locationNote = "Arch found where you are but "
+                                        + "could not name it. Search for your town "
+                                        + "— it is exact either way."
                                 }
                             }
-                        case .refused, .unavailable:
+                        case .refused:
                             locationPermission = .denied
+                        case .unavailable:
+                            locationNote = "Arch could not get a position just "
+                                + "now. Search for your town instead."
                         }
                     }
                 },
-                onCancel: { isPickingPlace = false }
+                onCancel: { isPickingPlace = false },
+                locationNote: locationNote
             )
             .padding(.horizontal, ArchSpacing.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
