@@ -110,7 +110,7 @@ struct ValueSlider: View {
 private struct SliderPreview: View {
     @State private var low = 26
     @State private var high = 36
-    @State private var distance = 10
+    @State private var distance = 25
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xxl) {

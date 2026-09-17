@@ -44,7 +44,12 @@ REQ_MARGINALS = {
 }
 
 #: The distance slider. 100 is "Anywhere" and means no filter at all.
-DISTANCE_CHOICES = ((10, 0.60), (25, 0.20), (50, 0.12), (100, 0.08))
+#:
+#: Weighted around the default the app actually ships, which is 25 rather than 10
+#: since the picker stopped being New-York-only. The shape is the same claim as
+#: before -- most people never touch the slider, some widen it, a few narrow it --
+#: and only the number they are sitting on has moved.
+DISTANCE_CHOICES = ((25, 0.60), (50, 0.20), (10, 0.12), (100, 0.08))
 
 #: Roughly the real shape of the place library, with the three upstate towns held
 #: near 6% -- enough that a starving rural cohort is a cohort and not an anecdote.
