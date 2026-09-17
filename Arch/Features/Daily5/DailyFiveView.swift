@@ -61,6 +61,7 @@ struct DailyFiveView: View {
             .background(ArchColor.night)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .navigationBar)
+            .archBackSwipe()
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .profile(let person):
