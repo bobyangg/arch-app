@@ -91,7 +91,22 @@ final class PlaceSearch {
 
     /// `nil` means the lookup failed. An empty array means it worked and there is
     /// nothing by that name in either country.
+    ///
+    /// **Two services, and the second is only ever asked when the first came
+    /// back with nothing.** `MKLocalSearch` is built for search-as-you-type and
+    /// is what every keystroke goes to. `CLGeocoder` is the better authority on
+    /// whether a town exists at all, but Apple rate limits it per app and is
+    /// explicit that it is not for per-keystroke use — so it is the second
+    /// opinion on an empty answer and never the first.
     private static func lookUp(_ needle: String) async -> [Place]? {
+        let mapped = await mapSearch(needle)
+        if let mapped, !mapped.isEmpty { return mapped }
+        if let geocoded = await geocode(needle), !geocoded.isEmpty { return geocoded }
+        // nil when the map search itself failed, [] when it simply found nothing.
+        return mapped
+    }
+
+    private static func mapSearch(_ needle: String) async -> [Place]? {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = needle
         // Addresses and places, not businesses. Nobody lives in a coffee shop,
@@ -101,19 +116,32 @@ final class PlaceSearch {
 
         do {
             let response = try await MKLocalSearch(request: request).start()
-            var seen = Set<String>()
-            var places: [Place] = []
-            for item in response.mapItems {
-                guard let place = Place(item.placemark) else { continue }
-                // Ten addresses on one street all reduce to the same
-                // neighbourhood, and the same row ten times is not a list.
-                guard seen.insert(place.id).inserted else { continue }
-                places.append(place)
-            }
-            return places
+            return reduce(response.mapItems.map(\.placemark))
         } catch {
             return nil
         }
+    }
+
+    /// The plain geocoder, for a town the map search did not think to offer.
+    private static func geocode(_ needle: String) async -> [Place]? {
+        guard let marks = try? await CLGeocoder().geocodeAddressString(needle) else {
+            return nil
+        }
+        return reduce(marks)
+    }
+
+    /// Placemarks to rows: to the words Arch keeps, in either country, once each.
+    private static func reduce(_ marks: [CLPlacemark]) -> [Place] {
+        var seen = Set<String>()
+        var places: [Place] = []
+        for mark in marks {
+            guard let place = Place(mark) else { continue }
+            // Ten addresses on one street all reduce to the same neighbourhood,
+            // and the same row ten times is not a list.
+            guard seen.insert(place.id).inserted else { continue }
+            places.append(place)
+        }
+        return places
     }
 
     /// The words for a point, for when somebody taps "Use my location".
