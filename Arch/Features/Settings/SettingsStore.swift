@@ -69,7 +69,11 @@ final class SettingsStore {
     }
 
     var seeking: Set<Gender> = [.man, .woman, .nonBinary]
-    var distance = 10
+    /// Twenty-five miles, not ten. Ten reached most of four boroughs and was a
+    /// sensible default while New York was the whole app; across the US and
+    /// Canada it is a radius that finds nobody outside a metro, and an empty
+    /// roster is the one failure the product does not survive.
+    var distance = 25
     var minAge = 26
     var maxAge = 36
     var lookingFor = "Something serious"

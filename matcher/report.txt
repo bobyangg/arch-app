@@ -61,18 +61,18 @@ Compatibility.swift at 92a555d
 1c. Can the tables tell one person's own candidates apart?
 ------------------------------------------------------------------------------
   (the only pool that matters -- their shortlist after the hard filters)
-  candidate-score sd   min 0.408  p10 0.587  median 0.812  p90 1.074  max 1.459
-  median pool size     60 people
+  candidate-score sd   min 0.448  p10 0.597  median 0.824  p90 1.044  max 1.337
+  median pool size     69 people
   verdict              PASS  (good >= 0.60, bad < 0.35)
 
 1d. Is the fifth pick meaningfully above the pool?
 ------------------------------------------------------------------------------
-  selection margin     1.41 sd above the candidate mean
+  selection margin     1.44 sd above the candidate mean
   verdict              weak  (good >= 1.5, bad < 0.8)
   within 0.10 of the cutoff   3.7 people
-  within 0.25 of the cutoff   7.6 people (13% of the pool)
-  exact ties at the cutoff    1.20
-  1st pick beats 5th by       0.48 points (0.58 pool sd)
+  within 0.25 of the cutoff   7.9 people (13% of the pool)
+  exact ties at the cutoff    1.21
+  1st pick beats 5th by       0.46 points (0.56 pool sd)
 
 1e. Against other tables of the same shape -- the decisive test
 ------------------------------------------------------------------------------
@@ -87,12 +87,12 @@ Compatibility.swift at 92a555d
 
 1f. Delivered -- the real matcher against the same matcher on noise
 ------------------------------------------------------------------------------
-  real tables      4504 pairs, mean compatibility 10.720 (sd 0.858)
-  ranked by noise  4514 pairs, mean compatibility 10.209 (sd 0.931)
-  gain             +0.511 points = 0.63 pool sd   weak  (good >= 1.2, bad < 0.5)
+  real tables      4584 pairs, mean compatibility 10.748 (sd 0.842)
+  ranked by noise  4615 pairs, mean compatibility 10.229 (sd 0.930)
+  gain             +0.519 points = 0.63 pool sd   weak  (good >= 1.2, bad < 0.5)
 
   For scale: picking everybody's unconstrained best five would average
-  11.408. The mutual cap and the cooldown eat the rest, so the matcher
+  11.434. The mutual cap and the cooldown eat the rest, so the matcher
   captures 43% of the lift the tables actually offer.
 
   This is the only line in the section that is not circular: the matcher
@@ -102,51 +102,49 @@ Compatibility.swift at 92a555d
 2. Who starves?
 ==============================================================================
   night   pairs   held   active   empty   full rosters
-    1     1378      0      580       7     462
-    2      576      0      580      23     469
-    3      547      0      580      31     446
-    4      544      0      580      43     432
-    5      510      0      580      55     408
-    6      497     10      570      67     392
-    7      452     24      556      80     354
+    1     1398      0      580       4     469
+    2      588      0      580      11     468
+    3      559      0      580      23     445
+    4      541      0      580      33     436
+    5      520      0      580      42     436
+    6      503      7      573      61     402
+    7      475     22      558      74     376
 
-  unique people met across the week   p10 5   median 17   p90 22
+  unique people met across the week   p10 6   median 17   p90 21
 
-  Empty on 3 or more of 7 nights: 56 people
+  Empty on 3 or more of 7 nights: 41 people
 
   which single rule, relaxed on its own, would unstick them:
-      distance       29
-      requirements   13
-      orientation    9
-      age            5
+      distance       23
+      requirements   10
+      orientation    6
+      age            2
   by where they live:
-      New York       28
-      Brooklyn       10
-      The Bronx      8
-      Manhattan      3
-      Staten Island  3
-      Queens         2
-      New Jersey     2
+      New York       23
+      Brooklyn       7
+      Manhattan      5
+      The Bronx      5
+      Queens         1
   by their distance setting:
-      10 miles       35
-      25 miles       14
-      50 miles       2
-      Anywhere       5
+      10 miles       5
+      25 miles       23
+      50 miles       12
+      Anywhere       1
 
   worst affected:
       pid     nights  candidates  met  binding rule   would give  where
       p015       7           0      0  distance            11    New York
-      p085       7           0      0  requirements        81    Manhattan
+      p085       7           0      0  requirements        87    Manhattan
       p091       7           0      0  distance            44    New York
       p234       7           0      0  distance            13    New York
-      p288       7           0      0  orientation         25    The Bronx
-      p460       7           0      0  distance            35    New York
-      p575       7           0      0  distance            81    New York
-      p004       6           1      1  requirements        51    Brooklyn
-      p056       6           1      1  distance            63    New York
-      p185       6           1      1  distance            37    New York
-      p257       6           1      1  requirements        22    The Bronx
+      p004       6           1      1  requirements        55    Brooklyn
+      p288       6           1      1  orientation         66    The Bronx
       p295       6           1      1  distance            11    New York
+      p351       6           1      1  distance            19    New York
+      p489       6           1      1  distance            48    New York
+      p478       6           2      2  requirements        40    Brooklyn
+      p003       6           4      4  distance            95    New York
+      p056       5           1      1  distance            63    New York
 
 ==============================================================================
 3. What the mutual cap costs
@@ -157,8 +155,8 @@ Compatibility.swift at 92a555d
   The real question is how much work it is doing. Shadow demand is how many
   people would hold you in their top five with no constraints at all:
 
-      median 3   p90 11   p95 15   max 34   (capacity 5)
-      wanted by nobody: 85 people
+      median 3   p90 12   p95 15   max 35   (capacity 5)
+      wanted by nobody: 82 people
       p95 is 3.0x capacity   PASS  (good <= 3x)
 
 ==============================================================================
@@ -167,14 +165,14 @@ Compatibility.swift at 92a555d
   every possible pair                      179700   100.0%
   after orientation                         77609    43.2%   (-56.8%)
   after age                                 34280    19.1%   (-24.1%)
-  after distance                            26536    14.8%   (-4.3%)
-  after requirements                        15388     8.6%   (-6.2%)
-  after blocked                             15388     8.6%   (-0.0%)
-  after paused                              14313     8.0%   (-0.6%)
+  after distance                            29522    16.4%   (-2.6%)
+  after requirements                        17132     9.5%   (-6.9%)
+  after blocked                             17132     9.5%   (-0.0%)
+  after paused                              15973     8.9%   (-0.6%)
 
-  candidates per person   min 0   p10 5   p25 18   median 48   p90 97
-  below 5 (one roster)    52 people
-  below 35 (a full week)  228 people
+  candidates per person   min 0   p10 6   p25 21   median 53   p90 107
+  below 5 (one roster)    44 people
+  below 35 (a full week)  205 people
 
   Candidate sets scale with the size of the city. At n=600 this is a small
   town; the shape of the funnel is the transferable finding, not the counts.
@@ -183,47 +181,3 @@ Compatibility.swift at 92a555d
       q14   84.0%
       q15   88.1%
       q16   78.5%
-==============================================================================
-5. The control: does the headline survive noisier answers?
-==============================================================================
-  Crisp archetypes would make any scoring rule look good -- the pool would be
-  full of near clones. noise=1.00 is answers drawn at random, with no types
-  at all. The claim in section 1 only stands if it holds at noise >= 0.30.
-
-  noise   cand sd   margin   vs shuffled   vs alignment   spearman   gain(sd)
-   0.00     0.941     1.60          0.27           0.87       0.56       0.65
-   0.15     0.837     1.51          0.15           0.65       0.61       0.66
-   0.30     0.778     1.42          0.12           0.54       0.61       0.64
-   0.50     0.744     1.40          0.10           0.45       0.57       0.62
-   1.00     0.737     1.38          0.12           0.42       0.53       0.63
-
-  (mean of 3 seeds per row)
-==============================================================================
-6. The control: is the starving cohort the cooldown's fault?
-==============================================================================
-  "Never show the same person twice" is a guarantee that runs out of people.
-  Nights is 7, so a cooldown of 7 means nobody repeats all week.
-
-  cooldown   pairs/night   empty night 7   persistent zero   met (median)
-  none               795            2.6%              2.6%              7
-  3                  668            5.5%              5.0%             12
-  7                  626           13.0%              8.6%             16
-  never              626           13.0%              8.6%             16
-
-  The trade is real and it is the product decision, not a bug: the cooldown
-  is what stops the same faces recurring, and it is also what strands the
-  people whose candidate list is short. Compare the last two columns.
-==============================================================================
-7. The control: how much of this is just a small city?
-==============================================================================
-  Candidate sets scale with the population. A cohort that starves at n=400
-  and not at n=2400 is a launch problem, not a design problem.
-
-     n     median candidates   p10    empty night 7   persistent zero
-    300                  21     2           21.5%             14.0%
-    600                  45     6           12.6%              7.9%
-   1200                  91    13            7.2%              5.2%
-   2400                 180    26            4.2%              2.6%
-
-  Counts would have risen down this column and said the opposite. As a share
-  of the city, a bigger pool is the single most effective fix available.

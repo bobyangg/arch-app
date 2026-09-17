@@ -338,7 +338,7 @@ enum ArchBackend {
             DiscoveryRow(
                 accountId: session.userID,
                 seeking: seeking,
-                distanceMiles: 10, minAge: 26, maxAge: 36,
+                distanceMiles: 25, minAge: 26, maxAge: 36,
                 paused: false, notifyMessages: notifyMessages
             )
         )
