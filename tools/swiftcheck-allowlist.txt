@@ -101,3 +101,6 @@ CGContext
 UNUserNotificationCenter
 UIApplication
 UIApplicationDelegateAdaptor
+
+# CoreLocation, added with the real location fix
+CLLocationManager

@@ -107,6 +107,17 @@ targets:
         # applied at the root, so the system is never left to pick.
         UIUserInterfaceStyle: Automatic
 
+        # **Its absence is a crash, not a warning.** iOS terminates an app that
+        # asks for a location without a reason string, so this has to be here
+        # before `DeviceLocation` is ever called.
+        #
+        # The wording is the same promise the picker makes on screen: one fix,
+        # rounded to about a kilometre, and nothing finer kept.
+        NSLocationWhenInUseUsageDescription:
+          Arch uses your location once, to fill in where you live. It is rounded to
+          about a kilometre and never shown to anyone — your profile shows a
+          neighbourhood, never a distance.
+
         # Read from the build settings above rather than written here, so that
         # Debug stays the design build and Release is the real one. Xcode expands
         # `$(...)` in Info.plist values when it processes the file.
