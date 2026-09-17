@@ -215,10 +215,18 @@ final class OnboardingStore {
         if let email = identity.email { self.email = email }
     }
 
-    func useDeviceLocation(_ fix: Coordinate) {
+    /// **The words are handed in rather than looked up here.** They come from
+    /// the device's geocoder, which knows the whole of both countries;
+    /// `PlaceLibrary.nearest` used to do it and searched thirty-two New York
+    /// neighbourhoods, so a fix anywhere else was confidently wrong.
+    ///
+    /// A nil `found` is the honest outcome when the geocoder could not answer.
+    /// The position is still kept — it is the thing the distance filter reads,
+    /// and it is right — and the picker stays open for a name to be chosen.
+    func useDeviceLocation(_ fix: Coordinate, place found: Place?) {
         locationPermission = .granted
         coordinate = fix.coarsened
-        if place == nil { place = PlaceLibrary.nearest(to: fix) }
+        if place == nil, let found { place = found }
     }
 
     func refuseDeviceLocation() {

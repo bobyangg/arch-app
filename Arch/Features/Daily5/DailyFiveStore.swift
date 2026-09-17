@@ -26,9 +26,10 @@ final class DailyFiveStore {
     /// across runs and reconcile them afterwards. One batch makes that problem not
     /// exist, and it is a great deal less to run.
     ///
-    /// Everyone Arch currently serves is in and around New York, so today this *is*
-    /// the local nine. Somewhere else it is not, and the open slot says which zone
-    /// the hour belongs to rather than claiming it is the reader's.
+    /// Arch is open across the United States and Canada, so for most readers this
+    /// is not the local nine: it is six in the morning in Vancouver and half past
+    /// ten in St. John's. Nothing in the app claims otherwise — the open slot
+    /// names the zone the hour belongs to rather than the reader's own.
     static let refillHour = 9
 
     /// The zone the batch runs in.

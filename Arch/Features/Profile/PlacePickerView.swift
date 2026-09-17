@@ -32,9 +32,24 @@ struct PlacePickerView: View {
     let onCancel: () -> Void
 
     @State private var search = ""
+    /// Asks the device's geocoder, which knows every town in the United States
+    /// and Canada. Held by the view rather than made per keystroke so that one
+    /// lookup can cancel the one before it.
+    @State private var searcher = PlaceSearch()
 
-    private var results: [Place] { PlaceLibrary.search(search) }
+    /// **The design build searches the bundled list instead, and that is not a
+    /// shortcut.** The UI tests run in a simulator against `MockData`, where
+    /// every profile is in New York and there may be no network at all; a picker
+    /// that needed Apple's servers to show a row would make them flaky for a
+    /// reason that has nothing to do with what they test.
+    private var isOffline: Bool { !ArchConfig.isConfigured }
+
+    private var results: [Place] {
+        isOffline ? PlaceLibrary.search(search) : searcher.results
+    }
     private var isSearching: Bool { !search.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var isWaiting: Bool { !isOffline && searcher.state == .searching }
+    private var isUnreachable: Bool { !isOffline && searcher.state == .unreachable }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -47,29 +62,31 @@ struct PlacePickerView: View {
                         useLocation
                     }
 
-                    if results.isEmpty {
+                    if isWaiting && results.isEmpty {
+                        note("Looking…", nil)
+                    } else if isUnreachable {
+                        note("Arch could not reach the map just now.",
+                             "It needs a connection to find a town by name. "
+                             + "The list below works without one.")
+                        suggestions
+                    } else if results.isEmpty {
                         nothingFound
                     } else if isSearching {
                         VStack(spacing: ArchSpacing.xs) {
                             ForEach(results) { row($0) }
                         }
                     } else {
-                        ForEach(PlaceLibrary.groups, id: \.city) { group in
-                            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-                                Text(group.city)
-                                    .archText(.prompt)
-                                    .foregroundStyle(ArchColor.mortar)
-                                VStack(spacing: ArchSpacing.xs) {
-                                    ForEach(group.places) { row($0) }
-                                }
-                            }
-                        }
+                        suggestions
                     }
                 }
                 .padding(.top, ArchSpacing.m)
                 .padding(.bottom, ArchSpacing.sectionGap)
             }
             .scrollIndicators(.hidden)
+        }
+        .onChange(of: search) { _, text in
+            guard !isOffline else { return }
+            searcher.search(text)
         }
     }
 
@@ -127,15 +144,43 @@ struct PlacePickerView: View {
         .buttonStyle(PressScaleStyle(scale: 0.99))
     }
 
+    /// What is offered before anybody types: the bundled list, grouped.
+    ///
+    /// It is a set of suggestions rather than the extent of the app. Anywhere in
+    /// either country can be typed into the field above.
+    @ViewBuilder
+    private var suggestions: some View {
+        ForEach(PlaceLibrary.groups, id: \.city) { group in
+            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                Text(group.city)
+                    .archText(.prompt)
+                    .foregroundStyle(ArchColor.mortar)
+                VStack(spacing: ArchSpacing.xs) {
+                    ForEach(group.places) { row($0) }
+                }
+            }
+        }
+    }
+
     private var nothingFound: some View {
+        note("Nothing by that name",
+             isSearching
+                ? "Arch is in the United States and Canada. Try the town, or the "
+                  + "nearest one."
+                : nil)
+    }
+
+    private func note(_ title: String, _ detail: String?) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-            Text("Nothing by that name")
+            Text(title)
                 .archText(.body)
                 .foregroundStyle(ArchColor.limestone)
-            Text("Try the borough or the town instead — Arch is only in New York so far.")
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
+            if let detail {
+                Text(detail)
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

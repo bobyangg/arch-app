@@ -47,19 +47,80 @@ struct Place: Identifiable, Hashable {
     let id: String
     /// The neighbourhood, or the town.
     let name: String
-    /// What it sits inside: a borough, a city, or a state.
+    /// What it sits inside: a borough, a city, a state, or a province.
     let city: String
-    let centre: Coordinate
+
+    /// Where it is — when Arch knows.
+    ///
+    /// **Optional on purpose, and the reason is a privacy one.** A place rebuilt
+    /// from a stored `place_id` has no coordinate, because the id deliberately
+    /// does not carry one: `visible_profiles` publishes `place_id` and no
+    /// position, so a latitude smuggled inside the id would be a latitude
+    /// published to everybody who can see the profile. The coordinate lives in
+    /// `coarse_lat`/`coarse_lon`, which only the matcher reads.
+    ///
+    /// Nothing on the display side ever touches this. The two places that do —
+    /// creating a profile and editing one — are the two that have just been
+    /// handed a real place, from the list or from a geocoder.
+    let centre: Coordinate?
 
     /// What goes on the profile chip.
-    var label: String { "\(name), \(city)" }
+    var label: String { city.isEmpty ? name : "\(name), \(city)" }
+}
+
+extension Place {
+
+    /// Marks an id as words rather than a row in `PlaceLibrary.all`.
+    static let geocodedPrefix = "g:"
+
+    /// A place that came from a geocoder rather than the bundled list.
+    ///
+    /// The id *is* the label, because there is no table to look it up in later:
+    /// somebody in Moose Jaw is not in `all` and never will be, and the chip on
+    /// their profile still has to say Moose Jaw. `place_id` is already the
+    /// public display value in `visible_profiles`, so putting display words in
+    /// it exposes nothing that column did not already expose.
+    init(geocodedName name: String, city: String, centre: Coordinate?) {
+        // The separators have to survive the round trip, so they cannot appear
+        // inside a name. Neither occurs in a North American place name; this is
+        // for whatever a geocoder does that I have not seen.
+        func clean(_ text: String) -> String {
+            text.replacingOccurrences(of: "|", with: " ")
+                .replacingOccurrences(of: ":", with: " ")
+                .trimmingCharacters(in: .whitespaces)
+        }
+        let cleanName = clean(name), cleanCity = clean(city)
+        self.init(
+            id: "\(Place.geocodedPrefix)\(cleanName)|\(cleanCity)",
+            name: cleanName,
+            city: cleanCity,
+            centre: centre
+        )
+    }
+
+    /// The words back out of a geocoded id, or nil if it is not one.
+    static func geocoded(fromID id: String) -> Place? {
+        guard id.hasPrefix(geocodedPrefix) else { return nil }
+        let body = id.dropFirst(geocodedPrefix.count)
+        let parts = body.split(separator: "|", maxSplits: 1,
+                               omittingEmptySubsequences: false)
+        guard let name = parts.first, !name.isEmpty else { return nil }
+        return Place(
+            id: id,
+            name: String(name),
+            city: parts.count > 1 ? String(parts[1]) : "",
+            centre: nil
+        )
+    }
 }
 
 /// The gazetteer the picker reads.
 ///
-/// A few dozen rows for one metro is the whole of it — no geocoding service, no map
-/// tiles, no per-lookup bill. A real launch extends the list; nothing about the
-/// shape changes.
+/// **This is the suggestion list, not the coverage.** Anywhere in the United
+/// States or Canada can be chosen — `PlaceSearch` asks the device's own geocoder,
+/// which knows every town in both and costs nothing. What stays here is the set
+/// the picker offers before anybody types, the fixture the design build and the UI
+/// tests run on, and the population the matcher simulation reads.
 ///
 /// Coordinates are approximate centres, which is the point: they are the fallback
 /// for somebody who did not give Arch their location, and they are never more
@@ -126,8 +187,12 @@ enum PlaceLibrary {
         return order.map { (city: $0, places: byCity[$0] ?? []) }
     }
 
+    /// **Two kinds of id reach this, and both have to come back as words.** A
+    /// row in `all` for anybody who picked from the list, and a geocoded id for
+    /// everybody else — which is now most people, since the list covers one
+    /// metro and the app covers two countries.
     static func place(matching id: String) -> Place? {
-        all.first { $0.id == id }
+        all.first { $0.id == id } ?? Place.geocoded(fromID: id)
     }
 
     /// Case- and punctuation-insensitive, and it searches the city as well as the
@@ -143,14 +208,22 @@ enum PlaceLibrary {
         }
     }
 
-    /// What a device fix resolves to: the nearest place in the list.
+    /// The nearest row in the bundled list.
     ///
-    /// The coordinate is still stored separately and coarsened — this only picks
-    /// the words that go on the profile, because "Bedford-Stuyvesant" from a
-    /// geocoder is not what somebody who says "Bed-Stuy" wants on their profile.
-    /// They can change it; that is what the picker is for.
+    /// **This is no longer how a device fix becomes a place, and using it that
+    /// way was wrong the moment Arch left New York.** It searches thirty-two
+    /// neighbourhoods, so a fix in Vancouver came back as Bay Ridge — the
+    /// closest of them, two and a half thousand miles away, written onto a
+    /// profile as fact. `PlaceSearch.place(at:)` asks the device's geocoder
+    /// instead and knows the whole continent.
+    ///
+    /// It survives for the design build, which has no network and no geocoder,
+    /// and where every mock profile is in New York anyway.
     static func nearest(to coordinate: Coordinate) -> Place? {
-        all.min { $0.centre.miles(to: coordinate) < $1.centre.miles(to: coordinate) }
+        all.min { a, b in
+            (a.centre?.miles(to: coordinate) ?? .infinity)
+                < (b.centre?.miles(to: coordinate) ?? .infinity)
+        }
     }
 
     private static func place(
