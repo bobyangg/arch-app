@@ -329,6 +329,12 @@ jobs:
           APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
           APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
           APPSTORE_PRIVATE_KEY: ${{ secrets.APPSTORE_PRIVATE_KEY }}
+          # Optional. Set them and the certificate is reused instead of remade,
+          # which is what stops Apple emailing the account holder about a
+          # revocation on every single push. Unset, the old behaviour stands and
+          # the build still works.
+          DIST_P12: ${{ secrets.DIST_P12 }}
+          DIST_P12_PASSWORD: ${{ secrets.DIST_P12_PASSWORD }}
         run: python tools/makecert.py build/signing
 
       # Its own keychain, not the login one. The runner is thrown away afterwards,
