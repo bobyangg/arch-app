@@ -14,13 +14,30 @@ The usual fix is a Mac: Keychain Access makes a signing request, you upload it,
 you download a certificate. There is no Mac here. But the App Store Connect API
 does the same three steps, so this does them.
 
-**The private key lives for one run and is then thrown away.** A certificate is
-useless without it, so a certificate left behind at Apple would be dead weight
-counting against the limit of three. Every run therefore revokes the ones it made
-before creating a new one, and the account stays at one.
+**Two ways to run, and the second is the one you want.**
 
-Nothing is printed except paths and fingerprints. The key and the passphrase go to
-files in the output directory, and the passphrase is random per run.
+Given `DIST_P12` and `DIST_P12_PASSWORD`, it reuses that certificate: no
+creation, no revocation, no email. It checks the serial against the account first,
+so a certificate Apple has since revoked fails here rather than producing an
+archive that is refused much later and much less clearly.
+
+Without them it makes a new certificate and revokes the previous ones, because the
+private key would otherwise die with the runner and leave dead weight against the
+limit of three. That works, and it makes Apple write to the account holder about a
+revocation on every single push, which is how the first version of this announced
+itself.
+
+To move from the second to the first, on your own machine:
+
+    export APPSTORE_ISSUER_ID=... APPSTORE_KEY_ID=...
+    export APPSTORE_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
+    python tools/makecert.py --export ./signing
+
+It prints the two values to set as repository secrets. **On your machine and
+nowhere else**: a private key must not pass through a workflow log or a build
+artifact, both of which any signed-in user can read on a public repository.
+
+Nothing else is printed but paths and fingerprints.
 """
 import base64
 import json
@@ -90,10 +107,137 @@ def run(args, **kwargs):
     return result
 
 
+def serial_of(pem):
+    """The certificate's serial, as Apple writes it.
+
+    `openssl x509 -serial` gives uppercase hex with no leading zeroes, which is
+    the same form `/v1/certificates` reports, so the two compare directly.
+    """
+    raw = run(["openssl", "x509", "-noout", "-serial", "-in", pem]).stdout.strip()
+    return raw.split("=", 1)[-1].strip().upper().lstrip("0")
+
+
+def reuse(out, bearer):
+    """Use the certificate we were given rather than making another.
+
+    **This is what stops the emails.** Making a certificate each run meant
+    revoking the last one each run, and Apple writes to the account holder every
+    single time -- so a working pipeline generated an alarming message on every
+    commit.
+
+    Returns the certificate's id at Apple, found by matching the serial in the
+    .p12 against the account's certificates. Matched on serial rather than trusted
+    blindly, because a .p12 whose certificate Apple has since revoked would
+    otherwise sign an archive that fails much later and much less clearly.
+    """
+    p12 = os.path.join(out, "dist.p12")
+    with open(p12, "wb") as handle:
+        handle.write(base64.b64decode(os.environ["DIST_P12"]))
+
+    passphrase = os.environ["DIST_P12_PASSWORD"]
+    pem = os.path.join(out, "dist.pem")
+    run(["openssl", "pkcs12", "-in", p12, "-nokeys", "-out", pem,
+         "-passin", "pass:" + passphrase])
+
+    wanted = serial_of(pem)
+    for row in call("GET", "/certificates?limit=200", bearer).get("data", []):
+        attributes = row.get("attributes", {})
+        if (attributes.get("serialNumber") or "").upper().lstrip("0") == wanted:
+            print("reusing %s, expires %s" % (
+                attributes.get("name"), (attributes.get("expirationDate") or "")[:10]))
+            return row["id"], p12, passphrase
+
+    raise SystemExit(
+        "The certificate in DIST_P12 is not on this account any more -- it has "
+        "been revoked, or it belongs to a different team. Make a new one with\n"
+        "    python tools/makecert.py --export ./signing\n"
+        "and replace the DIST_P12 and DIST_P12_PASSWORD secrets."
+    )
+
+
+def make_profile(out, bearer, cert_id):
+    # ---- and the provisioning profile ------------------------------------
+    #
+    # Automatic signing was asked three times and chose a *development* profile
+    # every time, even with a distribution certificate sitting right there:
+    # `xcodebuild` does not infer "this archive is for the App Store" the way the
+    # Xcode application does. So the profile is made here too, and the build signs
+    # manually — which takes the guessing out of it entirely.
+
+    bundles = call("GET", "/bundleIds?limit=200", bearer).get("data", [])
+    bundle = next((row for row in bundles
+                   if row.get("attributes", {}).get("identifier") == BUNDLE_ID), None)
+    if not bundle:
+        raise SystemExit("No registered bundle id %s to attach a profile to." % BUNDLE_ID)
+
+    # A profile is bound to the certificates it was made with, so last run's is
+    # useless the moment its certificate is revoked. Clear ours out by name.
+    for row in call("GET", "/profiles?limit=200", bearer).get("data", []):
+        if row.get("attributes", {}).get("name") == PROFILE_NAME:
+            call("DELETE", "/profiles/%s" % row["id"], bearer)
+            print("removed the previous %s profile" % PROFILE_NAME)
+
+    profile = call("POST", "/profiles", bearer, {
+        "data": {
+            "type": "profiles",
+            "attributes": {"name": PROFILE_NAME, "profileType": "IOS_APP_STORE"},
+            "relationships": {
+                "bundleId": {"data": {"id": bundle["id"], "type": "bundleIds"}},
+                "certificates": {"data": [{"id": cert_id, "type": "certificates"}]},
+            },
+        }
+    })
+    content = base64.b64decode(profile["data"]["attributes"]["profileContent"])
+
+    # The UUID sits in the plist inside the CMS envelope. Read with a regex rather
+    # than `security cms`, which exists only on a Mac — this way the tool can be
+    # run and reasoned about anywhere.
+    match = re.search(rb"<key>UUID</key>\s*<string>([0-9A-Fa-f-]+)</string>", content)
+    if not match:
+        raise SystemExit("Could not find the UUID inside the profile.")
+    uuid = match.group(1).decode()
+
+    # Both locations: the second is where Xcode 16 and later look, and which Xcode
+    # is newest is decided by the runner image rather than by us.
+    for folder in [
+        os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
+        os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
+    ]:
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, uuid + ".mobileprovision"), "wb") as handle:
+            handle.write(content)
+
+    print("profile: %s  (%s)" % (PROFILE_NAME, uuid))
+
+    return uuid
+
+
+def publish(out, p12, passphrase, uuid=None):
+    """Hand the step outputs to the workflow."""
+    if not os.environ.get("GITHUB_OUTPUT"):
+        return
+    with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
+        handle.write("p12=%s\n" % p12)
+        handle.write("pass=%s\n" % passphrase)
+        handle.write("profile=%s\n" % PROFILE_NAME)
+        if uuid:
+            handle.write("uuid=%s\n" % uuid)
+
+
 def main():
-    out = sys.argv[1] if len(sys.argv) > 1 else "."
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    exporting = "--export" in sys.argv
+    out = args[0] if args else "."
     os.makedirs(out, exist_ok=True)
     bearer = token()
+
+    # The whole point of the exercise: if a certificate was handed to us, use it
+    # and revoke nothing.
+    if os.environ.get("DIST_P12") and not exporting:
+        cert_id, p12, passphrase = reuse(out, bearer)
+        make_profile(out, bearer, cert_id)
+        publish(out, p12, passphrase)
+        return 0
 
     # Clear out the previous run's certificates.
     #
@@ -202,66 +346,24 @@ def main():
     subject = run(["openssl", "x509", "-noout", "-subject", "-in", pem]).stdout.strip()
     print("subject: %s" % subject)
 
-    # ---- and the provisioning profile ------------------------------------
-    #
-    # Automatic signing was asked three times and chose a *development* profile
-    # every time, even with a distribution certificate sitting right there:
-    # `xcodebuild` does not infer "this archive is for the App Store" the way the
-    # Xcode application does. So the profile is made here too, and the build signs
-    # manually — which takes the guessing out of it entirely.
-    cert_id = created["data"]["id"]
+    uuid = make_profile(out, bearer, created["data"]["id"])
+    publish(out, p12, passphrase, uuid)
 
-    bundles = call("GET", "/bundleIds?limit=200", bearer).get("data", [])
-    bundle = next((row for row in bundles
-                   if row.get("attributes", {}).get("identifier") == BUNDLE_ID), None)
-    if not bundle:
-        raise SystemExit("No registered bundle id %s to attach a profile to." % BUNDLE_ID)
-
-    # A profile is bound to the certificates it was made with, so last run's is
-    # useless the moment its certificate is revoked. Clear ours out by name.
-    for row in call("GET", "/profiles?limit=200", bearer).get("data", []):
-        if row.get("attributes", {}).get("name") == PROFILE_NAME:
-            call("DELETE", "/profiles/%s" % row["id"], bearer)
-            print("removed the previous %s profile" % PROFILE_NAME)
-
-    profile = call("POST", "/profiles", bearer, {
-        "data": {
-            "type": "profiles",
-            "attributes": {"name": PROFILE_NAME, "profileType": "IOS_APP_STORE"},
-            "relationships": {
-                "bundleId": {"data": {"id": bundle["id"], "type": "bundleIds"}},
-                "certificates": {"data": [{"id": cert_id, "type": "certificates"}]},
-            },
-        }
-    })
-    content = base64.b64decode(profile["data"]["attributes"]["profileContent"])
-
-    # The UUID sits in the plist inside the CMS envelope. Read with a regex rather
-    # than `security cms`, which exists only on a Mac — this way the tool can be
-    # run and reasoned about anywhere.
-    match = re.search(rb"<key>UUID</key>\s*<string>([0-9A-Fa-f-]+)</string>", content)
-    if not match:
-        raise SystemExit("Could not find the UUID inside the profile.")
-    uuid = match.group(1).decode()
-
-    # Both locations: the second is where Xcode 16 and later look, and which Xcode
-    # is newest is decided by the runner image rather than by us.
-    for folder in [
-        os.path.expanduser("~/Library/MobileDevice/Provisioning Profiles"),
-        os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles"),
-    ]:
-        os.makedirs(folder, exist_ok=True)
-        with open(os.path.join(folder, uuid + ".mobileprovision"), "wb") as handle:
-            handle.write(content)
-
-    print("profile: %s  (%s)" % (PROFILE_NAME, uuid))
-
-    if os.environ.get("GITHUB_OUTPUT"):
-        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
-            handle.write("p12=%s\n" % p12)
-            handle.write("pass=%s\n" % passphrase)
-            handle.write("profile=%s\n" % PROFILE_NAME)
-            handle.write("uuid=%s\n" % uuid)
+    if exporting:
+        # Local use. The private key must never reach a log or an artifact --
+        # both are readable by any signed-in user on a public repository -- so
+        # it is printed here, on the machine that made it, and nowhere else.
+        with open(p12, "rb") as handle:
+            encoded = base64.b64encode(handle.read()).decode()
+        print()
+        print("Set these two as GitHub repository secrets, then CI will reuse")
+        print("this certificate instead of making a new one every run:")
+        print()
+        print("  DIST_P12")
+        print(encoded)
+        print()
+        print("  DIST_P12_PASSWORD")
+        print(passphrase)
     return 0
 
 
