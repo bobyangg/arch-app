@@ -157,6 +157,48 @@ final class ArchSmokeTests: XCTestCase {
         )
     }
 
+    // MARK: The top bar
+
+    /// The lock-up goes away as you read down, and comes back the moment you
+    /// scroll up.
+    ///
+    /// Shipped once to TestFlight without this, and the bar never moved on a
+    /// phone. The build had compiled and launched in the simulator, and nothing
+    /// in the simulator had ever scrolled it.
+    ///
+    /// The bar is addressed by identifier. Hidden tabs are `accessibilityHidden`,
+    /// so the one match is the bar on the tab in front, and a hidden bar takes
+    /// itself out of the tree rather than sitting there transparent.
+    func testTheTopBarHidesOnScrollDownAndComesBackOnScrollUp() {
+        let app = launch()
+        app.buttons["tab.daily"].tap()
+
+        let bar = app.descendants(matching: .any).matching(identifier: "topbar.arch")
+        XCTAssertTrue(
+            bar.firstMatch.waitForExistence(timeout: 5),
+            "The roster has no lock-up above it."
+        )
+        XCTAssertEqual(bar.count, 1, "Expected one lock-up on screen, found \(bar.count).")
+
+        // Two swipes, so a slow one on a busy runner still gets well past the
+        // bar's own height. Reading down is the gesture; the bar should go.
+        app.swipeUp()
+        app.swipeUp()
+        expectation(for: NSPredicate(format: "count == 0"), evaluatedWith: bar)
+        waitForExpectations(timeout: 5) { error in
+            XCTAssertNil(error, "Scrolling down did not hide the lock-up.")
+        }
+
+        // One swipe up the page. Not necessarily back to the top, and it should
+        // not need to be: any scroll towards the top brings the bar back.
+        app.swipeDown()
+        XCTAssertTrue(
+            bar.firstMatch.waitForExistence(timeout: 5),
+            "Scrolling back up did not bring the lock-up back."
+        )
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     // MARK: You
 
     func testTheYouTabDrawsAProfile() {
