@@ -176,7 +176,12 @@ final class ArchSmokeTests: XCTestCase {
         let app = launch()
         app.buttons["tab.daily"].tap()
 
-        let bars = app.descendants(matching: .any).matching(identifier: "topbar.arch")
+        // By identifier or by label. A content shape on the bar once cost it its
+        // identifier in the tree while the label stayed, and the label is a
+        // brand name that no other element carries on its own.
+        let bars = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == 'topbar.arch' OR label == 'Arch'")
+        )
         if !bars.firstMatch.waitForExistence(timeout: 5) {
             // The tree, in the message, because a log is all CI keeps.
             let tree = app.debugDescription.split(separator: "\n")
