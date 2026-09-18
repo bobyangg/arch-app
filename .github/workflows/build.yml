@@ -9,11 +9,17 @@ name: Build
 
 on:
   push:
-    # `alwin_testing` as well as main, and this is the half I forgot the first
-    # time: the TestFlight job's own `if` already allowed the branch, but a job
-    # condition is never evaluated if the workflow does not start. Pushing to the
-    # branch produced no run at all, and therefore no check to look at.
-    branches: [main, alwin_testing]
+    # **Any `*_testing` branch, by convention rather than by list.**
+    #
+    # Two places have to agree for a branch to reach a phone: this trigger and
+    # the TestFlight job's own `if`. I once updated the second and not the first,
+    # and the result is quietly confusing -- a job condition is never evaluated
+    # if the workflow never starts, so pushing produced no run at all and
+    # therefore no failing check to go and look at.
+    #
+    # A pattern removes the chance of doing that again. Another tester branches
+    # `<name>_testing` and builds, with nothing to change here.
+    branches: [main, '*_testing']
   pull_request:
   workflow_dispatch:
 
@@ -283,11 +289,12 @@ jobs:
   testflight:
     name: TestFlight
     needs: [checks, signing, build]
-    # `alwin_testing` uploads too, because a branch you cannot install is not a
-    # branch you can test on a phone.
+    # The testing branches upload too, because a branch you cannot install is not
+    # a branch you can test on a phone. Same convention as the trigger above, and
+    # deliberately the same shape, so the two cannot drift apart.
     if: >-
       github.event_name == 'push' &&
-      (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/alwin_testing')
+      (github.ref == 'refs/heads/main' || endsWith(github.ref, '_testing'))
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7
