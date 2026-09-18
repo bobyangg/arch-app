@@ -36,16 +36,10 @@ struct PhotoPlaceholder: View {
                 if let data, let image = UIImage(data: data) {
                     Image(uiImage: image).resizable().scaledToFill()
                 } else if let url {
-                    AsyncImage(url: url) { phase in
-                        if let image = phase.image {
-                            image.resizable().scaledToFill()
-                        } else {
-                            // Not a spinner. The tone underneath is already doing
-                            // the job, and a spinner on top of it would be the app
-                            // drawing attention to its own latency.
-                            Color.clear
-                        }
-                    }
+                    // `CachedImage` rather than `AsyncImage`: see the note there.
+                    // A grid cell is rebuilt on every reorder, and `AsyncImage`
+                    // restarts its download each time one is.
+                    CachedImage(url: url)
                 }
             }
             .clipped()
