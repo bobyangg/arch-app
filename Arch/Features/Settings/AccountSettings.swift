@@ -80,12 +80,14 @@ struct DeleteAccountSetting: View {
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
                 line("Your profile, photos and answers are deleted.")
                 line("The people you are talking to can still read what was said, and cannot reply. They are not told why.")
-                // Was "the same number can start again from scratch", which was
-                // wrong twice over: phone verification went when Apple sign-in
-                // arrived, and `delete_account` deliberately keeps the Apple id
-                // claimed so that somebody removed for abuse cannot delete their
-                // way to a clean one.
-                line("You cannot undo this, and this Apple ID cannot make another account.")
+                // **Said the opposite of what happens, and made it true.**
+                // `delete_account` set `status = 'removed'`, which `register`
+                // refuses, so this sentence was accurate and the behaviour it
+                // described was a bug -- deleting burned the Apple ID with no
+                // route back. `backend/016` separated the moderation state from
+                // the fact of having deleted; somebody who leaves can sign in
+                // again and start over, and only moderation refuses anybody.
+                line("You cannot undo this. Nothing here comes back, and starting again means building a profile from scratch.")
             }
 
             SettingNote("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else's roster, but your conversations keep working.")

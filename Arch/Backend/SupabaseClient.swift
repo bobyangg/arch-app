@@ -444,7 +444,17 @@ actor SupabaseClient {
             // an error, so a blocked photograph simply has none — which is what
             // the placeholder tone is for.
             guard let path = item.path, let relative = item.signedURL else { continue }
-            out[path] = URL(string: relative, relativeTo: ArchConfig.storageURL)?.absoluteURL
+            // **Appended, not resolved, and `relativeTo:` was why every
+            // photograph was blank.** Supabase answers with a path rather than a
+            // URL -- "/object/sign/photos/<id>.jpg?token=..." -- and RFC 3986
+            // resolution against a base of ".../storage/v1" throws part of the
+            // base away whichever shape it arrives in: a leading slash replaces
+            // the whole path and loses "/storage/v1", and without one the last
+            // segment is replaced and it loses "/v1". Both 404, the image never
+            // loads, and `PhotoPlaceholder` shows its tone -- which looks exactly
+            // like a photograph that has not finished uploading.
+            let tail = relative.hasPrefix("/") ? String(relative.dropFirst()) : relative
+            out[path] = URL(string: ArchConfig.storageURL.absoluteString + "/" + tail)
         }
         return out
     }
