@@ -311,6 +311,9 @@ final class ProfileStore {
     func updateDetails(_ details: PersonDetails) {
         person.name = details.name
         person.age = details.age
+        // Only when there is one: the edit sheet does not collect a date and
+        // must not blank the one already held.
+        if let birthday = details.birthday { person.birthday = birthday }
         person.gender = details.gender
         person.pronouns = details.pronouns
         person.place = details.place

@@ -19,7 +19,6 @@ struct EditDetailsSheet: View {
     @State private var place: Place?
     @State private var height = ""
     @State private var work = ""
-    @State private var isPickingHeight = false
     @State private var isPickingPlace = false
     /// Held by the view, not made inside the button: `CLLocationManager` answers
     /// through a delegate, and one created inside a closure is deallocated
@@ -31,7 +30,6 @@ struct EditDetailsSheet: View {
 
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && Int(age) != nil
             && gender != nil
             && place != nil
     }
@@ -46,11 +44,30 @@ struct EditDetailsSheet: View {
 
                 VStack(spacing: ArchSpacing.xs) {
                     ArchField(text: $name, label: "Name")
-                    ArchField(text: $age, label: "Age", keyboard: .numberPad)
+                    // **Age and height are shown and not edited.**
+                    //
+                    // Age never was editable in any meaningful sense -- it was a
+                    // field over a birthdate recomputed from whatever number was
+                    // in it, so saving an edit to your job title moved your
+                    // birthday. It is worked out from a date now, and a date does
+                    // not change.
+                    //
+                    // Height is frozen for the product reason rather than a
+                    // technical one: an age and a height somebody can quietly
+                    // revise are the two facts a profile is least able to be
+                    // trusted on, and the profile is supposed to be the one
+                    // somebody read yesterday. A genuine mistake is a support
+                    // question, not a settings screen.
+                    FixedRow(label: "Age", value: age)
                     PlaceRow(place: place) { isPickingPlace = true }
-                    HeightRow(height: height) { isPickingHeight = true }
+                    FixedRow(label: "Height", value: height)
                     ArchField(text: $work, label: "Work")
                 }
+
+                Text("Your age and height are set when you sign up and cannot be changed here.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 genderSection
 
@@ -83,9 +100,6 @@ struct EditDetailsSheet: View {
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .archSheetBackground()
-        .sheet(isPresented: $isPickingHeight) {
-            HeightPickerSheet(current: height) { height = $0 }
-        }
         .sheet(isPresented: $isPickingPlace) {
             PlacePickerView(
                 permission: locationPermission,
