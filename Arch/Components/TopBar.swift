@@ -93,9 +93,7 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
         }
         .coordinateSpace(name: "archScroll")
         .scrollIndicators(.hidden)
-        .onPreferenceChange(ScrollOffsetKey.self) { offset in
-            track(offset)
-        }
+        .modifier(ScrollOffsetReporter(onChange: track))
         .overlay(alignment: .top) { chrome }
         .onPreferenceChange(ChromeHeightKey.self) { height in
             chromeHeight = height
@@ -143,6 +141,36 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
 extension TopBarScroll where Pinned == EmptyView {
     init(@ViewBuilder content: @escaping () -> Content) {
         self.init(pinned: { EmptyView() }, content: content)
+    }
+}
+
+/// How far the scroll has moved, as the content's top edge in the scroll's own
+/// space: zero at rest, negative as you read down.
+///
+/// Two ways of finding it out, because the first one shipped and did nothing.
+/// The `GeometryReader` in the content's background, reporting a preference, is
+/// the pattern every tutorial gives, and on the OS the simulator and phones now
+/// run it reported nothing as the page scrolled -- the bar stayed put in a UI
+/// test and on a phone alike. iOS 18 gave scroll views a real geometry callback,
+/// and that is the one that is used wherever it exists. The preference is the
+/// road for iOS 17 only.
+private struct ScrollOffsetReporter: ViewModifier {
+    let onChange: (CGFloat) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                // The offset is measured from the inset edge, so at rest it is
+                // minus the top inset. Adding the inset back makes rest zero.
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, scrolled in
+                onChange(-scrolled)
+            }
+        } else {
+            content.onPreferenceChange(ScrollOffsetKey.self) { offset in
+                onChange(offset)
+            }
+        }
     }
 }
 
