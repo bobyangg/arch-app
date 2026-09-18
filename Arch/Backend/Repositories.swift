@@ -52,51 +52,82 @@ enum ArchBackend {
     /// false on a simulator, and the server decides whether to enforce — a client
     /// deciding whether it needs to prove itself is not a security control.
     static func register(identity: AppleIdentity) async throws -> Registration {
-        struct Body: Encodable {
-            let challenge: String?
-            let keyId: String?
-            let attestation: String?
-            let deviceToken: String?
-            let name: String?
-            let email: String?
-        }
-        struct Reply: Decodable {
-            let status: String
-            let isNewAccount: Bool?
-            let needsOnboarding: Bool?
-            let attested: Bool?
-        }
+        let deviceToken = (try? await DeviceIdentity.token())?.base64EncodedString()
 
-        var challenge: String?
-        var keyID: String?
-        var attestation: String?
-        if Attestation.isSupported {
-            // A failure here is not fatal. The server logs it and, until
-            // ATTEST_ENFORCED is on, lets the signup through -- turning attestation
-            // on and enforcing it in the same change makes the first failure
-            // indistinguishable from every real user being locked out.
-            challenge = try? await self.challenge()
-            if let challenge, let bytes = Data(base64Encoded: challenge) {
-                if let result = try? await Attestation.attest(challenge: bytes) {
-                    keyID = result.keyID
-                    attestation = result.attestation.base64EncodedString()
-                }
-            }
-        }
-        let deviceToken = try? await DeviceIdentity.token()
-
-        let reply: Reply = try await SupabaseClient.shared.callFunction(
-            "register",
-            Body(challenge: challenge, keyId: keyID, attestation: attestation,
-                 deviceToken: deviceToken?.base64EncodedString(),
-                 name: identity.name, email: identity.email),
-            returning: Reply.self
+        // **Attestation is off the path the reader waits on.**
+        //
+        // It used to run first: fetch a challenge from us, hand it to Apple, wait
+        // for Apple, then register. Three sequential round trips, two of them
+        // before anything could happen on screen -- the edge logs put the pair at
+        // about two and a half seconds of a button that looked stuck.
+        //
+        // Nothing is given up by moving it. The server already treats attestation
+        // as a signal rather than a gate unless `ATTEST_ENFORCED` is on -- and if
+        // it is on, the unattested call below is refused and the full exchange
+        // runs properly, exactly as it always did. Enforcement still enforces; it
+        // just costs the two seconds only where it is actually required.
+        var reply = try await post(
+            RegisterBody(challenge: nil, keyId: nil, attestation: nil,
+                         deviceToken: deviceToken,
+                         name: identity.name, email: identity.email)
         )
 
+        if reply.status != "ok", reply.error != nil, Attestation.isSupported,
+           let material = await attestationMaterial() {
+            reply = try await post(
+                RegisterBody(challenge: material.challenge, keyId: material.keyID,
+                             attestation: material.attestation,
+                             deviceToken: deviceToken,
+                             name: identity.name, email: identity.email)
+            )
+        }
+
         guard reply.status == "ok" else { return .removed }
+
+        // Proved afterwards, so the account still records a verified device and
+        // `account_devices` still gets its key: a second call, on nobody's
+        // critical path, whose answer nothing is waiting for.
+        if Attestation.isSupported, reply.attested != true {
+            let name = identity.name, email = identity.email
+            Task.detached(priority: .background) {
+                guard let material = await attestationMaterial() else { return }
+                _ = try? await post(
+                    RegisterBody(challenge: material.challenge,
+                                 keyId: material.keyID,
+                                 attestation: material.attestation,
+                                 deviceToken: deviceToken, name: name, email: email)
+                )
+            }
+        }
+
         return .ok(isNewAccount: reply.isNewAccount ?? true,
                    needsOnboarding: reply.needsOnboarding ?? true,
                    attested: reply.attested ?? false)
+    }
+
+    private static func post(_ body: RegisterBody) async throws -> RegisterReply {
+        try await SupabaseClient.shared.callFunction(
+            "register", body, returning: RegisterReply.self,
+            // So a refused account is read rather than thrown. Without it the
+            // `.removed` branch above is unreachable, and a banned reader is told
+            // the network is down.
+            readingRefusals: true
+        )
+    }
+
+    /// A challenge from us and Apple's answer to it, or nil if either step failed.
+    ///
+    /// A failure here is not fatal and never has been: the server logs it and,
+    /// until `ATTEST_ENFORCED` is on, lets the signup through. Turning attestation
+    /// on and enforcing it in the same change would make the first failure
+    /// indistinguishable from every real user being locked out.
+    private static func attestationMaterial()
+        async -> (challenge: String, keyID: String, attestation: String)? {
+        guard let challenge = try? await self.challenge(),
+              let bytes = Data(base64Encoded: challenge),
+              let result = try? await Attestation.attest(challenge: bytes)
+        else { return nil }
+        return (challenge, result.keyID, result.attestation.base64EncodedString())
     }
 
     /// A one-time value for the device to attest over. Without it, a captured
@@ -894,4 +925,28 @@ enum ArchClock {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
+}
+
+// MARK: - Registration wire shapes
+
+/// What `register` is sent, and what it answers.
+///
+/// At file scope rather than inside `register` so the background attestation can
+/// build one without capturing anything out of a function body.
+private struct RegisterBody: Encodable {
+    let challenge: String?
+    let keyId: String?
+    let attestation: String?
+    let deviceToken: String?
+    let name: String?
+    let email: String?
+}
+
+private struct RegisterReply: Decodable {
+    /// Absent on a refusal, which answers with `error` instead.
+    let status: String?
+    let isNewAccount: Bool?
+    let needsOnboarding: Bool?
+    let attested: Bool?
+    let error: String?
 }

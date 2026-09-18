@@ -223,10 +223,18 @@ final class OnboardingStore {
     /// A nil `found` is the honest outcome when the geocoder could not answer.
     /// The position is still kept — it is the thing the distance filter reads,
     /// and it is right — and the picker stays open for a name to be chosen.
+    ///
+    /// **It replaces whatever was there, and `if place == nil` was the bug.**
+    /// Somebody who had picked Toronto from the list and then tapped "Use my
+    /// location" in Chicago kept Toronto: the coordinate moved to Chicago and
+    /// the name did not, which is worse than either on its own — the chip said
+    /// one city and the distance filter used another. Tapping that button is an
+    /// explicit instruction, and the only reason to guard it was to avoid
+    /// overwriting a choice nobody had made yet.
     func useDeviceLocation(_ fix: Coordinate, place found: Place?) {
         locationPermission = .granted
         coordinate = fix.coarsened
-        if place == nil, let found { place = found }
+        if let found { place = found }
     }
 
     func refuseDeviceLocation() {
