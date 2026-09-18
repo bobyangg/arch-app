@@ -126,13 +126,6 @@ struct PhotoCropView: View {
                 ),
                 to: limit
             )
-            let hole = CGRect(
-                x: (geo.size.width - frame.width) / 2,
-                y: (geo.size.height - frame.height) / 2,
-                width: frame.width,
-                height: frame.height
-            )
-
             ZStack {
                 Color.clear
                     // The one piece of the stage geometry that has to outlive the
@@ -152,7 +145,7 @@ struct PhotoCropView: View {
                 // What is being left out, not thrown away. Lighter than the sheet
                 // scrim on purpose: a sheet's scrim hides what is behind it, and
                 // this one has to let you read it.
-                CropSurround(hole: hole, radius: ArchRadius.photo)
+                CropSurround(hole: frame, radius: ArchRadius.photo)
                     .fill(ArchColor.night.opacity(0.55), style: FillStyle(eoFill: true))
                     .allowsHitTesting(false)
 
@@ -296,13 +289,32 @@ struct PhotoCropView: View {
 ///
 /// Two subpaths filled even-odd, so the frame is a hole rather than four rectangles
 /// that have to be kept in agreement with each other.
+///
+/// **A size, centred in whatever space the shape is given — not a rect.** It took
+/// a `CGRect` computed from the stage's size, and a shape inside that `ZStack` is
+/// not laid out in the stage's space: the stack grows to fit the zoomed
+/// photograph, which overflows sideways long before it overflows vertically. So
+/// the hole was drawn at stage coordinates inside a wider rect and slid left by
+/// half the overflow, while the frame's outline — centred by the stack, like
+/// everything else — stayed put. Two rectangles, a hand's width apart, and the
+/// lit part of the picture matching neither.
+///
+/// Centring it here is not a correction applied to the old arithmetic; it removes
+/// the arithmetic. The hole and the outline are now centred by the same rule in
+/// the same space, so there is no longer a way for them to disagree.
 struct CropSurround: Shape {
-    let hole: CGRect
+    let hole: CGSize
     var radius: CGFloat = ArchRadius.photo
 
     func path(in rect: CGRect) -> Path {
+        let cut = CGRect(
+            x: rect.midX - hole.width / 2,
+            y: rect.midY - hole.height / 2,
+            width: hole.width,
+            height: hole.height
+        )
         var path = Path(rect)
-        path.addPath(Path(roundedRect: hole, cornerRadius: radius, style: .continuous))
+        path.addPath(Path(roundedRect: cut, cornerRadius: radius, style: .continuous))
         return path
     }
 }
