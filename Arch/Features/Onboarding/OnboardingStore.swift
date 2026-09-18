@@ -20,6 +20,11 @@ final class OnboardingStore {
     /// verified, so the two screens and the change-number sheet are gone rather
     /// than parked.
     enum Step: Int, CaseIterable {
+        /// **First, and before anything is collected.** Somebody under eighteen
+        /// asked on the fifth screen has already written their name and uploaded
+        /// four photographs, all of which then has to be deleted. Asked here,
+        /// there is nothing to delete.
+        case birthday
         case identity
         case about
         case seeking
@@ -51,7 +56,16 @@ final class OnboardingStore {
     var email = ""
     /// Apple's stable id for this person and this app. The account key.
     var appleUserID = ""
-    var ageText = ""
+    /// Kept as three fields rather than one `Birthday?` because the screen fills
+    /// them one at a time and a half-chosen date is a real state: a year and a
+    /// month with no day yet is what the day list is built from.
+    var birthYear: Int? {
+        didSet { clampDay() }
+    }
+    var birthMonth: Int? {
+        didSet { clampDay() }
+    }
+    var birthDay: Int?
     /// Picked from the library, so it carries a position as well as its name.
     var place: Place?
     /// What iOS has said, and the square it gave back. The precise fix never
@@ -92,12 +106,47 @@ final class OnboardingStore {
 
     // MARK: Gating
 
+    /// The whole date, or nil while it is still being chosen.
+    var birthday: Birthday? {
+        guard let birthYear, let birthMonth, let birthDay else { return nil }
+        return Birthday(year: birthYear, month: birthMonth, day: birthDay)
+    }
+
+    var birthMonthName: String {
+        guard let birthMonth, (1...12).contains(birthMonth) else { return "" }
+        return Birthday.months[birthMonth - 1]
+    }
+
+    /// 28, 29, 30 or 31, and 31 while there is nothing to narrow it with.
+    var daysInChosenMonth: Int {
+        guard let birthYear, let birthMonth else { return 31 }
+        return Birthday.days(inYear: birthYear, month: birthMonth)
+    }
+
+    /// **The 31st of a month that has 30 days is not a date.** Choosing March 31
+    /// and then changing the month to April has to do something, and silently
+    /// keeping an impossible date until the insert fails is the worst of the
+    /// options. It moves to the last day that month has.
+    private func clampDay() {
+        guard let birthDay else { return }
+        let limit = daysInChosenMonth
+        if birthDay > limit { self.birthDay = limit }
+    }
+
     var canContinue: Bool {
         switch step {
+        case .birthday:
+            // Being too young stops the button and nothing else. No record is
+            // written, nothing is sent, and the pickers stay exactly as they
+            // were -- a year picked one row off is far likelier than a child,
+            // and a screen that locked would punish a scroll.
+            return birthday?.isOldEnough() == true
         case .identity:
             return !name.isBlank
         case .about:
-            return Int(ageText) != nil && place != nil
+            // Age is no longer asked for here: it is worked out from the
+            // birthday, on the screen before the reader ever reached this one.
+            return place != nil
                 && !height.isBlank && !work.isBlank
                 && genderDraft != nil
         case .seeking:
@@ -246,7 +295,8 @@ final class OnboardingStore {
         profile.updateDetails(
             PersonDetails(
                 name: name.trimmed,
-                age: Int(ageText) ?? 0,
+                age: birthday?.age() ?? 0,
+                birthday: birthday,
                 gender: genderDraft,
                 pronouns: pronounsDraft.trimmed,
                 place: place,

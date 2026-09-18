@@ -282,6 +282,9 @@ enum ArchBackend {
             id: row.accountId,
             name: row.name,
             age: ArchUnits.age(fromBirthdate: row.birthdate),
+            // Your own row carries the date. Nobody else's does, and nobody
+            // else's ever will -- `visible_profiles` publishes an age.
+            birthday: Birthday(iso: row.birthdate),
             place: PlaceLibrary.place(matching: row.placeId),
             coordinate: Coordinate(latitude: row.coarseLat, longitude: row.coarseLon),
             height: ArchUnits.height(fromCentimetres: row.heightCm),
@@ -343,7 +346,13 @@ enum ArchBackend {
             NewProfile(
                 accountId: session.userID,
                 name: details.name,
-                birthdate: ArchUnits.birthdate(fromAge: details.age),
+                // The date the reader gave, not one computed backwards from an
+                // age. The fallback cannot be reached -- onboarding will not let
+                // you past the first screen without a date -- and is here so a
+                // future caller that forgets one still creates a profile rather
+                // than failing at the last step of signing up.
+                birthdate: details.birthday?.iso
+                    ?? ArchUnits.birthdate(fromAge: details.age),
                 gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
@@ -403,9 +412,20 @@ enum ArchBackend {
         /// Hand-written rather than an optional field because PostgREST reads a
         /// `null` as "set this column to null", and the column is `not null` —
         /// the key has to be absent, not empty.
+        /// **No `birthdate` and no `height_cm`: both are settled at signup.**
+        ///
+        /// Leaving them out is the enforcement, not a convenience. `birthdate`
+        /// used to be recomputed here from the displayed age, so saving an edit
+        /// to your job title moved your birthday by however much the year had
+        /// turned -- a column that drifted every time an unrelated field was
+        /// touched. Height had no such bug and is frozen for the product reason:
+        /// an age and a height that can be edited are two things people quietly
+        /// revise, and the profile is supposed to be the same one somebody read
+        /// yesterday.
+        ///
+        /// A genuine mistake is a support question, not a settings screen.
         struct Update: Encodable {
             let name: String
-            let birthdate: String
             let gender: String
             let pronouns: String?
             let placeId: String
@@ -413,22 +433,19 @@ enum ArchBackend {
             /// CHECK constraint on the column refuses anything finer, so this is
             /// belt and braces on purpose.
             let centre: Coordinate?
-            let heightCm: Int?
             let work: String?
 
             enum CodingKeys: String, CodingKey {
-                case name, birthdate, gender, pronouns, placeId
-                case coarseLat, coarseLon, heightCm, work
+                case name, gender, pronouns, placeId
+                case coarseLat, coarseLon, work
             }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
                 try container.encode(name, forKey: .name)
-                try container.encode(birthdate, forKey: .birthdate)
                 try container.encode(gender, forKey: .gender)
                 try container.encode(pronouns, forKey: .pronouns)
                 try container.encode(placeId, forKey: .placeId)
-                try container.encode(heightCm, forKey: .heightCm)
                 try container.encode(work, forKey: .work)
                 if let centre {
                     try container.encode(centre.latitude, forKey: .coarseLat)
@@ -441,12 +458,10 @@ enum ArchBackend {
             "profiles",
             Update(
                 name: details.name,
-                birthdate: ArchUnits.birthdate(fromAge: details.age),
                 gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
                 centre: place.centre?.coarsened,
-                heightCm: ArchUnits.centimetres(fromHeight: details.height),
                 work: details.work.isEmpty ? nil : details.work
             ),
             filters: ["account_id": "eq.\(session.userID)"]

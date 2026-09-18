@@ -65,13 +65,11 @@ struct OnboardingAbout: View {
             )
 
             VStack(spacing: ArchSpacing.xs) {
-                ArchField(
-                    text: Binding(get: { store.ageText }, set: { store.ageText = $0 }),
-                    label: "Age",
-                    placeholder: "30",
-                    keyboard: .numberPad,
-                    surface: ArchColor.stone
-                )
+                // **No age field.** It is worked out from the birthday collected
+                // on the first screen. A typed age is a number that stops being
+                // true: it was stored as a date computed backwards from the day
+                // it was typed, so it drifted a year every birthday, and two
+                // places to change one fact is how they come to disagree.
                 PlaceRow(place: store.place, surface: ArchColor.stone) {
                     isPickingPlace = true
                 }
@@ -200,7 +198,7 @@ struct OnboardingAbout: View {
 
 #Preview("About you") {
     OnboardingAbout(store: .configured {
-        $0.ageText = "30"
+        $0.birthYear = 1996; $0.birthMonth = 3; $0.birthDay = 14
         $0.place = PlaceLibrary.place(matching: "bk-fort-greene")
     })
         .padding(ArchSpacing.screenMargin)

@@ -254,7 +254,12 @@ enum Gender: String, CaseIterable, Hashable, Identifiable {
 /// a struct — the compiler now checks what the argument order used to.
 struct PersonDetails: Hashable {
     var name: String
+    /// Displayed everywhere, derived from `birthday` and never typed.
     var age: Int
+    /// **The truth, where `age` is a rendering of it.** Present when this came
+    /// from onboarding or from your own profile row; nil for anybody else's,
+    /// because `visible_profiles` publishes an age and never a date.
+    var birthday: Birthday?
     var gender: Gender?
     var pronouns: String
     var place: Place?
@@ -267,7 +272,11 @@ struct Person: Identifiable, Hashable {
     // Other people's copies are never mutated — nothing hands them to a store.
     let id: String
     var name: String
+    /// Whole years. Displayed, never typed, and never editable after signing up.
     var age: Int
+    /// The date behind `age`, for your own profile only. Nobody else's is ever
+    /// fetched: `visible_profiles` publishes an age and no date.
+    var birthday: Birthday?
     /// Where they say they live. Two strings once, which meant "Bed-Stuy",
     /// "bed stuy" and "Bedford Stuyvesant" were three different places and none of
     /// them had a position — so the distance filter had nothing to filter on.
@@ -341,8 +350,8 @@ struct Person: Identifiable, Hashable {
     /// Everything `EditDetailsSheet` edits, gathered.
     var details: PersonDetails {
         PersonDetails(
-            name: name, age: age, gender: gender, pronouns: pronouns,
-            place: place, height: height, work: work
+            name: name, age: age, birthday: birthday, gender: gender,
+            pronouns: pronouns, place: place, height: height, work: work
         )
     }
 
