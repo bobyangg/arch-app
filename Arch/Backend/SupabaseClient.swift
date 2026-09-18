@@ -121,7 +121,17 @@ actor SupabaseClient {
         method: String,
         body: Data? = nil,
         prefer: String? = nil,
-        authenticated: Bool = true
+        authenticated: Bool = true,
+        /// Status codes whose *body* is the answer rather than an error.
+        ///
+        /// Only the edge functions need this, and only because they refuse with
+        /// something worth reading. `register` answers a banned account with
+        /// 403 and a body saying which kind of ban it was — and throwing on the
+        /// status threw that away, so a removed account surfaced as
+        /// `ArchAPIError.notPermitted` and was reported to the reader as "Arch
+        /// could not reach the network just now". The `.removed` branch that
+        /// was supposed to handle it could never be reached.
+        readingBodyOn: Set<Int> = []
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -149,6 +159,8 @@ actor SupabaseClient {
         guard let http = response as? HTTPURLResponse else { throw ArchAPIError.transport }
         switch http.statusCode {
         case 200...299:
+            return data
+        case let code where readingBodyOn.contains(code):
             return data
         case 401, 403:
             // **Not necessarily an auth failure.** Row-level security answers a
@@ -441,11 +453,14 @@ actor SupabaseClient {
     func callFunction<Body: Encodable, T: Decodable>(
         _ name: String,
         _ body: Body,
-        returning: T.Type
+        returning: T.Type,
+        /// Decode a 403 body instead of throwing. See `readingBodyOn`.
+        readingRefusals: Bool = false
     ) async throws -> T {
         let url = ArchConfig.functionsURL.appendingPathComponent(name)
         let data = try await request(url: url, method: "POST",
-                                     body: try encoder.encode(body))
+                                     body: try encoder.encode(body),
+                                     readingBodyOn: readingRefusals ? [403] : [])
         return try decoder.decode(T.self, from: data)
     }
 }

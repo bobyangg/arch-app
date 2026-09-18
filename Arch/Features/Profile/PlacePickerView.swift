@@ -177,28 +177,48 @@ struct PlacePickerView: View {
         }
     }
 
-    /// What is offered before anybody types: the bundled list, grouped.
+    /// What is offered before anybody types.
     ///
-    /// It is a set of suggestions rather than the extent of the app. Anywhere in
-    /// either country can be typed into the field above.
+    /// **Not thirty-two New York neighbourhoods any more.** They were the whole
+    /// gazetteer once, so listing them was listing the app; now they are one
+    /// metro out of two countries, and opening this screen to a column of
+    /// Brooklyn made Arch look like a Brooklyn app to everybody who is not in
+    /// Brooklyn — which is almost everybody.
+    ///
+    /// What replaces them is nothing, on purpose. The two controls that matter
+    /// are the search field and the location button, and an empty space below
+    /// them points at both. The design build still lists them, because its
+    /// mock people all live there and it has no geocoder to search with.
     @ViewBuilder
     private var suggestions: some View {
-        if !isOffline {
-            Text("Search for anywhere in the United States or Canada. These are "
-                 + "just a starting point.")
+        if isOffline {
+            ForEach(PlaceLibrary.groups, id: \.city) { group in
+                VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                    Text(group.city)
+                        .archText(.prompt)
+                        .foregroundStyle(ArchColor.mortar)
+                    VStack(spacing: ArchSpacing.xs) {
+                        ForEach(group.places) { row($0) }
+                    }
+                }
+            }
+        } else {
+            // Shown rather than hidden, because a place that came from the
+            // geocoder is in no list and would otherwise be invisible here --
+            // the screen would look as though nothing had been chosen.
+            if let current {
+                VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                    Text("Where you live")
+                        .archText(.prompt)
+                        .foregroundStyle(ArchColor.mortar)
+                    row(current)
+                }
+            }
+            Text("Type the town or neighbourhood where you live. Anywhere in the "
+                 + "United States or Canada.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
-        }
-        ForEach(PlaceLibrary.groups, id: \.city) { group in
-            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-                Text(group.city)
-                    .archText(.prompt)
-                    .foregroundStyle(ArchColor.mortar)
-                VStack(spacing: ArchSpacing.xs) {
-                    ForEach(group.places) { row($0) }
-                }
-            }
         }
     }
 
