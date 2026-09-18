@@ -44,20 +44,33 @@ struct TopBar: View {
 /// A scroll with the lock-up above it, which goes away as you read down and
 /// comes back the moment you scroll up.
 ///
-/// The bar collapses rather than sliding off: its height goes to nothing and
-/// the scroll takes the room, so reading gains a line rather than looking at a
-/// gap where the brand was. Any upward scroll returns it — not only reaching the
-/// top — because "I want the top of the page" and "I want to see where I am" are
-/// the same gesture on a phone and the app should not make people finish it.
+/// The bar sits *over* the scroll rather than above it, and slides up out of the
+/// way; the scroll itself never changes shape. The first version collapsed the
+/// bar's height and let the scroll take the room, so that hiding the bar resized
+/// the very scroll it was measuring -- a layout that has to argue with itself
+/// every time it moves. Now the only thing that moves when the bar goes is the
+/// bar. (That was not why the first version failed; see `ScrollOffsetReporter`
+/// for that. It is why this one is simpler.)
 ///
-/// `pinned` is for the one tab whose own header stays put (You): the lock-up
-/// collapses above it while it holds.
+/// The content is padded by the bar's height so that at the top of the page
+/// nothing is under it; once you are past that, what is under the bar is the
+/// page you were reading, and hiding the bar shows it -- the same line gained.
+///
+/// Any upward scroll returns it -- not only reaching the top -- because "I want
+/// the top of the page" and "I want to see where I am" are the same gesture on a
+/// phone and the app should not make people finish it.
+///
+/// `pinned` is for the one tab whose own header stays put (You): it rides under
+/// the lock-up and takes its place when the lock-up slides away.
 struct TopBarScroll<Pinned: View, Content: View>: View {
     @ViewBuilder let pinned: () -> Pinned
     @ViewBuilder let content: () -> Content
 
     @State private var isHidden = false
     @State private var lastOffset: CGFloat = 0
+    /// The bar plus whatever is pinned under it, measured rather than assumed,
+    /// because the You header is the height of its own type.
+    @State private var chromeHeight: CGFloat = TopBar.height
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// How far a scroll has to travel, in one direction, before the bar reacts.
@@ -66,31 +79,46 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
     private let threshold: CGFloat = 4
 
     var body: some View {
+        ScrollView {
+            content()
+                .padding(.top, chromeHeight)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: ScrollOffsetKey.self,
+                            value: proxy.frame(in: .named("archScroll")).minY
+                        )
+                    }
+                )
+        }
+        .coordinateSpace(name: "archScroll")
+        .scrollIndicators(.hidden)
+        .modifier(ScrollOffsetReporter(onChange: track))
+        .overlay(alignment: .top) { chrome }
+        .onPreferenceChange(ChromeHeightKey.self) { height in
+            chromeHeight = height
+        }
+    }
+
+    /// The lock-up and the pinned header, on the page's own colour so the scroll
+    /// passing underneath does not show through them. `night` rather than a
+    /// surface: this is not a bar, it is the top of the page holding still.
+    private var chrome: some View {
         VStack(spacing: 0) {
             TopBar()
-                .frame(height: isHidden ? 0 : TopBar.height, alignment: .bottom)
-                .clipped()
                 .opacity(isHidden ? 0 : 1)
-
+                .allowsHitTesting(!isHidden)
+                .accessibilityHidden(isHidden)
             pinned()
-
-            ScrollView {
-                content()
-                    .background(
-                        GeometryReader { proxy in
-                            Color.clear.preference(
-                                key: ScrollOffsetKey.self,
-                                value: proxy.frame(in: .named("archScroll")).minY
-                            )
-                        }
-                    )
-            }
-            .coordinateSpace(name: "archScroll")
-            .scrollIndicators(.hidden)
-            .onPreferenceChange(ScrollOffsetKey.self) { offset in
-                track(offset)
-            }
         }
+        .frame(maxWidth: .infinity)
+        .background(ArchColor.night, ignoresSafeAreaEdges: .top)
+        .background(
+            GeometryReader { proxy in
+                Color.clear.preference(key: ChromeHeightKey.self, value: proxy.size.height)
+            }
+        )
+        .offset(y: isHidden ? -TopBar.height : 0)
         .animation(ArchMotion.honouring(reduceMotion, ArchMotion.glass), value: isHidden)
     }
 
@@ -116,8 +144,45 @@ extension TopBarScroll where Pinned == EmptyView {
     }
 }
 
+/// How far the scroll has moved, as the content's top edge in the scroll's own
+/// space: zero at rest, negative as you read down.
+///
+/// Two ways of finding it out, because the first one shipped and did nothing.
+/// The `GeometryReader` in the content's background, reporting a preference, is
+/// the pattern every tutorial gives, and on the OS the simulator and phones now
+/// run it reported nothing as the page scrolled -- the bar stayed put in a UI
+/// test and on a phone alike. iOS 18 gave scroll views a real geometry callback,
+/// and that is the one that is used wherever it exists. The preference is the
+/// road for iOS 17 only.
+private struct ScrollOffsetReporter: ViewModifier {
+    let onChange: (CGFloat) -> Void
+
+    func body(content: Content) -> some View {
+        if #available(iOS 18, *) {
+            content.onScrollGeometryChange(for: CGFloat.self) { geometry in
+                // The offset is measured from the inset edge, so at rest it is
+                // minus the top inset. Adding the inset back makes rest zero.
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, scrolled in
+                onChange(-scrolled)
+            }
+        } else {
+            content.onPreferenceChange(ScrollOffsetKey.self) { offset in
+                onChange(offset)
+            }
+        }
+    }
+}
+
 private struct ScrollOffsetKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private struct ChromeHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = TopBar.height
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
         value = nextValue()
     }
