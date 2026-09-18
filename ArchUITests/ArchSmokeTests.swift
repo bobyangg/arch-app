@@ -157,6 +157,62 @@ final class ArchSmokeTests: XCTestCase {
         )
     }
 
+    // MARK: The top bar
+
+    /// The lock-up goes away as you read down, and comes back the moment you
+    /// scroll up.
+    ///
+    /// Shipped once to TestFlight without this, and the bar never moved on a
+    /// phone. The build had compiled and launched in the simulator, and nothing
+    /// in the simulator had ever scrolled it.
+    ///
+    /// Measured, not counted. All four tabs stay in the tree and XCUITest sees
+    /// all four lock-ups whatever their accessibility says, and it will not call
+    /// a plain strip over a scroll view "hittable" either. What it does report
+    /// faithfully is a frame: the bar on the tab in front is the one that moves,
+    /// so the lowest top edge among the bars drops by the bar's height when it
+    /// slides away and comes back when it returns.
+    func testTheTopBarHidesOnScrollDownAndComesBackOnScrollUp() {
+        let app = launch()
+        app.buttons["tab.daily"].tap()
+
+        // By identifier or by label. A content shape on the bar once cost it its
+        // identifier in the tree while the label stayed, and the label is a
+        // brand name that no other element carries on its own.
+        let bars = app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == 'topbar.arch' OR label == 'Arch'")
+        )
+        if !bars.firstMatch.waitForExistence(timeout: 5) {
+            // The tree, in the message, because a log is all CI keeps.
+            let tree = app.debugDescription.split(separator: "\n")
+                .filter { $0.contains("Arch") || $0.contains("topbar") || $0.contains("ScrollView") || $0.contains("Header") }
+                .prefix(30).joined(separator: "\n")
+            XCTFail("The roster has no lock-up above it. Related elements:\n\(tree)")
+        }
+        func top() -> CGFloat { bars.allElementsBoundByIndex.map(\.frame.minY).min() ?? .nan }
+        func wait(until settled: @escaping (CGFloat) -> Bool, _ message: String) {
+            let deadline = Date().addingTimeInterval(5)
+            while !settled(top()) && Date() < deadline { usleep(200_000) }
+            let tops = bars.allElementsBoundByIndex.map { $0.frame.minY }
+            XCTAssertTrue(settled(top()), "\(message) Bar tops: \(tops)")
+        }
+
+        let shown = top()
+        XCTAssertFalse(shown.isNaN, "No lock-up has a frame.")
+
+        // Two swipes, so a slow one on a busy runner still gets well past the
+        // bar's own height. Reading down is the gesture; the bar should go.
+        app.swipeUp()
+        app.swipeUp()
+        wait(until: { $0 < shown - 30 }, "Scrolling down did not hide the lock-up.")
+
+        // One swipe up the page. Not necessarily back to the top, and it should
+        // not need to be: any scroll towards the top brings the bar back.
+        app.swipeDown()
+        wait(until: { abs($0 - shown) < 2 }, "Scrolling back up did not bring the lock-up back.")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     // MARK: You
 
     func testTheYouTabDrawsAProfile() {
