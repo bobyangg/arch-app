@@ -179,13 +179,10 @@ final class ArchSmokeTests: XCTestCase {
         let bars = app.descendants(matching: .any).matching(identifier: "topbar.arch")
         if !bars.firstMatch.waitForExistence(timeout: 5) {
             // The tree, in the message, because a log is all CI keeps.
-            let tree = app.debugDescription.split(separator: "
-")
+            let tree = app.debugDescription.split(separator: "\n")
                 .filter { $0.contains("Arch") || $0.contains("topbar") || $0.contains("ScrollView") || $0.contains("Header") }
-                .prefix(30).joined(separator: "
-")
-            XCTFail("The roster has no lock-up above it. Related elements:
-\(tree)")
+                .prefix(30).joined(separator: "\n")
+            XCTFail("The roster has no lock-up above it. Related elements:\n\(tree)")
         }
         func top() -> CGFloat { bars.allElementsBoundByIndex.map(\.frame.minY).min() ?? .nan }
         func wait(until settled: @escaping (CGFloat) -> Bool, _ message: String) {
