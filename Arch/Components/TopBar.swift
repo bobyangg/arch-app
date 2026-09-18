@@ -35,10 +35,6 @@ struct TopBar: View {
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
         .frame(height: Self.height)
-        // The whole strip is the bar, not just the mark and the word. It sits
-        // over the scroll now, and a hit on the empty half of it should land on
-        // the bar rather than fall through to the page underneath.
-        .contentShape(Rectangle())
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Arch")
         .accessibilityAddTraits(.isHeader)
