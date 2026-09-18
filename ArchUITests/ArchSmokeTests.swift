@@ -166,36 +166,34 @@ final class ArchSmokeTests: XCTestCase {
     /// phone. The build had compiled and launched in the simulator, and nothing
     /// in the simulator had ever scrolled it.
     ///
-    /// The bar is addressed by identifier. Hidden tabs are `accessibilityHidden`,
-    /// so the one match is the bar on the tab in front, and a hidden bar takes
-    /// itself out of the tree rather than sitting there transparent.
+    /// The bar is addressed by identifier and counted by *hittability*. All four
+    /// tabs stay in the tree, and the query sees all four bars whatever their
+    /// accessibility says; only the one in front can be hit, and a bar that has
+    /// slid off no longer takes hits either.
     func testTheTopBarHidesOnScrollDownAndComesBackOnScrollUp() {
         let app = launch()
         app.buttons["tab.daily"].tap()
 
-        let bar = app.descendants(matching: .any).matching(identifier: "topbar.arch")
-        XCTAssertTrue(
-            bar.firstMatch.waitForExistence(timeout: 5),
-            "The roster has no lock-up above it."
-        )
-        XCTAssertEqual(bar.count, 1, "Expected one lock-up on screen, found \(bar.count).")
+        let bars = app.descendants(matching: .any).matching(identifier: "topbar.arch")
+        func visible() -> Int { bars.allElementsBoundByIndex.filter(\.isHittable).count }
+        func wait(for count: Int, _ message: String) {
+            let deadline = Date().addingTimeInterval(5)
+            while visible() != count && Date() < deadline { usleep(200_000) }
+            XCTAssertEqual(visible(), count, message)
+        }
+
+        wait(for: 1, "The roster has no lock-up above it.")
 
         // Two swipes, so a slow one on a busy runner still gets well past the
         // bar's own height. Reading down is the gesture; the bar should go.
         app.swipeUp()
         app.swipeUp()
-        expectation(for: NSPredicate(format: "count == 0"), evaluatedWith: bar)
-        waitForExpectations(timeout: 5) { error in
-            XCTAssertNil(error, "Scrolling down did not hide the lock-up.")
-        }
+        wait(for: 0, "Scrolling down did not hide the lock-up.")
 
         // One swipe up the page. Not necessarily back to the top, and it should
         // not need to be: any scroll towards the top brings the bar back.
         app.swipeDown()
-        XCTAssertTrue(
-            bar.firstMatch.waitForExistence(timeout: 5),
-            "Scrolling back up did not bring the lock-up back."
-        )
+        wait(for: 1, "Scrolling back up did not bring the lock-up back.")
         XCTAssertEqual(app.state, .runningForeground)
     }
 

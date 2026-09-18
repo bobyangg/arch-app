@@ -109,6 +109,7 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
         VStack(spacing: 0) {
             TopBar()
                 .opacity(isHidden ? 0 : 1)
+                .allowsHitTesting(!isHidden)
                 .accessibilityHidden(isHidden)
             pinned()
         }
