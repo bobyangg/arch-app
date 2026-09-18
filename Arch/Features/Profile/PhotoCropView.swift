@@ -112,9 +112,6 @@ struct PhotoCropView: View {
         .padding(.leading, ArchSpacing.xs)
         .padding(.trailing, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.xs)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     private var stage: some View {
@@ -212,10 +209,7 @@ struct PhotoCropView: View {
             .padding(.horizontal, ArchSpacing.screenMargin)
             .padding(.top, ArchSpacing.s)
             .padding(.bottom, ArchSpacing.s)
-            .background(ArchColor.stoneRaised)
-            .overlay(alignment: .top) {
-                Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-            }
+            .archBar(.bottom)
     }
 
     private var useTitle: String {

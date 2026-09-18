@@ -41,6 +41,8 @@ struct RootTabView: View {
     /// and writes here; everything below reads it and nothing else changes.
     @State private var isOffline = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             if isOffline { OfflineBanner() }
@@ -122,15 +124,27 @@ struct RootTabView: View {
         }
     }
 
+    /// All four stay in the tree; the one you chose is the one you can see.
+    ///
+    /// The change is a cross-fade, on the same curve the tab bar's pill moves
+    /// on, so the two read as one gesture. The incoming tab is layered on top and
+    /// settles from a hair under full size — enough to say "this is a new place",
+    /// not enough to be a slide: the tabs are not arranged left to right in any
+    /// sense that matters, and a slide would claim they were. Under Reduce Motion
+    /// the scale is dropped and only the fade remains.
     @ViewBuilder
     private func tab<Content: View>(
         _ which: ArchTab,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        let isCurrent = selection == which
         content()
-            .opacity(selection == which ? 1 : 0)
-            .allowsHitTesting(selection == which)
-            .accessibilityHidden(selection != which)
+            .opacity(isCurrent ? 1 : 0)
+            .scaleEffect(isCurrent || reduceMotion ? 1 : 0.99)
+            .zIndex(isCurrent ? 1 : 0)
+            .animation(ArchMotion.honouring(reduceMotion, ArchMotion.tabSwitch), value: selection)
+            .allowsHitTesting(isCurrent)
+            .accessibilityHidden(!isCurrent)
     }
 }
 

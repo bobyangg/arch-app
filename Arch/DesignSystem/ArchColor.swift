@@ -79,10 +79,17 @@ enum ArchColor {
 
     // MARK: Derived
 
-    /// Hairline dividers and the tab bar's top edge.
-    static let hairline = mortar.opacity(0.16)
+    /// The rule between two rows of a list. Only there: bars have no edge line
+    /// any more, and cards are not outlined. Faint enough to be felt as a gap
+    /// rather than seen as a line.
+    static let hairline = mortar.opacity(0.10)
 
-    /// Border of the quiet (pass / secondary) button.
+    /// The fill of the quiet (pass / secondary) button and the add-an-interest
+    /// chip. A wash where there used to be an outline.
+    static let quietFill = mortar.opacity(0.12)
+
+    /// The crop frame's edge — the one outline left, because it is a mask and
+    /// the reader needs to see exactly where it cuts.
     static let quietBorder = mortar.opacity(0.28)
 
     /// Pressed-state wash over any surface.

@@ -48,7 +48,7 @@ struct EditInterestsSheet: View {
         .presentationDetents([.height(460)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
         .onAppear {
             for (index, interest) in interests.prefix(3).enumerated() {
                 drafts[index] = interest.text

@@ -75,8 +75,10 @@ struct InterestChip: View {
     }
 }
 
-/// An interest you have not written yet. Outlined rather than dashed — a dashed
-/// border reads as an error to be fixed, and an unfinished profile is not an error.
+/// An interest you have not written yet. A wash rather than a dashed outline — a
+/// dashed border reads as an error to be fixed, and an unfinished profile is not
+/// an error; and a wash rather than a solid one, so it reads as room for a chip
+/// rather than as a chip.
 struct AddInterestChip: View {
     var body: some View {
         HStack(spacing: ArchSpacing.xxs) {
@@ -90,7 +92,7 @@ struct AddInterestChip: View {
         .padding(.vertical, ArchSpacing.xs)
         .background(
             RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                .strokeBorder(ArchColor.quietBorder, lineWidth: 1)
+                .fill(ArchColor.quietFill)
         )
     }
 }

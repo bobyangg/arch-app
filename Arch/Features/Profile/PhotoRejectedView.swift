@@ -241,8 +241,10 @@ struct PhotoReviewSheet: View {
         }
         .padding(ArchSpacing.screenMargin)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(ArchColor.stone)
         .presentationDetents([.height(420)])
+        .presentationDragIndicator(.visible)
+        .presentationCornerRadius(ArchRadius.sheet)
+        .archSheetBackground()
     }
 }
 

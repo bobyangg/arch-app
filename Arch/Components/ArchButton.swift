@@ -4,7 +4,7 @@ import SwiftUI
 
 /// Arch has exactly two button weights. `lamp` is the only colour that invites
 /// action, so only the primary button carries it; everything secondary is a quiet
-/// outline that stays clearly available without competing.
+/// wash that stays clearly available without competing.
 ///
 /// Some decisions get neither weight. Confirming a dismissal is the clearest
 /// example: it is the user's to make, so the app puts no colour behind it.
@@ -42,13 +42,6 @@ struct ArchButtonStyle: ButtonStyle {
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
                     .fill(fill)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .strokeBorder(
-                        kind == .quiet ? ArchColor.quietBorder : Color.clear,
-                        lineWidth: 1
-                    )
-            )
             .opacity(configuration.isPressed ? 0.82 : 1)
             .animation(ArchMotion.quick, value: configuration.isPressed)
             .animation(ArchMotion.quick, value: isEnabled)
@@ -58,7 +51,7 @@ struct ArchButtonStyle: ButtonStyle {
     // accent. Fading `lamp` out turns it into a muddy brown, which reads as
     // damage rather than as "not yet".
     private var fill: Color {
-        guard kind == .primary else { return .clear }
+        guard kind == .primary else { return ArchColor.quietFill }
         return isEnabled ? ArchColor.lamp : ArchColor.stoneRaised
     }
 
