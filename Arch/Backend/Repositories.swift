@@ -543,8 +543,15 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        /// **No `id`, and sending one is what lost every answer ever written.**
+        /// The column is a `uuid` with a default; the client's ids are view
+        /// identities, and the ones onboarding mints are `"you-q1"`, `"you-q2"`,
+        /// `"you-q3"`. Postgres refused the whole insert as invalid uuid syntax,
+        /// `commit()` wraps this call in `try?`, and three answers went quietly
+        /// nowhere. Letting the default do it removes the class of mistake rather
+        /// than the instance: these rows are deleted and rewritten on every save,
+        /// so a client-side id was never stable enough to be worth keeping.
         struct PromptWrite: Encodable {
-            let id: String
             let accountId: String
             let position: Int
             let promptKey: String
@@ -553,9 +560,19 @@ enum ArchBackend {
         try await SupabaseClient.shared.delete(
             "profile_prompts", filters: ["account_id": "eq.\(session.userID)"]
         )
-        let rows = prompts.enumerated().map { index, prompt in
+        // **Only the ones actually written.** `answer` is
+        // `check (length(trim(answer)) between 1 and 280)`, and onboarding starts
+        // with three empty slots so that `updatePrompt` has somewhere to write --
+        // so sending the whole set meant one unanswered slot failing the insert
+        // and taking the two real answers down with it. Filtered here rather than
+        // at each call site, because both callers had the same bug and a third
+        // would have had it too.
+        let written = prompts.filter {
+            !$0.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let rows = written.enumerated().map { index, prompt in
             PromptWrite(
-                id: prompt.id,
                 accountId: session.userID,
                 position: index,
                 // Stored by id, not by its words: rewording a prompt is an ordinary
@@ -566,6 +583,9 @@ enum ArchBackend {
                 answer: prompt.answer
             )
         }
+        // An empty set is a legitimate state -- three questions chosen and none
+        // answered yet -- and PostgREST refuses an empty insert body.
+        guard !rows.isEmpty else { return }
         try await SupabaseClient.shared.insert("profile_prompts", rows)
     }
 
@@ -574,8 +594,9 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        /// Same as `PromptWrite`: no `id`. Onboarding's were `"draft-0"`,
+        /// `"draft-1"`, `"draft-2"`, and a `uuid` column refused all three.
         struct InterestWrite: Encodable {
-            let id: String
             let accountId: String
             let position: Int
             let text: String
@@ -583,10 +604,16 @@ enum ArchBackend {
         try await SupabaseClient.shared.delete(
             "profile_interests", filters: ["account_id": "eq.\(session.userID)"]
         )
-        let rows = interests.enumerated().map { index, interest in
-            InterestWrite(id: interest.id, accountId: session.userID,
+        // `text` carries the same kind of length check, so a blank chip would
+        // refuse the whole set the way an unanswered prompt did.
+        let filled = interests.filter {
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let rows = filled.enumerated().map { index, interest in
+            InterestWrite(accountId: session.userID,
                           position: index, text: interest.text)
         }
+        guard !rows.isEmpty else { return }
         try await SupabaseClient.shared.insert("profile_interests", rows)
     }
 
