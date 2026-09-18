@@ -1,31 +1,45 @@
 import SwiftUI
 
 /// Your email.
+///
+/// **Shown, not edited, and it used to be neither.** This was a text field over a
+/// hard-coded `sam@example.com` that saved into a variable nothing read and
+/// nothing persisted — an address that was not yours, presented as though it were.
+///
+/// Arch does not ask for an email and does not need to: signing in with Apple
+/// already supplies one, Apple has verified it, and asking again would be asking
+/// for something we hold. It cannot be changed from here either, because it is not
+/// Arch's to change — it belongs to the Apple ID, and iOS is where it is changed.
 struct EmailSetting: View {
     let store: SettingsStore
-    @State private var draft = ""
+
+    /// Apple's forwarding address, for somebody who chose Hide My Email. Worth
+    /// naming on screen, because an unexplained `2r8vhk9p8c@privaterelay.appleid.com`
+    /// reads as a mistake.
+    private var isRelay: Bool {
+        store.email?.hasSuffix("privaterelay.appleid.com") ?? false
+    }
 
     var body: some View {
         SettingsPage(title: "Email") {
-            ArchField(
-                text: $draft,
-                placeholder: "sam@example.com",
-                keyboard: .emailAddress,
-                surface: ArchColor.stone
-            )
+            Text(store.email ?? "Not loaded")
+                .archText(.titleM)
+                .foregroundStyle(store.email == nil ? ArchColor.mortar : ArchColor.limestone)
+                .fixedSize(horizontal: false, vertical: true)
 
-            SettingNote("Used for signing in and account notices. Never shown to anyone, and Arch does not send anything else here.")
-
-            ArchButton(title: "Save", isEnabled: isValid && draft != store.email) {
-                store.email = draft.trimmed
+            if isRelay {
+                SettingNote("You chose Hide My Email when you signed in, so this is "
+                            + "Apple's forwarding address. Anything sent here reaches "
+                            + "your real inbox, and Arch never sees the address behind it.")
             }
-        }
-        .onAppear { draft = store.email }
-    }
 
-    private var isValid: Bool {
-        let t = draft.trimmed
-        return t.contains("@") && !t.hasPrefix("@") && !t.hasSuffix("@")
+            SettingNote("This comes from your Apple ID. Arch never shows it to "
+                        + "anyone and sends nothing to it today — if that changes it "
+                        + "will be account notices and nothing else.")
+
+            SettingNote("To change it, open iOS Settings, tap your name, then Sign "
+                        + "in with Apple, then Arch. It is not Arch's to change.")
+        }
     }
 }
 
@@ -237,8 +251,27 @@ struct SignOutConfirmSheet: View {
 }
 
 #Preview("Email") {
-    NavigationStack { EmailSetting(store: SettingsStore()) }
-        .preferredColorScheme(.dark)
+    NavigationStack {
+        EmailSetting(store: {
+            let s = SettingsStore()
+            s.email = "2r8vhk9p8c@privaterelay.appleid.com"
+            return s
+        }())
+    }
+    .preferredColorScheme(.dark)
+}
+
+/// Somebody who shared their real address rather than hiding it, so the relay
+/// explanation is absent.
+#Preview("Email, not hidden") {
+    NavigationStack {
+        EmailSetting(store: {
+            let s = SettingsStore()
+            s.email = "sam@fastmail.com"
+            return s
+        }())
+    }
+    .preferredColorScheme(.dark)
 }
 
 #Preview("Premium, not subscribed") {
