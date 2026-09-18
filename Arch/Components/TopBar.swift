@@ -46,15 +46,15 @@ struct TopBar: View {
 ///
 /// The bar sits *over* the scroll rather than above it, and slides up out of the
 /// way; the scroll itself never changes shape. The first version collapsed the
-/// bar's height and let the scroll take the room, which read well and never once
-/// worked on a phone: the scroll it was measuring moved *because* the bar hid,
-/// the measurement moved with it, and the bar was back before a frame was drawn.
-/// Now the only thing that moves when the bar goes is the bar.
+/// bar's height and let the scroll take the room, so that hiding the bar resized
+/// the very scroll it was measuring -- a layout that has to argue with itself
+/// every time it moves. Now the only thing that moves when the bar goes is the
+/// bar. (That was not why the first version failed; see `ScrollOffsetReporter`
+/// for that. It is why this one is simpler.)
 ///
 /// The content is padded by the bar's height so that at the top of the page
 /// nothing is under it; once you are past that, what is under the bar is the
-/// page you were reading, and hiding the bar shows it -- which is the same line
-/// gained as before, arrived at without the layout arguing with itself.
+/// page you were reading, and hiding the bar shows it -- the same line gained.
 ///
 /// Any upward scroll returns it -- not only reaching the top -- because "I want
 /// the top of the page" and "I want to see where I am" are the same gesture on a
