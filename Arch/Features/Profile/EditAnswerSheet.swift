@@ -54,7 +54,7 @@ struct EditAnswerSheet: View {
         .presentationDetents([.height(560)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
         .onAppear {
             question = prompt.question
             draft = prompt.answer

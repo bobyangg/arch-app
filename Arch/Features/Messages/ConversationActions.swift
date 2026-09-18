@@ -59,7 +59,7 @@ struct ConversationMenuSheet: View {
         .presentationDetents([.height(280)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 
     private func option(_ action: ConversationAction, title: String, detail: String) -> some View {
@@ -121,7 +121,7 @@ struct BlockConfirmSheet: View {
         .presentationDetents([.height(320)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 
     private var detail: String {
@@ -164,7 +164,7 @@ struct ReportSheet: View {
         .presentationDetents([.height(sent ? 320 : 620)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 
     /// Closing the loop. A report that disappears with no acknowledgement teaches
@@ -265,7 +265,7 @@ struct LeaveConfirmSheet: View {
         .presentationDetents([.height(300)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 
     private var detail: String {

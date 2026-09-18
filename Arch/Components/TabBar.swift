@@ -40,9 +40,16 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
 ///
 /// All four are drawn at the same stroke weight with the same caps, so the set
 /// reads as one hand.
+///
+/// A frosted pill sits behind the active tab and slides to whichever one you
+/// choose. One pill, moved, rather than one lit per tab: the motion is what says
+/// "you went from here to there", and it is the only thing in the bar that moves.
 struct TabBar: View {
     @Binding var selection: ArchTab
     var unreadCount: Int = 0
+
+    @Namespace private var pill
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 0) {
@@ -50,20 +57,22 @@ struct TabBar: View {
                 TabBarItem(
                     tab: tab,
                     isActive: selection == tab,
-                    badge: tab == .messages ? unreadCount : 0
+                    badge: tab == .messages ? unreadCount : 0,
+                    pill: pill
                 ) {
-                    selection = tab
+                    withAnimation(ArchMotion.honouring(reduceMotion, ArchMotion.glass)) {
+                        selection = tab
+                    }
                 }
             }
         }
         .padding(.top, ArchSpacing.xs)
         .padding(.bottom, ArchSpacing.xxs)
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
-        }
+        // Also covers a change that did not come from a tap -- "Open your
+        // messages" from the roster sets the selection directly -- so the pill
+        // glides there too rather than jumping.
+        .animation(ArchMotion.honouring(reduceMotion, ArchMotion.glass), value: selection)
+        .archBar(.bottom)
     }
 }
 
@@ -71,6 +80,7 @@ private struct TabBarItem: View {
     let tab: ArchTab
     let isActive: Bool
     let badge: Int
+    let pill: Namespace.ID
     let action: () -> Void
 
     /// Premium's star lights amber, every other tab terracotta. The palette has
@@ -100,9 +110,20 @@ private struct TabBarItem: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, ArchSpacing.xxs)
+            .background {
+                if isActive {
+                    // `limestone` at a whisper: dark on paper, pale at night, so
+                    // it reads as frost on the glass in either world.
+                    RoundedRectangle(cornerRadius: ArchGlass.pillRadius, style: .continuous)
+                        .fill(ArchColor.limestone.opacity(ArchGlass.pillWash))
+                        .padding(.horizontal, ArchSpacing.xs)
+                        .matchedGeometryEffect(id: "pill", in: pill)
+                }
+            }
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .animation(ArchMotion.glass, value: isActive)
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier(tab.identifier)
         .accessibilityLabel(tab.title)

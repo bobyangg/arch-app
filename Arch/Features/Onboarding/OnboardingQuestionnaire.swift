@@ -105,14 +105,7 @@ struct OptionRow: View {
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
                     .fill(isSelected ? ArchColor.stoneRaised : ArchColor.stone)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? ArchColor.limestone.opacity(0.30) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .animation(ArchMotion.quick, value: isSelected)
+            .archSelected(isSelected, radius: ArchRadius.control, tint: ArchColor.limestone)
         }
         .buttonStyle(PressScaleStyle(scale: 0.99))
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)

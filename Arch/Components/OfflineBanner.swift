@@ -29,10 +29,7 @@ struct OfflineBanner: View {
         .frame(maxWidth: .infinity)
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.s)
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.top)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("No connection. You can read what is already here.")
     }

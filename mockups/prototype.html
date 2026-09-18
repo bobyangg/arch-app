@@ -13,9 +13,12 @@
   --limestone:#232120; --mortar:#6F675F;
   --lamp:#C9512F; --ember:#A9661A; --verdigris:#3F7359;
   --onLamp:#FAF6F0;
-  --hairline:rgba(111,103,95,.16);
+  --hairline:rgba(111,103,95,.10);
   --quiet:rgba(111,103,95,.28);
-  --lampQuiet:rgba(201,81,47,.45);
+  --quietFill:rgba(111,103,95,.12);
+  --lampWash:rgba(201,81,47,.10); --lampGlow:rgba(201,81,47,.26);
+  --inkGlow:rgba(35,33,32,.18); --frost:rgba(35,33,32,.07);
+  --scrim:rgba(35,33,32,.40);
   --selected:rgba(35,33,32,.30);
   --surround:#EDE4D8;
 
@@ -43,9 +46,12 @@ html[data-theme="dark"]{
   --limestone:#F5EFE6; --mortar:#9A8F86;
   --lamp:#E5714D; --ember:#F0A243; --verdigris:#7FA98F;
   --onLamp:#1F1C1A;
-  --hairline:rgba(154,143,134,.16);
+  --hairline:rgba(154,143,134,.10);
   --quiet:rgba(154,143,134,.28);
-  --lampQuiet:rgba(229,113,77,.45);
+  --quietFill:rgba(154,143,134,.12);
+  --lampWash:rgba(229,113,77,.10); --lampGlow:rgba(229,113,77,.26);
+  --inkGlow:rgba(245,239,230,.18); --frost:rgba(245,239,230,.07);
+  --scrim:rgba(14,13,12,.55);
   --selected:rgba(245,239,230,.30);
   --surround:#0E0D0C;
 
@@ -57,6 +63,9 @@ html[data-theme="dark"]{
   --tone5a:#4A4640; --tone5b:#413E38;
   color-scheme:dark;
 }
+@keyframes glassIn{from{opacity:0; transform:scale(.985)} to{opacity:1; transform:none}}
+#root.tab-in>.screen{animation:glassIn .28s ease-out;}
+@media (prefers-reduced-motion:reduce){#root.tab-in>.screen,.tab[aria-selected="true"]::before{animation:none;}}
 *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
@@ -100,7 +109,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .limestone{color:var(--limestone);}
 
 /* ---- scroll region ---- */
-.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;}
+.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; touch-action:pan-y;}
+#root.has-tabs>.screen{padding-bottom:calc(66px + env(safe-area-inset-bottom,0px));}
+#root.has-tabs>.bottombar{margin-bottom:calc(66px + env(safe-area-inset-bottom,0px));}
 .pad{padding-left:var(--s-l); padding-right:var(--s-l);}
 .safetop{height:env(safe-area-inset-top,0px);}
 .hairline{height:.5px; background:var(--hairline);}
@@ -114,16 +125,31 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 /* The tab bar's twin: same surface, same hairline, the lock-up at the left and
    nothing else. Root screens only — a thread or a profile has somebody else's
    name at the top, and the brand has no business above that. */
-.topbar{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
-        display:flex; align-items:center; gap:8px; padding:env(safe-area-inset-top,0px) 20px 0;
-        height:calc(52px + env(safe-area-inset-top,0px));}
+/* Bars are solid blocks of stoneRaised with no line at their edge: the step up
+   from the page is what separates them. The top and tab bars float over the page
+   so a screen can scroll to its very end beneath them. Mirrors ArchGlass.swift. */
+#root{position:relative;}
+/* Ink on the page, not a bar: the lock-up collapses as you read down and comes
+   back the moment you scroll up. Mirrors TopBarScroll in TopBar.swift. */
+.topbar{flex:none; background:var(--night); overflow:hidden;
+        /* A plain 52px, not calc() with env(): Chrome will not interpolate the
+           latter and the collapse silently never happens. The safe-area inset is
+           an untransitioned margin instead. */
+        transition:height .34s ease-out, opacity .34s ease-out;
+        display:flex; align-items:center; gap:8px; padding:0 20px;
+        margin-top:env(safe-area-inset-top,0px); height:52px;}
+.topbar.hidden{height:0; opacity:0;}
 .topbar .word{font-family:var(--serif); font-optical-sizing:auto;
-        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:25px; line-height:30px; font-weight:600;}
+        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:22px; line-height:26px; font-weight:600;}
 .topbar svg{display:block;}
 
-.tabbar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+.tabbar{position:absolute; bottom:0; left:0; right:0; z-index:5;
+        background:var(--stoneRaised);
         display:flex; padding:8px 0 calc(4px + env(safe-area-inset-bottom,0px));}
-.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0; position:relative;}
+.tab[aria-selected="true"]::before{content:""; position:absolute; inset:0 8px; border-radius:14px;
+  background:var(--frost); animation:glassIn .32s ease-out;}
+.tab>*{position:relative;}
 .tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
 .tab[aria-selected="true"] .lbl{color:var(--lamp);}
 .glyph{width:26px; height:26px; position:relative;}
@@ -138,21 +164,24 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
       font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
 .interest{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
           font-size:13px; line-height:18px; color:var(--limestone);}
-.interest.add{background:none; border:1px solid var(--quiet); color:var(--mortar);}
+.interest.add{background:var(--quietFill); color:var(--mortar);}
 
 .card{background:var(--stone); border-radius:var(--r-card); padding:var(--s-xl); position:relative;}
-.card.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
-.photo.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+/* Selection: a wash of the accent over the card and a glow of it around, in
+   place of a one-pixel ring. The inset shadow at full spread is the wash. */
+.card.sel,.photo.sel{box-shadow:inset 0 0 0 100vmax var(--lampWash), 0 0 14px var(--lampGlow);}
+.card,.photo{transition:box-shadow .32s ease-out;}
 
 .btn{height:52px; border-radius:var(--r-control); display:flex; align-items:center;
      justify-content:center; font-size:15px; font-weight:600; width:100%;}
 .btn.primary{background:var(--lamp); color:var(--onLamp);}
 .btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
-.btn.quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btn.quiet{background:var(--quietFill); color:var(--mortar);}
 .btntext{height:44px; display:flex; align-items:center; justify-content:center;
          font-size:15px; font-weight:600; color:var(--mortar); width:100%;}
 
-.slotcard{height:112px; background:var(--stone); border:1px solid var(--hairline);
+.slotcard{height:112px; background:color-mix(in srgb, var(--stone) 62%, transparent);
+          -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
           border-radius:var(--r-photo); display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:4px;}
 
@@ -160,9 +189,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
    app, not to the roster. It pushes the app down rather than floating over it —
    a bar that overlays content covers what you were reading at the moment you least
    want to lose your place. No red: this is a train tunnel, not a fault. */
-.offline{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
+.offline{flex:none; background:var(--stoneRaised);
          padding:12px 20px; text-align:center;}
-.bottombar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+.bottombar{flex:none; background:var(--stoneRaised);
            padding:12px 20px calc(4px + env(safe-area-inset-bottom,0px));}
 
 /* ---- rows ---- */
@@ -183,10 +212,11 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .quoted{background:var(--stoneRaised); border-radius:var(--r-control); padding:var(--s-s);}
 
 /* ---- sheets ---- */
-#scrim{position:absolute; inset:0; background:rgba(15,19,25,.72); opacity:0;
+#scrim{position:absolute; inset:0; background:var(--scrim); opacity:0;
        transition:opacity .25s ease; pointer-events:none; z-index:20;}
 #scrim.on{opacity:1; pointer-events:auto;}
-#sheet{position:absolute; left:0; right:0; bottom:0; background:var(--stone);
+#sheet{position:absolute; left:0; right:0; bottom:0;
+       background:color-mix(in srgb, var(--stone) 72%, transparent); -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
        border-radius:var(--r-sheet) var(--r-sheet) 0 0; z-index:21;
        padding:0 20px calc(16px + env(safe-area-inset-bottom,0px));
        transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.8,.2,1);
@@ -241,7 +271,8 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
           font-size:17px; font-weight:600; width:100%;}
 .opt{background:var(--stone); border-radius:var(--r-control); padding:var(--s-m);
      font-size:17px; line-height:24px;}
-.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
+.opt.sel{background:var(--stoneRaised); box-shadow:0 0 14px var(--inkGlow);}
+.opt{transition:box-shadow .32s ease-out, background .32s ease-out;}
 .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-xs);}
 .slot{aspect-ratio:1; border-radius:var(--r-control); position:relative; overflow:hidden;}
 
@@ -798,15 +829,14 @@ function rows(p){
   return out.slice(1); // the lead photo is drawn separately
 }
 
-/* Same fractions as TopBar.swift: a 30pt mark at its wordmark stroke, beside the word. */
+/* Same fractions as TopBar.swift: a 24pt mark at its wordmark stroke, beside the word. */
 function topbar(){
-  return `<div class="topbar">${markSVG(30,3.9,"var(--lamp)")}<div class="word">arch</div></div>`;
+  return `<div class="topbar">${markSVG(24,3.1,"var(--lamp)")}<div class="word">arch</div></div>`;
 }
 
 function navbar(title,right){
   return `<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
-    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>
-    <div class="hairline"></div>`;
+    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>`;
 }
 
 /* ============================ screens ============================ */
@@ -818,8 +848,7 @@ function dailyRoot(){
   let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
       <div class="titleL">${title}</div>
-      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div>
-      <div class="hairline"></div></div>`;
+      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div></div>`;
   if(open10>=LIMIT()){
     /* Not an error and not a telling-off. The people are still yours; the rule is
        stated once and the way out is a button rather than a lecture. */
@@ -1065,7 +1094,7 @@ function premiumRoot(){
   PLANS.forEach(([d,total,per,rec],i)=>{
     h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
       <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
-        border-radius:var(--r-control); ${S.plan===i?"box-shadow:inset 0 0 0 1px var(--selected)":""}">
+        border-radius:var(--r-control); transition:box-shadow .32s ease-out; ${S.plan===i?"box-shadow:0 0 14px var(--inkGlow)":""}">
         <div><div class="subhead">${d}</div><div class="footnote mortar">${per}</div></div>
         <div style="flex:1"></div>
         <div style="text-align:right"><div class="subhead">${total}</div>
@@ -2004,6 +2033,7 @@ function render(){
       <div class="subhead">No connection</div>
       <div class="footnote mortar" style="margin-top:4px">You can read what is already here.
         Anything you write waits until Arch is back.</div></div>`:"";
+  r.className="v";
   if(S.removal){ r.innerHTML=removedRoot(); return; }
   if(S.picker){ r.innerHTML=offlineBar+(S.picker.step<0?pickerRoot():cropRoot()); return; }
   if(S.onboarding){ r.innerHTML=offlineBar+onboarding(); return; }
@@ -2029,6 +2059,7 @@ function render(){
       <div class="lbl"${S.tab===k&&k==="premium"?' style="color:var(--ember)"':""}>${label}</div></button>`;
   }).join("");
   r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
+  r.className="v"+(t?"":" has-top")+(hideTabs?"":" has-tabs");
 }
 
 /* ============================ sheets ============================ */
@@ -2307,7 +2338,8 @@ document.addEventListener("click",e=>{
   const a=el.dataset.a, id=el.dataset.id, o=S.onboarding;
 
   const acts={
-    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();},
+    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
+      const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
@@ -2716,8 +2748,78 @@ function mountRange(){
   knobs.max.addEventListener("pointerdown",drag("max"));
   paint();
 }
+/* The lock-up gives way as you read down and returns on any scroll up, not only
+   at the top: wanting the top of the page and wanting to see where you are are the
+   same gesture on a phone. */
+function watchTopBar(){
+  const r=document.getElementById("root"), bar=r.querySelector(".topbar"), sc=r.querySelector(".screen");
+  if(!bar||!sc) return;
+  let last=sc.scrollTop;
+  sc.addEventListener("scroll",()=>{
+    const y=sc.scrollTop, d=y-last; last=y;
+    if(y<=52){ bar.classList.remove("hidden"); return; }
+    if(d>4) bar.classList.add("hidden"); else if(d<-4) bar.classList.remove("hidden");
+  },{passive:true});
+}
+/* Where you were. Rebuilding the screen's HTML on every state change threw the
+   scroll position away, so choosing a plan on the paywall put you back at the top
+   of it. The app does not do that -- a state change is not a navigation -- so
+   this remembers the position per screen and puts it back, the same way the four
+   tabs in the app each keep their own scroll while you are on another. A pushed
+   screen you come back to starts at the top, as it does in the app. */
+const scrollMemory={};
+let lastScreenKey=null;
+function screenKey(){
+  const t=current();
+  return [S.tab, t?t.name+":"+(t.id||""):"", S.onboarding?"ob"+S.onboarding.step:"",
+          S.picker?"pick":"", S.removal?"rm":""].join("|");
+}
 const _render=render;
-render=function(){ _render(); mountRange(); mountCrop(); };
+render=function(){
+  const r=document.getElementById("root"), prev=r.querySelector(".screen");
+  if(prev&&lastScreenKey!==null) scrollMemory[lastScreenKey]=prev.scrollTop;
+  _render(); mountRange(); mountCrop(); watchTopBar();
+  const key=screenKey(), next=r.querySelector(".screen");
+  const isRoot=!current()&&!S.onboarding&&!S.picker&&!S.removal;
+  if(next&&(key===lastScreenKey||isRoot)){
+    const y=scrollMemory[key]||0;
+    next.scrollTop=y;
+    const bar=r.querySelector(".topbar");
+    if(bar&&y>52){ bar.style.transition="none"; bar.classList.add("hidden"); void bar.offsetHeight; bar.style.transition=""; }
+  }
+  lastScreenKey=key;
+};
+
+/* Swipe in from the left edge to go back, on any pushed screen. The screen
+   follows the finger and lets go past a third of the width; short of that it
+   settles back. Roots do not take it -- a swipe there has nowhere to go and
+   would only fight the scroll -- and sheets already come down on their own.
+   Mirrors BackSwipe.swift, which re-enables the same gesture in the app. */
+(function(){
+  const device=document.getElementById("device");
+  let start=null, moved=0, parts=[];
+  const canPop=()=>!!current()&&!S.onboarding&&!S.picker&&!S.removal;
+  device.addEventListener("pointerdown",e=>{
+    if(!canPop()||e.clientX-device.getBoundingClientRect().left>28) return;
+    start=e.clientX; moved=0;
+    parts=[...document.getElementById("root").children].filter(el=>!el.classList.contains("tabbar"));
+    parts.forEach(el=>el.style.transition="none");
+  });
+  device.addEventListener("pointermove",e=>{
+    if(start===null) return;
+    moved=Math.max(0,e.clientX-start);
+    parts.forEach(el=>el.style.transform=`translateX(${moved}px)`);
+  });
+  const end=()=>{
+    if(start===null) return;
+    const goes=moved>device.clientWidth/3;
+    parts.forEach(el=>{ el.style.transition="transform .34s ease-out"; el.style.transform=goes?`translateX(${device.clientWidth}px)`:""; });
+    start=null;
+    if(goes) setTimeout(pop,200);
+  };
+  device.addEventListener("pointerup",end);
+  device.addEventListener("pointercancel",end);
+})();
 
 applyTheme();
 render();

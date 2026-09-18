@@ -69,7 +69,7 @@ struct MessageComposerSheet: View {
         .presentationDetents([.height(quotedItem == nil ? 480 : 580)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
         .onAppear {
             quotedItem = quoted
             isWriting = true

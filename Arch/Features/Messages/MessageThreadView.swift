@@ -126,9 +126,6 @@ struct MessageThreadView: View {
         .padding(.trailing, ArchSpacing.xs)
         .padding(.bottom, ArchSpacing.xs)
         .background(ArchColor.night)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     private var lastOutgoing: Message? {
@@ -179,10 +176,7 @@ struct MessageThreadView: View {
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.top, ArchSpacing.s)
         .padding(.bottom, ArchSpacing.xs)
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.bottom)
     }
 
     /// The end of a conversation, with no account of itself.
@@ -204,10 +198,7 @@ struct MessageThreadView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.s)
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.bottom)
     }
 
     private var composer: some View {
@@ -237,10 +228,7 @@ struct MessageThreadView: View {
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.xs)
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.bottom)
     }
 }
 
