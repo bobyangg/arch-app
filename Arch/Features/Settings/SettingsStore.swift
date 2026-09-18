@@ -10,7 +10,28 @@ import SwiftUI
 final class SettingsStore {
 
     // Account
-    var email = "sam@example.com"
+
+    /// The address on the reader's Apple ID, read from `accounts.apple_email`.
+    ///
+    /// **It was `"sam@example.com"`, hard-coded, and nothing ever replaced it.**
+    /// `load()` did not read it and `save()` did not write it, so the Email row
+    /// in Settings showed an address that was not the reader's, let them edit it,
+    /// and threw the edit away when the process ended — under a line claiming it
+    /// was used for signing in and account notices. All three were false.
+    ///
+    /// Optional now, because "not loaded yet" and "an address" are different
+    /// things and a placeholder is how the first became the second.
+    var email: String?
+
+    init() {
+        // The design build has no account to read an address from, and an empty
+        // row there reads as a bug rather than as a build with no backend. This
+        // is the one place a stand-in belongs: it cannot reach a real build,
+        // because a real build has keys and `load()` fetches the real thing.
+        if !ArchConfig.isConfigured {
+            email = "sam@privaterelay.appleid.com"
+        }
+    }
     var isSubscribed = false
 
     // Notifications
@@ -38,6 +59,14 @@ final class SettingsStore {
     /// account gets; this replaces them once there is somewhere to read from.
     func load() async throws {
         guard ArchConfig.isConfigured else { return }
+
+        // On the account rather than on the discovery row, so it is fetched
+        // separately. A failure here is not worth failing the whole screen for:
+        // the address is shown, not acted on.
+        if let account = try? await ArchBackend.account() {
+            email = account.appleEmail
+        }
+
         guard let row = try await ArchBackend.discovery() else { return }
         seeking = Set(row.seeking.compactMap { ArchUnits.gender(fromColumn: $0) })
         distance = row.distanceMiles
@@ -152,7 +181,7 @@ final class SettingsStore {
 
         return [
             SettingsSection(id: "account", title: "Account", rows: [
-                .init(id: "a-email", title: "Email", detail: email, control: .push),
+                .init(id: "a-email", title: "Email", detail: email ?? "—", control: .push),
                 .init(id: "a-premium", title: "Arch Premium", detail: premiumText, control: .push),
                 .init(id: "a-delete", title: "Delete your account", control: .push)
             ]),
