@@ -564,19 +564,39 @@ enum ArchBackend {
     /// Sent as one upsert rather than sixteen inserts so that a connection dropping
     /// halfway cannot leave somebody with a half-answered questionnaire that the
     /// matcher would then score against everybody.
-    static func saveAnswers(_ answers: [String: Int]) async throws {
+    ///
+    /// Written again, whole, when somebody answers again from Settings. The
+    /// time is sent rather than left to the column's default, because on an
+    /// upsert the default only applies to a row being made -- and the row is
+    /// already there. It is what "when did you last answer" is read from.
+    static func saveAnswers(_ answers: [String: Int], at time: Date = .now) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
-        struct AnswerRow: Encodable {
+        struct AnswerWrite: Encodable {
             let accountId: String
             let questionId: String
             let optionIndex: Int
+            let answeredAt: Date
         }
         let rows = answers.sorted { $0.key < $1.key }.map {
-            AnswerRow(accountId: session.userID, questionId: $0.key, optionIndex: $0.value)
+            AnswerWrite(accountId: session.userID, questionId: $0.key,
+                        optionIndex: $0.value, answeredAt: time)
         }
         try await SupabaseClient.shared.upsert("questionnaire_answers", rows)
+    }
+
+    /// Your own answers, and only yours: the policy on the table admits nobody
+    /// else, and this is the one read of it the app makes. Settings uses it to
+    /// start the questions from what you said rather than from nothing, and to
+    /// know when you last said it.
+    static func answers() async throws -> [AnswerRow] {
+        guard let session = await SupabaseClient.shared.restore() else { return [] }
+        return try await SupabaseClient.shared.select(
+            "questionnaire_answers",
+            columns: "question_id,option_index,answered_at",
+            filters: ["account_id": "eq.\(session.userID)"]
+        )
     }
 
     // MARK: The roster

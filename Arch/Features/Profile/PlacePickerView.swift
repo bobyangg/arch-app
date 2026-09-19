@@ -37,6 +37,16 @@ struct PlacePickerView: View {
     /// all — so it read as a dead control, and tapping it again did the same
     /// nothing. A screen that cannot succeed quietly should not fail quietly.
     var locationNote: String? = nil
+    /// Whether the list and the search are on offer at all.
+    ///
+    /// Onboarding says yes: a place has to come from somewhere, and the device
+    /// is a convenience that may be refused. After that, choosing a place you
+    /// are not in is part of Arch Premium, and everybody else gets the one
+    /// button that puts them where they are. The picker draws both, so the two
+    /// paths cannot drift apart.
+    var canChoose: Bool = true
+    /// Where "See Arch Premium" goes when `canChoose` is false. Nil hides it.
+    var onOpenPremium: (() -> Void)? = nil
 
     @State private var search = ""
     /// Asks the device's geocoder, which knows every town in the United States
@@ -68,7 +78,7 @@ struct PlacePickerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            field
+            if canChoose { field }
 
             ScrollView {
                 VStack(alignment: .leading, spacing: ArchSpacing.xl) {
@@ -77,7 +87,9 @@ struct PlacePickerView: View {
                     }
                     locationNoteRow
 
-                    if isTooShort {
+                    if !canChoose {
+                        premiumNote
+                    } else if isTooShort {
                         suggestions
                     } else if isWaiting && results.isEmpty {
                         note("Looking…", nil)
@@ -111,7 +123,7 @@ struct PlacePickerView: View {
 
     private var header: some View {
         HStack(spacing: ArchSpacing.s) {
-            Text("Where you live")
+            Text(canChoose ? "Where you live" : "Where you are")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
             Spacer(minLength: 0)
@@ -165,6 +177,29 @@ struct PlacePickerView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PressScaleStyle(scale: 0.99))
+    }
+
+    /// The half of the picker that is not on offer, and why.
+    ///
+    /// Said plainly and once, on the same surface as everything else. The button
+    /// is a text button rather than a `lamp` one: the screen was opened to set a
+    /// location, and the thing it should push hardest is the button that does.
+    private var premiumNote: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            if permission == .denied {
+                Text("Arch places you from your phone's location, which is off for Arch. Turn it on in your iPhone settings, and this puts you where you are.")
+                    .archText(.body)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Text("Choosing somewhere you are not — a city you are moving to, or one you visit — is part of Arch Premium.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+            if let onOpenPremium {
+                ArchTextButton(title: "See Arch Premium", action: onOpenPremium)
+            }
+        }
     }
 
     @ViewBuilder

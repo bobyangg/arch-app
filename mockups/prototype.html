@@ -662,7 +662,7 @@ const S={
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
-       visibility:"Anyone Arch picks me for",blocked:[],
+       blocked:[],
        theme:"Match my phone"},
   edit:null,
   report:{reason:null,block:true,sent:false},
@@ -1445,8 +1445,7 @@ function settingsSections(){
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
       ["d-intent","Looking for",x.intent,"push"],
       ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
-    ["Privacy",[["p-visible","Who can see me",x.visibility,"push"],
-      ["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
+    ["Privacy",[["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
       ["p-data","Download your data",null,"push"]]],
     ["Help",[["h-how","How Arch works",null,"push"],["h-safety","Safety",null,"push"],
       ["h-contact","Contact us",null,"push"]]]];
@@ -1550,7 +1549,7 @@ const SET_TITLES={"a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
   "d-seeking":"Who you want to meet","x-theme":"Light and dark",
   "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
-  "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
+  "p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
 
 function settingDetail(id){
@@ -1594,9 +1593,6 @@ function settingDetail(id){
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
-  } else if(id==="p-visible"){
-    b=opts(["Anyone Arch picks me for","Nobody new while I have unread messages"],x.visibility,"setVisibility")
-     +NOTE("Either way you keep the people already in "+rosterName()+", and they keep you. To come off Arch entirely, pause your profile.");
   } else if(id==="p-blocked"){
     b='<div class="titleM">Nobody blocked</div>'
      +NOTE("Blocking someone takes them out of "+rosterName()+", stops them appearing again, and stops you appearing in theirs. They are not told.");
@@ -2419,7 +2415,6 @@ document.addEventListener("click",e=>{
       m[3]="sending"; render();
       setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; m[2]="Just now"; render(); },1400);
     },
-    setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
     goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
     subscribe:()=>setSubscribed(true),
     review:()=>{ if(S.set.sub) push({name:"review"}); else acts.goPremium(); },
