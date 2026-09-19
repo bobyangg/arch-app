@@ -1281,6 +1281,16 @@ enum MockData {
             id: "b3",
             title: "A review of your profile",
             detail: "Which of your photos and answers people write about, and specific notes on what to change."
+        ),
+        PremiumBenefit(
+            id: "b4",
+            title: "Be somewhere you are not yet",
+            detail: "Choose any town for where you are — the city you are moving to, or the one you keep visiting — instead of where your phone says."
+        ),
+        PremiumBenefit(
+            id: "b5",
+            title: "Answer the questions whenever you like",
+            detail: "Everyone can answer again once a month. Premium drops the wait."
         )
     ]
 

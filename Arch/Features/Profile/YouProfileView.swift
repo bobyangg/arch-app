@@ -56,6 +56,7 @@ struct YouProfileView: View {
                 case .settings:
                     SettingsView(
                         store: settings,
+                        profile: store,
                         onOpenPremium: onOpenPremium,
                         onDeleteAccount: onDeleteAccount,
                         onSignOut: onSignOut
@@ -67,7 +68,11 @@ struct YouProfileView: View {
         .sheet(item: $editing) { sheet in
             switch sheet {
             case .details:
-                EditDetailsSheet(person: person) { details in
+                EditDetailsSheet(
+                    person: person,
+                    canChoosePlace: settings.isSubscribed,
+                    onOpenPremium: { editing = nil; onOpenPremium() }
+                ) { details in
                     store.updateDetails(details)
                     editing = nil
                 }

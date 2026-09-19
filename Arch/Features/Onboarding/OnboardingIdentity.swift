@@ -44,7 +44,8 @@ struct OnboardingIdentity: View {
 ///
 /// Height is a picker. It was a text field, which accepted "tall" and "1.8m" and
 /// every other way people write this, none of which two profiles can be compared
-/// on. Pronouns are the one optional thing on the screen and are marked as such.
+/// on. Pronouns are chips for the same reason, with a field kept for whatever the
+/// chips leave out; they are the one optional thing on the screen and say so.
 struct OnboardingAbout: View {
     let store: OnboardingStore
 
@@ -98,11 +99,8 @@ struct OnboardingAbout: View {
                 }
             }
 
-            ArchField(
+            PronounPicker(
                 text: Binding(get: { store.pronounsDraft }, set: { store.pronounsDraft = $0 }),
-                label: "Pronouns",
-                placeholder: "Optional",
-                characterLimit: 20,
                 surface: ArchColor.stone
             )
 
