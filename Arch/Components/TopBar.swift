@@ -81,6 +81,12 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
     var body: some View {
         ScrollView {
             content()
+                // The full width, whatever is in it. A vertical scroll view is
+                // only as wide as its content, and a page with nothing wide on
+                // it -- the roster's empty morning, which is three lines of
+                // text -- came up narrower than the screen, with the page's
+                // background stopping a margin short of either edge.
+                .frame(maxWidth: .infinity, alignment: .topLeading)
                 .padding(.top, chromeHeight)
                 .background(
                     GeometryReader { proxy in
@@ -91,6 +97,7 @@ struct TopBarScroll<Pinned: View, Content: View>: View {
                     }
                 )
         }
+        .frame(maxWidth: .infinity)
         .coordinateSpace(name: "archScroll")
         .scrollIndicators(.hidden)
         .modifier(ScrollOffsetReporter(onChange: track))
