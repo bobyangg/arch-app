@@ -55,6 +55,18 @@ struct OnboardingAnswers: View {
     let store: OnboardingStore
 
     @State private var choosingFor: Prompt?
+    /// Which answer field holds the caret.
+    @FocusState private var writing: String?
+    /// Which one *should* hold it once the picker has finished leaving.
+    ///
+    /// **Two steps, because the field does not exist yet.** The answer box only
+    /// appears once a question has been chosen, and at the moment of choosing the
+    /// picker is still on screen and on its way out. Focusing then either does
+    /// nothing or is taken back when the sheet finishes dismissing. `onDismiss`
+    /// fires after it has gone, which is the first moment the field is both in
+    /// the tree and uncovered — and it is an event rather than a guessed delay,
+    /// so it cannot drift if the animation changes.
+    @State private var writeNext: String?
 
     private var profile: ProfileStore { store.profile }
 
@@ -71,12 +83,21 @@ struct OnboardingAnswers: View {
                 }
             }
         }
-        .sheet(item: $choosingFor) { prompt in
+        .sheet(item: $choosingFor, onDismiss: {
+            if let id = writeNext {
+                writing = id
+                writeNext = nil
+            }
+        }) { prompt in
             PromptPickerView(
                 current: prompt.question,
                 taken: profile.questionsTaken(excluding: prompt.id),
                 onChoose: { chosen in
                     profile.updatePrompt(id: prompt.id, question: chosen.text, answer: "")
+                    // Picking a question is the first half of one action; the
+                    // second half is answering it, and it should not need a tap
+                    // of its own to begin.
+                    writeNext = prompt.id
                     choosingFor = nil
                 },
                 onCancel: { choosingFor = nil }
@@ -130,6 +151,7 @@ struct OnboardingAnswers: View {
                 .archText(.callout)
                 .foregroundStyle(ArchColor.limestone)
                 .lineLimit(3...7)
+                .focused($writing, equals: prompt.id)
                 .padding(.horizontal, ArchSpacing.s)
                 .padding(.vertical, ArchSpacing.s)
                 .background(
