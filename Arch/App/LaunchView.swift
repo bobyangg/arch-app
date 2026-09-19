@@ -2,17 +2,17 @@ import SwiftUI
 
 /// How the bridge gets built on the way in.
 ///
-/// Three sequences, one drawn at random for each cold start, so opening the app
-/// is not the same forty frames every morning. All three end on the same
-/// lock-up -- the mark over the word -- and all three take about the same time,
-/// so whichever one comes up, the app opens when it always opens.
+/// Two sequences, one drawn at random for each cold start, so opening the app
+/// is not the same forty frames every morning. Both end on the same lock-up --
+/// the mark over the word -- and both take about the same time, so whichever
+/// one comes up, the app opens when it always opens.
+///
+/// There was a third, which laid the five stones of the roster arch and then
+/// gave way to the mark. It went: the stone arch means "your slots" on the
+/// Daily 5, and building it at launch made the launch look like a roster.
 enum LaunchVariant: CaseIterable {
     /// The mark draws itself: the piers rise, then the deck lands across them.
     case drawn
-    /// The five stones of the arch are laid, springers first and the keystone
-    /// last, which is the order a mason works in. Then the arch gives way to
-    /// the mark.
-    case laid
     /// The mark arrives in pieces: the piers rise into place from below, and the
     /// deck comes down and settles on them.
     case raised
@@ -24,7 +24,7 @@ enum LaunchVariant: CaseIterable {
 
 /// The launch screen.
 ///
-/// The bridge builds itself once -- one of three ways, see `LaunchVariant` -- and
+/// The bridge builds itself once -- one of two ways, see `LaunchVariant` -- and
 /// then the app opens. It happens once per launch and never repeats. It is also
 /// what plays between signing in and the roster: the first roster is loading
 /// behind it, and a bridge going up is a better thing to watch than a spinner.
@@ -36,15 +36,9 @@ struct LaunchView: View {
 
     @State private var variant: LaunchVariant
 
-    // The mark drawing itself, and the word arriving. Shared by all three.
+    // The mark drawing itself, and the word arriving. Shared by both.
     @State private var drawn: CGFloat = 0
     @State private var wordOpacity: Double = 0
-
-    // Laid: how many stones are down, and how far the arch has given way to
-    // the mark.
-    @State private var stonesLaid = 0
-    @State private var stonesOpacity: Double = 1
-    @State private var markOpacity: Double = 0
 
     // Raised: where the pieces are, as offsets from their final place.
     @State private var pierRise: CGFloat = 1
@@ -53,11 +47,7 @@ struct LaunchView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let markWidth: CGFloat = 104
-    /// The stone arch is drawn a little wider than the mark it becomes, so the
-    /// two read as the same size when one gives way to the other.
-    private var archWidth: CGFloat { markWidth * 1.3 }
     private var stroke: CGFloat { max(2, markWidth * 0.13) }
-    private var band: ArchBand { ArchBand(count: 5, thickness: 18) }
 
     /// `nil` picks one at random, which is what the app does. Previews and tests
     /// name one so they get the one they asked for.
@@ -74,8 +64,6 @@ struct LaunchView: View {
             switch variant {
             case .drawn:
                 ArchWordmark(markWidth: markWidth, drawn: drawn, wordOpacity: wordOpacity)
-            case .laid:
-                laid
             case .raised:
                 raised
             }
@@ -86,49 +74,7 @@ struct LaunchView: View {
         .task { await open() }
     }
 
-    // MARK: The three
-
-    /// Stones over the word, and the mark waiting underneath to take over.
-    private var laid: some View {
-        VStack(spacing: markWidth * 0.16) {
-            ZStack {
-                stones
-                    .opacity(stonesOpacity)
-                ArchMark(lineWidth: stroke)
-                    .stroke(
-                        ArchColor.lamp,
-                        style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
-                    )
-                    .frame(width: markWidth, height: markWidth * ArchMark.aspect)
-                    .opacity(markOpacity)
-            }
-            .frame(width: archWidth, height: band.height(forWidth: archWidth))
-
-            word
-        }
-    }
-
-    /// Springers first, then the next pair in, then the keystone: 0 and 4, 1 and
-    /// 3, then 2. Each stone comes down a little way into its seat.
-    private var stones: some View {
-        GeometryReader { geometry in
-            ZStack {
-                ForEach(0..<5, id: \.self) { index in
-                    let isDown = Self.layingOrder(of: index) < stonesLaid
-                    band.segment(index, in: geometry.size)
-                        .fill(ArchColor.lamp)
-                        .opacity(isDown ? 1 : 0)
-                        .offset(y: isDown ? 0 : -12)
-                }
-            }
-        }
-    }
-
-    /// The round in which stone `index` is laid: the two springers in the first,
-    /// the keystone in the last.
-    private static func layingOrder(of index: Int) -> Int {
-        min(index, 4 - index)
-    }
+    // MARK: The two
 
     /// The piers below their place and the deck above it, until each arrives.
     private var raised: some View {
@@ -181,19 +127,6 @@ struct LaunchView: View {
             withAnimation(ArchMotion.launchDraw) { drawn = 1 }
             try? await Task.sleep(for: .milliseconds(650))
 
-        case .laid:
-            // Three rounds of stones, a beat apart, then the arch gives way.
-            for round in 1...3 {
-                withAnimation(ArchMotion.stoneLands) { stonesLaid = round }
-                try? await Task.sleep(for: .milliseconds(220))
-            }
-            try? await Task.sleep(for: .milliseconds(160))
-            withAnimation(ArchMotion.standard) {
-                stonesOpacity = 0
-                markOpacity = 1
-            }
-            try? await Task.sleep(for: .milliseconds(80))
-
         case .raised:
             withAnimation(ArchMotion.pierRises) { pierRise = 0 }
             try? await Task.sleep(for: .milliseconds(420))
@@ -210,9 +143,6 @@ struct LaunchView: View {
     private func settle() {
         drawn = 1
         wordOpacity = 1
-        stonesLaid = 3
-        stonesOpacity = 0
-        markOpacity = 1
         pierRise = 0
         deckDrop = 0
     }
@@ -220,11 +150,6 @@ struct LaunchView: View {
 
 #Preview("Drawn") {
     LaunchView(variant: .drawn, onFinish: {})
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Laid") {
-    LaunchView(variant: .laid, onFinish: {})
         .preferredColorScheme(.dark)
 }
 

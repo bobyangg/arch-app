@@ -45,11 +45,10 @@ enum ArchMotion {
     /// The launch mark drawing itself in, once.
     static let launchDraw = Animation.easeInOut(duration: 0.85)
 
-    /// The other two ways the bridge goes up at launch. A stone comes down into
-    /// its seat and stops -- stone does not bounce. The piers rise the same way.
-    /// The deck is the one piece that settles: it lands on the piers with a
-    /// little give, which is what makes it read as having weight.
-    static let stoneLands = Animation.easeOut(duration: 0.22)
+    /// The other way the bridge goes up at launch. The piers rise and stop --
+    /// stone does not bounce. The deck is the one piece that settles: it lands
+    /// on the piers with a little give, which is what makes it read as having
+    /// weight.
     static let pierRises = Animation.easeOut(duration: 0.40)
     static let deckLands = Animation.spring(duration: 0.42, bounce: 0.28)
 
