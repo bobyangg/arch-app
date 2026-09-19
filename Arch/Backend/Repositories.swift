@@ -148,8 +148,14 @@ enum ArchBackend {
     /// This is also the removal check: a removed account still has a valid session,
     /// because being removed is not the same as being signed out, and the screen
     /// that says so needs to know who it is talking to.
+    /// **Nil means there is no row, and only that.** It used to mean that *or*
+    /// "there is no session", and the caller signed the reader out and cleared
+    /// the keychain for either -- so the two were worth telling apart, because
+    /// one of them is recoverable and the other is what it says.
     static func account() async throws -> AccountRow? {
-        guard let session = await SupabaseClient.shared.restore() else { return nil }
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
         return try await SupabaseClient.shared.selectOne(
             "accounts",
             columns: "id,status,apple_email",
