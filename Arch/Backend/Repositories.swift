@@ -375,7 +375,13 @@ enum ArchBackend {
     /// Only `seeking` comes from onboarding; the rest are the sliders' own defaults
     /// and are changed in Settings. Asking somebody to pick a radius before they
     /// have seen a single person would be asking a question they cannot answer yet.
-    static func createDiscovery(seeking: [String], notifyMessages: Bool) async throws {
+    static func createDiscovery(
+        seeking: [String],
+        distanceMiles: Int,
+        minAge: Int,
+        maxAge: Int,
+        notifyMessages: Bool
+    ) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
@@ -384,7 +390,7 @@ enum ArchBackend {
             DiscoveryRow(
                 accountId: session.userID,
                 seeking: seeking,
-                distanceMiles: 25, minAge: 26, maxAge: 36,
+                distanceMiles: distanceMiles, minAge: minAge, maxAge: maxAge,
                 paused: false, notifyMessages: notifyMessages
             )
         )

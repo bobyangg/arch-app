@@ -19,7 +19,8 @@ struct DistanceSetting: View {
 
                 ValueSlider(
                     value: Binding(get: { store.distance }, set: { store.distance = $0 }),
-                    bounds: SettingsStore.distanceRange
+                    bounds: SettingsStore.distanceRange,
+                    label: "Distance"
                 )
 
                 HStack {
