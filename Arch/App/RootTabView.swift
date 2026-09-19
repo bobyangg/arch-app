@@ -136,23 +136,23 @@ struct RootTabView: View {
                 MessagesListView(
                     conversations: store.openConversations,
                     requests: store.requests,
-                    popToRoot: messagePops,
                     onAccept: { store.accept($0) },
                     onDecline: { store.decline($0) },
                     onOpenDaily: { selection = .daily },
                     actions: conversationActions,
-                    holdsSlot: { store.holdsSlot($0) }
+                    holdsSlot: { store.holdsSlot($0) },
+                    popToRoot: messagePops
                 )
             }
             tab(.you) {
                 YouProfileView(
                     store: profile,
                     settings: settings,
-                    popToRoot: youPops,
                     writtenAbout: MockData.writtenAbout,
                     onOpenPremium: { selection = .premium },
                     onDeleteAccount: onDeleteAccount,
-                    onSignOut: onSignOut
+                    onSignOut: onSignOut,
+                    popToRoot: youPops
                 )
             }
         }
