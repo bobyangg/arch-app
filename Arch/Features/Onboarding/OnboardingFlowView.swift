@@ -229,6 +229,8 @@ struct OnboardingFlowView: View {
             OnboardingAbout(store: store)
         case .seeking:
             OnboardingSeeking(store: store)
+        case .preferences:
+            OnboardingPreferences(store: store)
         case .photos:
             OnboardingPhotos(store: store)
         case .answers:
@@ -288,6 +290,9 @@ struct OnboardingFlowView: View {
 
         try? await ArchBackend.createDiscovery(
             seeking: store.seekingDrafts.map { ArchUnits.genderColumn($0) },
+            distanceMiles: store.distanceDraft,
+            minAge: store.minAgeDraft,
+            maxAge: store.maxAgeDraft,
             notifyMessages: notifications
         )
     }

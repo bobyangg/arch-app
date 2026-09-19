@@ -28,6 +28,10 @@ final class OnboardingStore {
         case identity
         case about
         case seeking
+        /// Age and distance. After the questions about you, before the four
+        /// photographs -- the first screen that is about anybody else, and the
+        /// last cheap decision before the longest step.
+        case preferences
         case photos
         case answers
         case interests
@@ -66,6 +70,16 @@ final class OnboardingStore {
         didSet { clampDay() }
     }
     var birthDay: Int?
+
+    /// **The two hardest filters in the app, and they used to be set by a line
+    /// of code.** `createDiscovery` gave everybody 25 miles and 26 to 36 —
+    /// nobody outside those goes in your five and you go in nobody else's —
+    /// with no screen where that was ever said. The defaults are the same; they
+    /// are now a starting position on a slider rather than a decision made for
+    /// somebody.
+    var minAgeDraft = 26
+    var maxAgeDraft = 36
+    var distanceDraft = 25
     /// Picked from the library, so it carries a position as well as its name.
     var place: Place?
     /// What iOS has said, and the square it gave back. The precise fix never
@@ -112,6 +126,15 @@ final class OnboardingStore {
         return Birthday(year: birthYear, month: birthMonth, day: birthDay)
     }
 
+    var ageRangeText: String { "\(minAgeDraft) to \(maxAgeDraft)" }
+
+    /// The top of the slider switches the filter off rather than drawing a
+    /// hundred-mile circle, and "Anywhere" is the only honest way to write that.
+    var distanceText: String {
+        SettingsStore.isUnlimited(distanceDraft)
+            ? "Anywhere" : "Within \(distanceDraft) miles"
+    }
+
     var birthMonthName: String {
         guard let birthMonth, (1...12).contains(birthMonth) else { return "" }
         return Birthday.months[birthMonth - 1]
@@ -152,6 +175,11 @@ final class OnboardingStore {
         case .seeking:
             // Nobody is a valid preference for exactly nobody.
             return !seekingDrafts.isEmpty
+        case .preferences:
+            // Both arrive valid and both stay valid: the sliders cannot be
+            // dragged out of their own bounds, and `minimumSpan` keeps the age
+            // handles from crossing.
+            return true
         case .photos:
             return photoShortfall == 0
         case .answers:
