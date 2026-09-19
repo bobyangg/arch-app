@@ -400,7 +400,9 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
-        guard let gender = details.gender else { throw ArchAPIError.conflict }
+        // Gender is not read here any more: it is settled at signup and is not
+        // in the payload below, so requiring one would refuse a legitimate save
+        // over a field this function no longer writes.
         guard let place = details.place else { throw ArchAPIError.conflict }
 
         /// **The position is written only when there is a new one.**
@@ -432,7 +434,6 @@ enum ArchBackend {
         ///
         /// A genuine mistake is a support question, not a settings screen.
         struct Update: Encodable {
-            let gender: String
             let pronouns: String?
             let placeId: String
             /// Coarsened before it leaves the phone, not after it arrives. The
@@ -444,13 +445,12 @@ enum ArchBackend {
             let heightCm: Int?
 
             enum CodingKeys: String, CodingKey {
-                case gender, pronouns, placeId
+                case pronouns, placeId
                 case coarseLat, coarseLon, work, heightCm
             }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
-                try container.encode(gender, forKey: .gender)
                 try container.encode(pronouns, forKey: .pronouns)
                 try container.encode(placeId, forKey: .placeId)
                 try container.encode(work, forKey: .work)
@@ -467,7 +467,6 @@ enum ArchBackend {
         try await SupabaseClient.shared.update(
             "profiles",
             Update(
-                gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
                 centre: place.centre?.coarsened,
