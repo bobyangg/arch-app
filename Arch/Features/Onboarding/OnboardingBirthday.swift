@@ -60,6 +60,9 @@ struct OnboardingBirthday: View {
         }
     }
 
+    /// Said plainly and without a colour that makes it an alarm — no red anywhere
+    /// in Arch, and least of all on a screen somebody may have reached by
+    /// mis-scrolling a list.
     private func tooYoung(age: Int) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xs) {
             Text("Arch is for people 18 and over")
@@ -78,6 +81,7 @@ struct OnboardingBirthday: View {
                 .fill(ArchColor.stone)
         )
     }
+}
 
 #Preview("Nothing chosen") {
     OnboardingBirthday(store: OnboardingStore())

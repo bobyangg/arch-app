@@ -32,6 +32,8 @@ PROPERTY = re.compile(
 )
 STRUCT = re.compile(r"^(?:public\s+|internal\s+)?struct\s+([A-Z]\w*)")
 # A computed property or a function body -- not part of the initialiser.
+# A double-quoted string body, so braces inside one are not counted.
+STRING = re.compile('"[^"]*"')
 COMPUTED = re.compile(r"^\s*(?:@\w+\s+)*(?:private\s+|static\s+)*(?:var|func)\s+\w+[^=]*\{\s*$")
 
 
@@ -127,9 +129,75 @@ def call_labels(text, start):
     return out
 
 
+def brace_difference(source):
+    """Open braces minus closing ones, reading the file the way a lexer would.
+
+    A character scanner rather than regular expressions, because the regular
+    expressions were wrong in a way that looked like a bug in the code they were
+    checking. Stripping `//` comments first truncates `"https://..."` in the
+    middle of a string, leaving it unterminated and the count meaningless --
+    `ArchConfig.swift` was reported as having an unclosed brace and does not.
+
+    A check that cries wolf is a check people stop running, so this one knows
+    about strings, escapes, interpolation, line comments and nested block
+    comments, which is all Swift needs here.
+    """
+    depth, i, n = 0, 0, len(source)
+    in_string = in_line_comment = False
+    block_depth = 0
+
+    while i < n:
+        ch = source[i]
+        nxt = source[i + 1] if i + 1 < n else ""
+
+        if in_line_comment:
+            if ch == chr(10):
+                in_line_comment = False
+        elif block_depth:
+            if ch == "/" and nxt == "*":
+                block_depth += 1
+                i += 1
+            elif ch == "*" and nxt == "/":
+                block_depth -= 1
+                i += 1
+        elif in_string:
+            if ch == "\\":
+                # An escape, including `\(` -- whose parentheses are not
+                # braces, so nothing here has to follow it into the expression.
+                i += 1
+            elif ch == '"':
+                in_string = False
+        else:
+            if ch == "/" and nxt == "/":
+                in_line_comment = True
+                i += 1
+            elif ch == "/" and nxt == "*":
+                block_depth = 1
+                i += 1
+            elif ch == '"':
+                in_string = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+        i += 1
+
+    return depth
+
+
 def main():
     shapes = collect()
     problems = []
+
+    for path in swift_files():
+        with open(path, encoding="utf-8") as handle:
+            raw = handle.read()
+        rel = os.path.relpath(path, ROOT).replace(os.sep, "/")
+        difference = brace_difference(raw)
+        if difference:
+            side = "unclosed {" if difference > 0 else "unopened }"
+            problems.append("%s  %d %s" % (rel, abs(difference), side))
+
     for path in swift_files():
         with open(path, encoding="utf-8") as handle:
             text = strip_comments(handle.read())
