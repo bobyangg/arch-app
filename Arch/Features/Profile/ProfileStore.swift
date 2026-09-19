@@ -309,6 +309,8 @@ final class ProfileStore {
     }
 
     func updateDetails(_ details: PersonDetails) {
+        // Read before the change, because it is the question "was there one".
+        let hadNoHeight = person.height.isEmpty
         person.name = details.name
         person.age = details.age
         // Only when there is one: the edit sheet does not collect a date and
@@ -319,6 +321,8 @@ final class ProfileStore {
         person.place = details.place
         person.height = details.height
         person.work = details.work
-        persist { try await ArchBackend.saveDetails(details) }
+        persist { [hadNoHeight] in
+            try await ArchBackend.saveDetails(details, settingHeight: hadNoHeight)
+        }
     }
 }

@@ -20,6 +20,13 @@ struct EditDetailsSheet: View {
     @State private var height = ""
     @State private var work = ""
     @State private var isPickingPlace = false
+    @State private var isPickingHeight = false
+    /// **Only when the profile arrived without one.** Every exactly-round height
+    /// was lost to a conversion that required two numbers and got one, so there
+    /// are profiles with no height at all — and freezing the field outright
+    /// would freeze those empty forever. Filling a blank is not changing a
+    /// value; a height that is already there stays put.
+    @State private var canSetHeight = false
     /// Held by the view, not made inside the button: `CLLocationManager` answers
     /// through a delegate, and one created inside a closure is deallocated
     /// before iOS calls back. The symptom is a button that does nothing.
@@ -29,9 +36,7 @@ struct EditDetailsSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && gender != nil
-            && place != nil
+        gender != nil && place != nil
     }
 
     var body: some View {
@@ -43,7 +48,11 @@ struct EditDetailsSheet: View {
                     .padding(.top, ArchSpacing.l)
 
                 VStack(spacing: ArchSpacing.xs) {
-                    ArchField(text: $name, label: "Name")
+                    // **The name is what somebody was introduced to you as.**
+                    // Changing it after the fact means the person in a
+                    // conversation is not the person on the profile any more,
+                    // and there is no notice anywhere that would say so.
+                    FixedRow(label: "Name", value: name)
                     // **Age and height are shown and not edited.**
                     //
                     // Age never was editable in any meaningful sense -- it was a
@@ -60,11 +69,17 @@ struct EditDetailsSheet: View {
                     // question, not a settings screen.
                     FixedRow(label: "Age", value: age)
                     PlaceRow(place: place) { isPickingPlace = true }
-                    FixedRow(label: "Height", value: height)
+                    if canSetHeight {
+                        HeightRow(height: height) { isPickingHeight = true }
+                    } else {
+                        FixedRow(label: "Height", value: height)
+                    }
                     ArchField(text: $work, label: "Work")
                 }
 
-                Text("Your age and height are set when you sign up and cannot be changed here.")
+                Text(canSetHeight
+                     ? "Your name and age cannot be changed here. Your height is missing — once you set it, it stays."
+                     : "Your name, age and height are set when you sign up and cannot be changed here.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
@@ -168,6 +183,12 @@ struct EditDetailsSheet: View {
             place = details.place
             height = details.height
             work = details.work
+            // Decided once, on the way in. Reading it from `height` later would
+            // flip the row back to fixed the moment one was chosen, mid-edit.
+            canSetHeight = details.height.isEmpty
+        }
+        .sheet(isPresented: $isPickingHeight) {
+            HeightPickerSheet(current: height) { height = $0 }
         }
     }
 

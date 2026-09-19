@@ -389,7 +389,14 @@ enum ArchBackend {
     /// Age becomes a birthdate on the way down, because the database stores the
     /// date and derives the age — otherwise everybody's age would be whatever it
     /// was on the day they typed it.
-    static func saveDetails(_ details: PersonDetails) async throws {
+    /// `settingHeight` is for a profile that has none, and only that.
+    ///
+    /// **Filling a blank is not changing a value.** Every round height was lost
+    /// to the conversion bug above, so there are profiles with no height at all,
+    /// and freezing the field would freeze them empty forever. A height that is
+    /// already there still cannot be edited.
+    static func saveDetails(_ details: PersonDetails,
+                            settingHeight: Bool = false) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
@@ -425,7 +432,6 @@ enum ArchBackend {
         ///
         /// A genuine mistake is a support question, not a settings screen.
         struct Update: Encodable {
-            let name: String
             let gender: String
             let pronouns: String?
             let placeId: String
@@ -434,15 +440,16 @@ enum ArchBackend {
             /// belt and braces on purpose.
             let centre: Coordinate?
             let work: String?
+            /// Written only when there was nothing there. See `settingHeight`.
+            let heightCm: Int?
 
             enum CodingKeys: String, CodingKey {
-                case name, gender, pronouns, placeId
-                case coarseLat, coarseLon, work
+                case gender, pronouns, placeId
+                case coarseLat, coarseLon, work, heightCm
             }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
-                try container.encode(name, forKey: .name)
                 try container.encode(gender, forKey: .gender)
                 try container.encode(pronouns, forKey: .pronouns)
                 try container.encode(placeId, forKey: .placeId)
@@ -451,18 +458,22 @@ enum ArchBackend {
                     try container.encode(centre.latitude, forKey: .coarseLat)
                     try container.encode(centre.longitude, forKey: .coarseLon)
                 }
+                if let heightCm {
+                    try container.encode(heightCm, forKey: .heightCm)
+                }
             }
         }
 
         try await SupabaseClient.shared.update(
             "profiles",
             Update(
-                name: details.name,
                 gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
                 centre: place.centre?.coarsened,
-                work: details.work.isEmpty ? nil : details.work
+                work: details.work.isEmpty ? nil : details.work,
+                heightCm: settingHeight
+                    ? ArchUnits.centimetres(fromHeight: details.height) : nil
             ),
             filters: ["account_id": "eq.\(session.userID)"]
         )
