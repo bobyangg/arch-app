@@ -138,6 +138,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
       font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
 .interest{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
           font-size:13px; line-height:18px; color:var(--limestone);}
+/* A chip you can pick and unpick. Selected is a border and a lift, like .opt,
+   rather than lamp: the accent means "this is the action", and every chip is one. */
+.pchip{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+       font-size:13px; line-height:18px; color:var(--limestone); border:0; font:inherit;
+       transition:background .16s, box-shadow .16s;}
+.pchip.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
 .interest.add{background:none; border:1px solid var(--quiet); color:var(--mortar);}
 
 .card{background:var(--stone); border-radius:var(--r-card); padding:var(--s-xl); position:relative;}
@@ -502,7 +508,46 @@ const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2]
    anything about. A paywall is the easiest place to ship a lie. */
 const BENEFITS=[["Seven people instead of five","Two more slots. The same care choosing them \u2014 a longer queue is not the point."],
  ["Fifteen conversations instead of ten","More room before Arch holds your roster and asks you to answer someone."],
- ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."]];
+ ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."],
+ ["Be somewhere you are not yet","Choose any town for where you are \u2014 the city you are moving to, or the one you keep visiting \u2014 instead of where your phone says."],
+ ["Answer the questions whenever you like","Everyone can answer again once a month. Premium drops the wait."]];
+
+/* Pronouns as chips, and one string underneath. More than one is allowed and is
+   written by subject ("she/they"); what the chips do not cover is typed and
+   follows after a comma. parse() reads a string back into picks and a remainder,
+   so a profile written before the chips existed lights the right ones. */
+const PRONOUNS=[["she","her"],["he","him"],["they","them"],["xe","xem"],["ze","zir"]];
+function composePronouns(picked,other){
+  const on=PRONOUNS.filter(p=>picked.includes(p[0]));
+  const joined=on.length===0?"":on.length===1?on[0][0]+"/"+on[0][1]:on.map(p=>p[0]).join("/");
+  const typed=(other||"").trim();
+  if(!joined&&!typed) return "";
+  if(!typed) return joined;
+  if(!joined) return typed;
+  return joined+", "+typed;
+}
+function parsePronouns(text){
+  const at=(text||"").indexOf(",");
+  const head=(at<0?(text||""):text.slice(0,at)).trim(), tail=at<0?"":text.slice(at+1).trim();
+  if(!head) return {picked:[],other:""};
+  const picked=[]; let unknown=false;
+  head.toLowerCase().split("/").forEach(w=>{
+    const p=PRONOUNS.find(p=>p[0]===w||p[1]===w);
+    if(!p) unknown=true; else if(!picked.includes(p[0])) picked.push(p[0]);
+  });
+  if(unknown) return {picked:[],other:(text||"").trim()};
+  return {picked,other:tail};
+}
+function pronounPicker(target,text,onNight){
+  const {picked,other}=parsePronouns(text);
+  return `<div class="v gap-xs">
+    <div style="display:flex; justify-content:space-between; align-items:baseline">
+      <div class="footnote mortar">Pronouns</div><div class="caption mortar">Optional</div></div>
+    <div class="chips">${PRONOUNS.map(p=>`<button class="pchip ${picked.includes(p[0])?"sel":""}"
+      data-a="pickPronoun" data-t="${target}" data-o="${p[0]}">${p[0]}/${p[1]}</button>`).join("")}</div>
+    <div class="field ${onNight?"onNight":""}"><input id="pronounOther" data-t="${target}" maxlength="20"
+      value="${esc(other)}" placeholder="Something else"></div></div>`;
+}
 
 /* What people picked out of your profile when they wrote to you. Not likes \u2014 Arch
    has none. This is the photo or answer somebody quoted in the composer, which is a
@@ -661,6 +706,9 @@ const S={
        msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
+       /* The questionnaire, as answered: an array by question, and when. Null
+          until answered in this session, which is also what a design build has. */
+       qa:[],answeredAt:null,answerRun:null,
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
        blocked:[],
        theme:"Match my phone"},
@@ -1440,10 +1488,12 @@ function settingsSections(){
       ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
     ["Appearance",[["x-theme","Light and dark",x.theme,"push"]]],
-    ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
+    ["Discovery",[["d-location","Where you are",S.you.place?placeLabel(S.you.place):null,"push"],
+      ["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
       ["d-distance","Distance",distanceText(),"push"],
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
       ["d-intent","Looking for",x.intent,"push"],
+      ["d-answers","Your answers",x.answeredAt?"Answered "+shortDate(x.answeredAt):null,"push"],
       ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
     ["Privacy",[["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
       ["p-data","Download your data",null,"push"]]],
@@ -1549,9 +1599,42 @@ const SET_TITLES={"a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
   "d-seeking":"Who you want to meet","x-theme":"Light and dark",
   "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
+  "d-location":"Where you are","d-answers":"Your answers",
   "p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
 
+const ANSWER_WAIT=30*24*60*60*1000;
+function shortDate(ms){return new Date(ms).toLocaleDateString(undefined,{day:"numeric",month:"short"});}
+function answerAgainOn(){
+  const x=S.set; if(x.sub||!x.answeredAt) return null;
+  const opens=x.answeredAt+ANSWER_WAIT; return opens>Date.now()?opens:null;
+}
+/* The questionnaire again, from Settings. The same questions one per screen with
+   the last answer already picked, driven by a run that is thrown away after.
+   There is a month between one set and the next; Premium waives it, and the
+   screen says when the wait ends rather than hiding the button. */
+function answersDetail(){
+  const x=S.set, run=x.answerRun;
+  if(run){
+    const [q,options]=QUESTIONS[run.q];
+    let segs=""; for(let i=0;i<QUESTIONS.length;i++) segs+=`<div class="seg ${i<=run.q?"on":""}"></div>`;
+    return `<div class="rule">${segs}</div>
+      <div class="titleM mt-l">${esc(q)}</div><div class="v gap-xs mt-xl">${
+        options.map(o=>`<button data-a="setAnswer" data-o="${esc(o)}" style="display:block;width:100%">
+          <div class="opt ${run.qa[run.q]===o?"sel":""}">${esc(o)}</div></button>`).join("")}</div>
+      <div style="display:flex; gap:24px" class="mt-m">${run.q>0?'<button class="btntext" data-a="answerBack">Back a question</button>':""}
+        <button class="btntext" data-a="answerStop">Stop</button></div>`;
+  }
+  const opens=answerAgainOn();
+  return `<div class="v gap-s"><div class="body">${QUESTIONS.length} questions decide who reaches ${rosterName()}.</div>
+      ${x.answeredAt?`<div class="footnote mortar">You last answered on ${shortDate(x.answeredAt)}.</div>`:""}</div>`
+    +(opens
+      ? `<div class="v gap-s"><div class="body">You can answer again from ${shortDate(opens)}.</div>`
+        +NOTE("Arch waits a month between one set of answers and the next, so that the people it chooses for you were chosen against something that held. Arch Premium lets you answer whenever you like.")
+        +`<button class="btntext" data-a="goPremium">See Arch Premium</button></div>`
+      : `<button class="btn primary" data-a="answerAgain">Answer again</button>`)
+    +NOTE("Your answers are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and "+rosterName()+" from tomorrow is chosen against the new answers.");
+}
 function settingDetail(id){
   const x=S.set; let b="";
   if(id==="d-distance"){
@@ -1590,6 +1673,13 @@ function settingDetail(id){
     b=themeSpecimen()
      +opts(THEMES,x.theme,"setTheme")
      +NOTE(THEME_NOTES[x.theme]);
+  } else if(id==="d-location"){
+    b='<div class="titleM">'+(S.you.place?esc(placeLabel(S.you.place)):"Not set")+'</div>'
+     +NOTE("This is the chip under your name, and with your distance it decides who could plausibly meet you. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+     +'<button class="btn primary" data-a="youPlace">Change</button>'
+     +(x.sub?"":NOTE("Without Premium this puts you where your phone says you are. Choosing somewhere else is part of Arch Premium."));
+  } else if(id==="d-answers"){
+    b=answersDetail();
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
@@ -1692,8 +1782,7 @@ function onboarding(){
       <div class="v gap-xs mt-xl"><div class="footnote mortar">Gender</div>
         ${GENDERS.map(g=>`<button data-a="obGender" data-o="${g[0]}" style="display:block;width:100%">
           <div class="opt ${o.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
-      <div class="field onNight mt-m"><div class="lbl">Pronouns</div>
-        <input id="obPronouns" maxlength="20" value="${esc(o.pronouns)}" placeholder="Optional"></div>
+      <div class="mt-m">${pronounPicker("ob",o.pronouns,true)}</div>
       ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
         <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
     enabled=o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender;
@@ -2106,8 +2195,7 @@ function openDetails(){
       <div class="v gap-xs mt-m"><div class="footnote mortar">Gender</div>
         ${GENDERS.map(g=>`<button data-a="youGender" data-o="${g[0]}" style="display:block;width:100%">
           <div class="opt ${S.you.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
-      <div class="field mt-m"><div class="lbl">Pronouns</div>
-        <input maxlength="20" value="${esc(S.you.pronouns)}" placeholder="Optional"></div>`
+      <div class="mt-m">${pronounPicker("you",S.you.pronouns,false)}</div>`
     +`<button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`);
 }
@@ -2143,6 +2231,10 @@ function placeSheet(target,query){
       `<div class="v gap-xs"><div class="prompt mortar">${esc(city)}</div>
         <div class="v gap-xs">${list.map(row).join("")}</div></div>`).join("");
   }
+  /* Onboarding may choose from the list; after that, choosing a place you are
+     not in is part of Arch Premium, and everybody else gets the one button that
+     puts them where they are. */
+  const canChoose=target==="ob"||S.set.sub;
   const offer=S.set.locationPermission!=="denied"&&!searching
     ? `<button data-a="useLocation" data-t="${target}" style="display:block;width:100%">
         <div class="srow" style="background:var(--stoneRaised); border-radius:var(--r-control)">
@@ -2150,9 +2242,15 @@ function placeSheet(target,query){
             <div class="footnote mortar" style="margin-top:4px">Fills this in, and places you to
               about a kilometre. Arch keeps nothing finer than that.</div></div></div></button>`
     : "";
-  openSheet(`<div class="titleM" style="padding-top:8px">Where you live</div>
-    <div class="field mt-m"><input id="placeSearch" data-t="${target}"
-      placeholder="Search" value="${esc(q)}"></div>
+  if(!canChoose){
+    body=`<div class="v gap-s">${S.set.locationPermission==="denied"
+        ?`<div class="body">Arch places you from your phone&rsquo;s location, which is off for Arch. Turn it on in your iPhone settings, and this puts you where you are.</div>`:""}
+      <div class="footnote mortar">Choosing somewhere you are not &mdash; a city you are moving to, or one you visit &mdash; is part of Arch Premium.</div>
+      <button class="btntext" data-a="premiumFromSheet">See Arch Premium</button></div>`;
+  }
+  openSheet(`<div class="titleM" style="padding-top:8px">${canChoose?"Where you live":"Where you are"}</div>
+    ${canChoose?`<div class="field mt-m"><input id="placeSearch" data-t="${target}"
+      placeholder="Search" value="${esc(q)}"></div>`:""}
     <div class="v gap-xl mt-m" style="max-height:420px; overflow-y:auto">${offer}${body}</div>
     <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
 }
@@ -2399,7 +2497,26 @@ document.addEventListener("click",e=>{
       const t=el.dataset.t, target=t==="ob"?S.onboarding:S.you;
       target.coord=coarse(fix);
       if(!target.place) target.place=nearestPlace(fix);
-      placeSheet(t);
+      if(t==="ob"||S.set.sub) placeSheet(t); else { closeSheet(); render(); }
+    },
+    premiumFromSheet:()=>{ closeSheet(); acts.goPremium(); },
+    pickPronoun:()=>{
+      const target=el.dataset.t==="ob"?S.onboarding:S.you;
+      const cur=parsePronouns(target.pronouns), w=el.dataset.o;
+      const i=cur.picked.indexOf(w); if(i<0) cur.picked.push(w); else cur.picked.splice(i,1);
+      target.pronouns=composePronouns(cur.picked,cur.other);
+      if(el.dataset.t==="ob") render(); else openDetails();
+    },
+    answerAgain:()=>{ S.set.answerRun={q:0,qa:S.set.qa.slice()}; render(); },
+    answerBack:()=>{ S.set.answerRun.q--; render(); },
+    answerStop:()=>{ S.set.answerRun=null; render(); },
+    setAnswer:()=>{
+      const run=S.set.answerRun; run.qa[run.q]=el.dataset.o; render();
+      setTimeout(()=>{
+        if(run.q+1<QUESTIONS.length) run.q++;
+        else { S.set.qa=run.qa; S.set.answeredAt=Date.now(); S.set.answerRun=null; }
+        render();
+      },260);
     },
     youHeight:()=>heightSheet("you"),
     obGender:()=>{S.onboarding.gender=el.dataset.o; render();},
@@ -2620,6 +2737,11 @@ document.addEventListener("input",e=>{
     const b=document.querySelector('[data-a="obEmailNext"]');
     if(b) b.disabled=S.emailSignIn.code.length!==6;
     return; }
+  if(t.id==="pronounOther"){
+    const target=t.dataset.t==="ob"?S.onboarding:S.you;
+    const cur=parsePronouns(target.pronouns);
+    target.pronouns=composePronouns(cur.picked,t.value);
+    return; }
   if(t.id==="placeSearch"){
     const at=t.selectionStart;
     placeSheet(t.dataset.t,t.value);
@@ -2628,8 +2750,7 @@ document.addEventListener("input",e=>{
     return;
   }
   if(o){
-    const map={obName:"name",obEmail:"email",obAge:"age",
-               obWork:"work",obPronouns:"pronouns"};
+    const map={obName:"name",obEmail:"email",obAge:"age",obWork:"work"};
     if(map[t.id]){
       o[map[t.id]]=t.value;
       if(document.querySelector('[data-a="obNext"]')) refreshCTA();
@@ -2666,6 +2787,7 @@ function finishOnboarding(){
     S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
     S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
     if(o.seeking.length) S.set.seeking=o.seeking.slice();
+    if(o.qa&&o.qa.length){ S.set.qa=o.qa.slice(); S.set.answeredAt=Date.now(); }
     if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
     o.answers.forEach((a,i)=>{
       if(a.trim()&&o.questions[i]) S.you.prompts[i]=[o.questions[i],a.trim()];
