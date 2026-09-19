@@ -17,14 +17,6 @@ import SwiftUI
 struct OnboardingBirthday: View {
     let store: OnboardingStore
 
-    private enum Field: String, Identifiable {
-        case year, month, day
-        var id: String { rawValue }
-        var title: String { rawValue.capitalized }
-    }
-
-    @State private var picking: Field?
-
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
@@ -32,24 +24,26 @@ struct OnboardingBirthday: View {
                 detail: "Your age is worked out from this and shown on your profile. The date itself is never shown to anyone."
             )
 
-            VStack(spacing: ArchSpacing.xs) {
-                ChoiceRow(label: "Year",
-                          value: store.birthYear.map(String.init) ?? "",
-                          surface: ArchColor.stone) { picking = .year }
-
-                ChoiceRow(label: "Month",
-                          value: store.birthMonthName,
-                          surface: ArchColor.stone) { picking = .month }
-
-                // A day cannot be offered before the month it belongs to is
-                // known: "31" is a different promise in June than in May.
-                ChoiceRow(label: "Day",
-                          value: store.birthDay.map(String.init) ?? "",
-                          surface: ArchColor.stone,
-                          isEnabled: store.birthYear != nil && store.birthMonth != nil) {
-                    picking = .day
-                }
-            }
+            // **One control, not three sheets.** All three parts on screen at
+            // once, so a date reads as the single fact it is and any part of it
+            // can be changed without leaving the other two behind a dismissal.
+            ColumnPicker(columns: [
+                .init(id: "Year",
+                      options: Birthday.years().map(String.init),
+                      selection: store.birthYear.map(String.init),
+                      onPick: { store.birthYear = Int($0) }),
+                .init(id: "Month",
+                      options: Birthday.months,
+                      selection: store.birthMonth.map { Birthday.months[$0 - 1] },
+                      onPick: { store.birthMonth = Birthday.months.firstIndex(of: $0).map { $0 + 1 } }),
+                .init(id: "Day",
+                      options: (1...store.daysInChosenMonth).map(String.init),
+                      selection: store.birthDay.map(String.init),
+                      // A day cannot be offered before the month it belongs to
+                      // is known.
+                      isEnabled: store.birthYear != nil && store.birthMonth != nil,
+                      onPick: { store.birthDay = Int($0) })
+            ])
 
             if let birthday = store.birthday {
                 if birthday.isOldEnough() {
@@ -64,18 +58,8 @@ struct OnboardingBirthday: View {
                 }
             }
         }
-        .sheet(item: $picking) { field in
-            ChoiceSheet(title: field.title,
-                        options: options(for: field),
-                        current: current(for: field)) { choice in
-                choose(field, choice)
-            }
-        }
     }
 
-    /// Said plainly and without a colour that makes it an alarm — no red anywhere
-    /// in Arch, and least of all on a screen somebody may have reached by
-    /// mis-scrolling a list.
     private func tooYoung(age: Int) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xs) {
             Text("Arch is for people 18 and over")
@@ -94,37 +78,6 @@ struct OnboardingBirthday: View {
                 .fill(ArchColor.stone)
         )
     }
-
-    // MARK: The lists
-
-    private func options(for field: Field) -> [String] {
-        switch field {
-        case .year:  return Birthday.years().map(String.init)
-        case .month: return Birthday.months
-        case .day:   return (1...store.daysInChosenMonth).map(String.init)
-        }
-    }
-
-    private func current(for field: Field) -> String {
-        switch field {
-        case .year:  return store.birthYear.map(String.init) ?? ""
-        case .month: return store.birthMonthName
-        case .day:   return store.birthDay.map(String.init) ?? ""
-        }
-    }
-
-    private func choose(_ field: Field, _ choice: String) {
-        switch field {
-        case .year:
-            store.birthYear = Int(choice)
-        case .month:
-            store.birthMonth = Birthday.months.firstIndex(of: choice).map { $0 + 1 }
-        case .day:
-            store.birthDay = Int(choice)
-        }
-        picking = nil
-    }
-}
 
 #Preview("Nothing chosen") {
     OnboardingBirthday(store: OnboardingStore())
