@@ -7,6 +7,11 @@ import SwiftUI
 /// from `SettingsStore`, so a detail line always shows the live value.
 struct SettingsView: View {
     let store: SettingsStore
+    /// The profile, for the settings that are really about it -- where you are
+    /// lives on the profile row, not in discovery settings, and the screen that
+    /// changes it has to be able to save it there. Optional because every
+    /// preview of Settings has no profile to hand.
+    var profile: ProfileStore? = nil
     /// Sends the reader to the Premium tab, since a paywall inside a settings push
     /// would be the same screen in two places.
     var onOpenPremium: () -> Void = {}
@@ -22,7 +27,7 @@ struct SettingsView: View {
             header
             ScrollView {
                 VStack(alignment: .leading, spacing: ArchSpacing.xl) {
-                    ForEach(store.sections) { section in
+                    ForEach(store.sections(place: profile?.person.place?.label)) { section in
                         group(section)
                     }
                     signOut
@@ -40,6 +45,7 @@ struct SettingsView: View {
             SettingsDetailView(
                 row: row,
                 store: store,
+                profile: profile,
                 onOpenPremium: onOpenPremium,
                 onDeleteAccount: onDeleteAccount
             )
@@ -76,9 +82,6 @@ struct SettingsView: View {
         .padding(.leading, ArchSpacing.xs)
         .padding(.trailing, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.xs)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     private func group(_ section: SettingsSection) -> some View {

@@ -90,9 +90,6 @@ struct PhotoPickerView: View {
         .padding(.leading, ArchSpacing.xs)
         .padding(.trailing, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.xs)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     private var instruction: some View {
@@ -183,10 +180,7 @@ struct PhotoPickerView: View {
             .padding(.top, ArchSpacing.s)
             .padding(.bottom, ArchSpacing.s)
         }
-        .background(ArchColor.stoneRaised)
-        .overlay(alignment: .top) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
+        .archBar(.bottom)
     }
 
     // MARK: Behaviour

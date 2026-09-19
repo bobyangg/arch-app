@@ -23,6 +23,14 @@ struct ArrangeProfileView: View {
     @State private var isPicking = false
     /// The refused photograph being read about, if any.
     @State private var reading: Photo?
+    /// The answer being rewritten, if any.
+    ///
+    /// **The rows here were drag-only, and nothing said so.** A list of your three
+    /// questions that you cannot open is a dead end: the sheet that changes a
+    /// question already existed and was reachable from the You tab alone, so the
+    /// screen called "arrange your profile" was the one screen where a question
+    /// could not be changed.
+    @State private var editingAnswer: Prompt?
 
     private var person: Person { store.person }
 
@@ -44,6 +52,15 @@ struct ArrangeProfileView: View {
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isPicking) {
             PhotoLibraryPicker(slotsLeft: store.slotsLeft) { store.addPhotos($0) }
+        }
+        .sheet(item: $editingAnswer) { prompt in
+            EditAnswerSheet(
+                prompt: prompt,
+                taken: store.questionsTaken(excluding: prompt.id)
+            ) { question, answer in
+                store.updatePrompt(id: prompt.id, question: question, answer: answer)
+                editingAnswer = nil
+            }
         }
         // A sheet rather than a push: it is about one photograph rather than a
         // place in the profile, and it has its own way out.
@@ -107,9 +124,6 @@ struct ArrangeProfileView: View {
         .padding(.leading, ArchSpacing.xs)
         .padding(.trailing, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.xs)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     // MARK: Photos
@@ -168,32 +182,57 @@ struct ArrangeProfileView: View {
     }
 
     private func answerRow(_ prompt: Prompt, at index: Int) -> some View {
-        HStack(spacing: ArchSpacing.s) {
-            Image(systemName: "line.3.horizontal")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.mortar)
+        Button { editingAnswer = prompt } label: {
+            HStack(spacing: ArchSpacing.s) {
+                Image(systemName: "line.3.horizontal")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.mortar)
 
-            Text(prompt.question)
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.limestone)
-                .lineLimit(1)
+                VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+                    // An empty slot says so rather than showing a blank row, which
+                    // is what three unanswered questions looked like here.
+                    Text(prompt.question.isEmpty ? "Choose a question" : prompt.question)
+                        .archText(.footnote)
+                        .foregroundStyle(prompt.question.isEmpty
+                                         ? ArchColor.mortar : ArchColor.limestone)
+                        .lineLimit(1)
+                        .multilineTextAlignment(.leading)
 
-            Spacer(minLength: 0)
+                    if !prompt.answer.isEmpty {
+                        Text(prompt.answer)
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                            .lineLimit(1)
+                            .multilineTextAlignment(.leading)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .archText(.caption)
+                    .foregroundStyle(ArchColor.mortar)
+            }
+            .padding(.horizontal, ArchSpacing.s)
+            .padding(.vertical, ArchSpacing.s)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                    .fill(ArchColor.stone)
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.horizontal, ArchSpacing.s)
-        .padding(.vertical, ArchSpacing.s)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                .fill(ArchColor.stone)
-        )
+        .buttonStyle(PressScaleStyle(scale: 0.99))
+        // Both, on the same row: a tap opens it and a press-and-drag moves it,
+        // which is how the photo tiles above already behave.
         .draggable(prompt.id)
         .dropDestination(for: String.self) { ids, _ in
             guard let dragged = ids.first else { return false }
             store.moveAnswer(id: dragged, to: index)
             return true
         }
-        .accessibilityLabel("Answer \(index + 1), \(prompt.question)")
+        .accessibilityLabel("Answer \(index + 1), \(prompt.question.isEmpty ? "no question chosen" : prompt.question)")
+        .accessibilityHint("Opens it to change the question or rewrite the answer")
     }
 }
 

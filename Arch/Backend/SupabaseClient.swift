@@ -46,10 +46,29 @@ actor SupabaseClient {
         return saved
     }
 
+    /// **The keychain write is the one that matters, and it used to be a
+    /// `try?`.** Supabase rotates the refresh token on every refresh, so the one
+    /// just received is the only one that will ever work again. If it reached
+    /// memory and not the keychain, the app kept running perfectly and the next
+    /// launch read the *previous* session, refreshed with a token that had
+    /// already been spent, got a 400, and signed the reader out -- a failure
+    /// that appears a day later and points nowhere near its cause.
+    ///
+    /// It still cannot throw: there is nothing useful a caller could do, and
+    /// refusing a good in-memory session because the keychain was unavailable
+    /// would be worse. It is recorded instead, and the read-back proves it.
     func store(_ new: Session) {
         current = new
-        if let data = try? encoder.encode(new), let raw = String(data: data, encoding: .utf8) {
-            try? Keychain.set(raw, for: Session.keychainKey)
+        guard let data = try? encoder.encode(new),
+              let raw = String(data: data, encoding: .utf8) else {
+            print("[session] could not encode the session; it will not survive a launch")
+            return
+        }
+        do {
+            try Keychain.set(raw, for: Session.keychainKey)
+        } catch {
+            print("[session] keychain write failed: \(error). "
+                  + "This session will not survive a launch.")
         }
     }
 
@@ -100,12 +119,29 @@ actor SupabaseClient {
 
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else { throw ArchAPIError.transport }
+
+        // **Only a refusal ends a session. A bad afternoon does not.**
+        //
+        // This cleared the keychain on *any* non-200, which put a rate limit, a
+        // gateway error and a Supabase restart in the same bucket as a revoked
+        // credential -- and clearing is not recoverable. One 503 while the app
+        // was opening and the reader was signed out for good, with a perfectly
+        // valid refresh token thrown away. That is the whole of "it makes me
+        // sign in again".
+        //
+        // 400 and 401 are the server saying this grant is not a grant:
+        // `invalid_grant`, a token already rotated, an account deleted. Nothing
+        // else is, and everything else is worth keeping the session for and
+        // trying again on the next launch.
         guard http.statusCode == 200 else {
-            // A refused refresh means the session is gone for good — revoked,
-            // expired, or the account removed. Clear it so the app asks for Apple
-            // again instead of retrying a credential that will never work.
-            clearSession()
-            throw ArchAPIError.notSignedIn
+            if http.statusCode == 400 || http.statusCode == 401 {
+                clearSession()
+                throw ArchAPIError.notSignedIn
+            }
+            throw ArchAPIError.server(
+                status: http.statusCode,
+                message: String(data: data, encoding: .utf8)
+            )
         }
         let token = try decoder.decode(TokenResponse.self, from: data)
         let fresh = token.session
@@ -121,7 +157,17 @@ actor SupabaseClient {
         method: String,
         body: Data? = nil,
         prefer: String? = nil,
-        authenticated: Bool = true
+        authenticated: Bool = true,
+        /// Status codes whose *body* is the answer rather than an error.
+        ///
+        /// Only the edge functions need this, and only because they refuse with
+        /// something worth reading. `register` answers a banned account with
+        /// 403 and a body saying which kind of ban it was — and throwing on the
+        /// status threw that away, so a removed account surfaced as
+        /// `ArchAPIError.notPermitted` and was reported to the reader as "Arch
+        /// could not reach the network just now". The `.removed` branch that
+        /// was supposed to handle it could never be reached.
+        readingBodyOn: Set<Int> = []
     ) async throws -> Data {
         var request = URLRequest(url: url)
         request.httpMethod = method
@@ -149,6 +195,8 @@ actor SupabaseClient {
         guard let http = response as? HTTPURLResponse else { throw ArchAPIError.transport }
         switch http.statusCode {
         case 200...299:
+            return data
+        case let code where readingBodyOn.contains(code):
             return data
         case 401, 403:
             // **Not necessarily an auth failure.** Row-level security answers a
@@ -432,7 +480,17 @@ actor SupabaseClient {
             // an error, so a blocked photograph simply has none — which is what
             // the placeholder tone is for.
             guard let path = item.path, let relative = item.signedURL else { continue }
-            out[path] = URL(string: relative, relativeTo: ArchConfig.storageURL)?.absoluteURL
+            // **Appended, not resolved, and `relativeTo:` was why every
+            // photograph was blank.** Supabase answers with a path rather than a
+            // URL -- "/object/sign/photos/<id>.jpg?token=..." -- and RFC 3986
+            // resolution against a base of ".../storage/v1" throws part of the
+            // base away whichever shape it arrives in: a leading slash replaces
+            // the whole path and loses "/storage/v1", and without one the last
+            // segment is replaced and it loses "/v1". Both 404, the image never
+            // loads, and `PhotoPlaceholder` shows its tone -- which looks exactly
+            // like a photograph that has not finished uploading.
+            let tail = relative.hasPrefix("/") ? String(relative.dropFirst()) : relative
+            out[path] = URL(string: ArchConfig.storageURL.absoluteString + "/" + tail)
         }
         return out
     }
@@ -441,11 +499,14 @@ actor SupabaseClient {
     func callFunction<Body: Encodable, T: Decodable>(
         _ name: String,
         _ body: Body,
-        returning: T.Type
+        returning: T.Type,
+        /// Decode a 403 body instead of throwing. See `readingBodyOn`.
+        readingRefusals: Bool = false
     ) async throws -> T {
         let url = ArchConfig.functionsURL.appendingPathComponent(name)
         let data = try await request(url: url, method: "POST",
-                                     body: try encoder.encode(body))
+                                     body: try encoder.encode(body),
+                                     readingBodyOn: readingRefusals ? [403] : [])
         return try decoder.decode(T.self, from: data)
     }
 }

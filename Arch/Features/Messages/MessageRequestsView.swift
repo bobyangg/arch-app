@@ -65,9 +65,6 @@ struct MessageRequestsView: View {
         .padding(.leading, ArchSpacing.xs)
         .padding(.trailing, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.xs)
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(ArchColor.hairline).frame(height: ArchSpacing.hairline)
-        }
     }
 
     private var empty: some View {

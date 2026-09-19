@@ -29,7 +29,7 @@ struct PremiumView: View {
     }
 
     var body: some View {
-        ScrollView {
+        TopBarScroll {
             VStack(alignment: .leading, spacing: 0) {
                 masthead
                 benefitList
@@ -40,8 +40,6 @@ struct PremiumView: View {
             .padding(.bottom, ArchSpacing.sectionGap)
         }
         .background(ArchColor.night)
-        .scrollIndicators(.hidden)
-        .safeAreaInset(edge: .top) { TopBar() }
     }
 
     // MARK: Pieces
@@ -167,14 +165,7 @@ struct PlanRow: View {
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
                     .fill(isSelected ? ArchColor.stoneRaised : ArchColor.stone)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                    .strokeBorder(
-                        isSelected ? ArchColor.limestone.opacity(0.30) : Color.clear,
-                        lineWidth: 1
-                    )
-            )
-            .animation(ArchMotion.quick, value: isSelected)
+            .archSelected(isSelected, radius: ArchRadius.control, tint: ArchColor.limestone)
         }
         .buttonStyle(PressScaleStyle(scale: 0.99))
         .accessibilityLabel("\(plan.duration), \(plan.total), \(plan.perMonth)")

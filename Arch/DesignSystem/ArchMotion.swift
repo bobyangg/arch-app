@@ -10,6 +10,11 @@ import SwiftUI
 ///
 /// Arrivals are never animated. Tomorrow's person is simply there when you open the
 /// app — no reveal, no celebration.
+///
+/// Changing tabs and choosing a card are things the reader does, so they move:
+/// the glass pill slides under the tab you chose, the old screen gives way to the
+/// new one, a selection glow arrives. All of it settles rather than bounces —
+/// glass does not spring.
 enum ArchMotion {
 
     /// 150ms — a control acknowledging a tap.
@@ -17,6 +22,15 @@ enum ArchMotion {
 
     /// 250ms — a surface appearing, a row changing state.
     static let standard = Animation.easeOut(duration: 0.25)
+
+    /// Glass settling: the pill under the active tab, a selection glow, one tab
+    /// giving way to the next. A smooth spring with no bounce, so it reads as
+    /// glass coming to rest.
+    static let glass = Animation.smooth(duration: 0.34)
+
+    /// The same curve as `glass`, on purpose. The pill sliding and the page
+    /// changing are one gesture, and two curves would make them two.
+    static let tabSwitch = glass
 
     /// A stone falling out of the arch. Ease-*in* on purpose: it reads as gravity
     /// rather than as a bounce, and nothing about losing a slot should feel springy.

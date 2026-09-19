@@ -82,6 +82,13 @@ struct DiscoveryRow: Codable, Hashable {
     var notifyMessages: Bool
 }
 
+/// One questionnaire answer, as stored. Read back only by its owner.
+struct AnswerRow: Decodable, Hashable {
+    let questionId: String
+    let optionIndex: Int
+    let answeredAt: Date
+}
+
 // MARK: - Pairing
 
 struct PairingRow: Decodable, Hashable, Identifiable {
@@ -234,18 +241,33 @@ enum ArchUnits {
 
     /// Centimetres to the string the height picker offers, so a profile shows the
     /// same wording whether it was just edited or just downloaded.
+    /// **Written the way `Person.heights` writes it, because the picker looks
+    /// itself up in that list.** This returned "5 ft 0" for exactly five feet,
+    /// which is not one of the rows, so a round height came back from the server
+    /// and matched nothing — no tick in the picker, and a profile reading a
+    /// height the app would not have offered.
     static func height(fromCentimetres cm: Int?) -> String {
         guard let cm, cm > 0 else { return "" }
         let totalInches = Int((Double(cm) / 2.54).rounded())
-        return "\(totalInches / 12) ft \(totalInches % 12)"
+        let feet = totalInches / 12, inches = totalInches % 12
+        return inches == 0 ? "\(feet) ft" : "\(feet) ft \(inches)"
     }
 
-    /// "6 ft 1" back to centimetres, for saving.
+    /// "6 ft 1", or "6 ft", back to centimetres for saving.
+    ///
+    /// **`parts.count == 2` silently lost every round height.** `Person.heights`
+    /// writes exact feet as "5 ft" with no inches, so splitting on non-digits
+    /// gives one number, the guard failed, and `nil` went into a nullable column
+    /// — no error, no warning, just a profile with no height. It was only ever
+    /// visible to somebody who picked five feet exactly, which is why two test
+    /// profiles had a height and the third did not.
     static func centimetres(fromHeight text: String) -> Int? {
-        let parts = text.split(whereSeparator: { !$0.isNumber })
-        guard parts.count == 2,
-              let feet = Int(parts[0]), let inches = Int(parts[1]) else { return nil }
-        return Int((Double(feet * 12 + inches) * 2.54).rounded())
+        let numbers = text.split(whereSeparator: { !$0.isNumber }).compactMap { Int($0) }
+        switch numbers.count {
+        case 1:  return Int((Double(numbers[0] * 12) * 2.54).rounded())
+        case 2:  return Int((Double(numbers[0] * 12 + numbers[1]) * 2.54).rounded())
+        default: return nil
+        }
     }
 
     static func birthdate(fromAge age: Int, calendar: Calendar = .current) -> String {
