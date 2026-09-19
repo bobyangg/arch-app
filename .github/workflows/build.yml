@@ -50,6 +50,13 @@ jobs:
       - name: Swift names resolve
         run: python tools/swiftcheck.py Arch
 
+      # `swiftcheck` says in its own output that it checks names and nothing
+      # else -- not types, not argument labels, not order. That gap cost two
+      # twenty-minute round trips to the same compiler error, so the narrow
+      # part of it that keeps recurring is checked here instead.
+      - name: Arguments are in declaration order
+        run: python tools/arglint.py
+
       - name: SQL cross-references
         run: python backend/lint.py
 
