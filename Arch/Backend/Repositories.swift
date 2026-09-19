@@ -52,51 +52,82 @@ enum ArchBackend {
     /// false on a simulator, and the server decides whether to enforce — a client
     /// deciding whether it needs to prove itself is not a security control.
     static func register(identity: AppleIdentity) async throws -> Registration {
-        struct Body: Encodable {
-            let challenge: String?
-            let keyId: String?
-            let attestation: String?
-            let deviceToken: String?
-            let name: String?
-            let email: String?
-        }
-        struct Reply: Decodable {
-            let status: String
-            let isNewAccount: Bool?
-            let needsOnboarding: Bool?
-            let attested: Bool?
-        }
+        let deviceToken = (try? await DeviceIdentity.token())?.base64EncodedString()
 
-        var challenge: String?
-        var keyID: String?
-        var attestation: String?
-        if Attestation.isSupported {
-            // A failure here is not fatal. The server logs it and, until
-            // ATTEST_ENFORCED is on, lets the signup through -- turning attestation
-            // on and enforcing it in the same change makes the first failure
-            // indistinguishable from every real user being locked out.
-            challenge = try? await self.challenge()
-            if let challenge, let bytes = Data(base64Encoded: challenge) {
-                if let result = try? await Attestation.attest(challenge: bytes) {
-                    keyID = result.keyID
-                    attestation = result.attestation.base64EncodedString()
-                }
-            }
-        }
-        let deviceToken = try? await DeviceIdentity.token()
-
-        let reply: Reply = try await SupabaseClient.shared.callFunction(
-            "register",
-            Body(challenge: challenge, keyId: keyID, attestation: attestation,
-                 deviceToken: deviceToken?.base64EncodedString(),
-                 name: identity.name, email: identity.email),
-            returning: Reply.self
+        // **Attestation is off the path the reader waits on.**
+        //
+        // It used to run first: fetch a challenge from us, hand it to Apple, wait
+        // for Apple, then register. Three sequential round trips, two of them
+        // before anything could happen on screen -- the edge logs put the pair at
+        // about two and a half seconds of a button that looked stuck.
+        //
+        // Nothing is given up by moving it. The server already treats attestation
+        // as a signal rather than a gate unless `ATTEST_ENFORCED` is on -- and if
+        // it is on, the unattested call below is refused and the full exchange
+        // runs properly, exactly as it always did. Enforcement still enforces; it
+        // just costs the two seconds only where it is actually required.
+        var reply = try await post(
+            RegisterBody(challenge: nil, keyId: nil, attestation: nil,
+                         deviceToken: deviceToken,
+                         name: identity.name, email: identity.email)
         )
 
+        if reply.status != "ok", reply.error != nil, Attestation.isSupported,
+           let material = await attestationMaterial() {
+            reply = try await post(
+                RegisterBody(challenge: material.challenge, keyId: material.keyID,
+                             attestation: material.attestation,
+                             deviceToken: deviceToken,
+                             name: identity.name, email: identity.email)
+            )
+        }
+
         guard reply.status == "ok" else { return .removed }
+
+        // Proved afterwards, so the account still records a verified device and
+        // `account_devices` still gets its key: a second call, on nobody's
+        // critical path, whose answer nothing is waiting for.
+        if Attestation.isSupported, reply.attested != true {
+            let name = identity.name, email = identity.email
+            Task.detached(priority: .background) {
+                guard let material = await attestationMaterial() else { return }
+                _ = try? await post(
+                    RegisterBody(challenge: material.challenge,
+                                 keyId: material.keyID,
+                                 attestation: material.attestation,
+                                 deviceToken: deviceToken, name: name, email: email)
+                )
+            }
+        }
+
         return .ok(isNewAccount: reply.isNewAccount ?? true,
                    needsOnboarding: reply.needsOnboarding ?? true,
                    attested: reply.attested ?? false)
+    }
+
+    private static func post(_ body: RegisterBody) async throws -> RegisterReply {
+        try await SupabaseClient.shared.callFunction(
+            "register", body, returning: RegisterReply.self,
+            // So a refused account is read rather than thrown. Without it the
+            // `.removed` branch above is unreachable, and a banned reader is told
+            // the network is down.
+            readingRefusals: true
+        )
+    }
+
+    /// A challenge from us and Apple's answer to it, or nil if either step failed.
+    ///
+    /// A failure here is not fatal and never has been: the server logs it and,
+    /// until `ATTEST_ENFORCED` is on, lets the signup through. Turning attestation
+    /// on and enforcing it in the same change would make the first failure
+    /// indistinguishable from every real user being locked out.
+    private static func attestationMaterial()
+        async -> (challenge: String, keyID: String, attestation: String)? {
+        guard let challenge = try? await self.challenge(),
+              let bytes = Data(base64Encoded: challenge),
+              let result = try? await Attestation.attest(challenge: bytes)
+        else { return nil }
+        return (challenge, result.keyID, result.attestation.base64EncodedString())
     }
 
     /// A one-time value for the device to attest over. Without it, a captured
@@ -117,8 +148,14 @@ enum ArchBackend {
     /// This is also the removal check: a removed account still has a valid session,
     /// because being removed is not the same as being signed out, and the screen
     /// that says so needs to know who it is talking to.
+    /// **Nil means there is no row, and only that.** It used to mean that *or*
+    /// "there is no session", and the caller signed the reader out and cleared
+    /// the keychain for either -- so the two were worth telling apart, because
+    /// one of them is recoverable and the other is what it says.
     static func account() async throws -> AccountRow? {
-        guard let session = await SupabaseClient.shared.restore() else { return nil }
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
         return try await SupabaseClient.shared.selectOne(
             "accounts",
             columns: "id,status,apple_email",
@@ -251,6 +288,9 @@ enum ArchBackend {
             id: row.accountId,
             name: row.name,
             age: ArchUnits.age(fromBirthdate: row.birthdate),
+            // Your own row carries the date. Nobody else's does, and nobody
+            // else's ever will -- `visible_profiles` publishes an age.
+            birthday: Birthday(iso: row.birthdate),
             place: PlaceLibrary.place(matching: row.placeId),
             coordinate: Coordinate(latitude: row.coarseLat, longitude: row.coarseLon),
             height: ArchUnits.height(fromCentimetres: row.heightCm),
@@ -312,7 +352,13 @@ enum ArchBackend {
             NewProfile(
                 accountId: session.userID,
                 name: details.name,
-                birthdate: ArchUnits.birthdate(fromAge: details.age),
+                // The date the reader gave, not one computed backwards from an
+                // age. The fallback cannot be reached -- onboarding will not let
+                // you past the first screen without a date -- and is here so a
+                // future caller that forgets one still creates a profile rather
+                // than failing at the last step of signing up.
+                birthdate: details.birthday?.iso
+                    ?? ArchUnits.birthdate(fromAge: details.age),
                 gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
@@ -349,11 +395,20 @@ enum ArchBackend {
     /// Age becomes a birthdate on the way down, because the database stores the
     /// date and derives the age — otherwise everybody's age would be whatever it
     /// was on the day they typed it.
-    static func saveDetails(_ details: PersonDetails) async throws {
+    /// `settingHeight` is for a profile that has none, and only that.
+    ///
+    /// **Filling a blank is not changing a value.** Every round height was lost
+    /// to the conversion bug above, so there are profiles with no height at all,
+    /// and freezing the field would freeze them empty forever. A height that is
+    /// already there still cannot be edited.
+    static func saveDetails(_ details: PersonDetails,
+                            settingHeight: Bool = false) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
-        guard let gender = details.gender else { throw ArchAPIError.conflict }
+        // Gender is not read here any more: it is settled at signup and is not
+        // in the payload below, so requiring one would refuse a legitimate save
+        // over a field this function no longer writes.
         guard let place = details.place else { throw ArchAPIError.conflict }
 
         /// **The position is written only when there is a new one.**
@@ -372,36 +427,45 @@ enum ArchBackend {
         /// Hand-written rather than an optional field because PostgREST reads a
         /// `null` as "set this column to null", and the column is `not null` —
         /// the key has to be absent, not empty.
+        /// **No `birthdate` and no `height_cm`: both are settled at signup.**
+        ///
+        /// Leaving them out is the enforcement, not a convenience. `birthdate`
+        /// used to be recomputed here from the displayed age, so saving an edit
+        /// to your job title moved your birthday by however much the year had
+        /// turned -- a column that drifted every time an unrelated field was
+        /// touched. Height had no such bug and is frozen for the product reason:
+        /// an age and a height that can be edited are two things people quietly
+        /// revise, and the profile is supposed to be the same one somebody read
+        /// yesterday.
+        ///
+        /// A genuine mistake is a support question, not a settings screen.
         struct Update: Encodable {
-            let name: String
-            let birthdate: String
-            let gender: String
             let pronouns: String?
             let placeId: String
             /// Coarsened before it leaves the phone, not after it arrives. The
             /// CHECK constraint on the column refuses anything finer, so this is
             /// belt and braces on purpose.
             let centre: Coordinate?
-            let heightCm: Int?
             let work: String?
+            /// Written only when there was nothing there. See `settingHeight`.
+            let heightCm: Int?
 
             enum CodingKeys: String, CodingKey {
-                case name, birthdate, gender, pronouns, placeId
-                case coarseLat, coarseLon, heightCm, work
+                case pronouns, placeId
+                case coarseLat, coarseLon, work, heightCm
             }
 
             func encode(to encoder: Encoder) throws {
                 var container = encoder.container(keyedBy: CodingKeys.self)
-                try container.encode(name, forKey: .name)
-                try container.encode(birthdate, forKey: .birthdate)
-                try container.encode(gender, forKey: .gender)
                 try container.encode(pronouns, forKey: .pronouns)
                 try container.encode(placeId, forKey: .placeId)
-                try container.encode(heightCm, forKey: .heightCm)
                 try container.encode(work, forKey: .work)
                 if let centre {
                     try container.encode(centre.latitude, forKey: .coarseLat)
                     try container.encode(centre.longitude, forKey: .coarseLon)
+                }
+                if let heightCm {
+                    try container.encode(heightCm, forKey: .heightCm)
                 }
             }
         }
@@ -409,14 +473,12 @@ enum ArchBackend {
         try await SupabaseClient.shared.update(
             "profiles",
             Update(
-                name: details.name,
-                birthdate: ArchUnits.birthdate(fromAge: details.age),
-                gender: ArchUnits.genderColumn(gender),
                 pronouns: details.pronouns.isEmpty ? nil : details.pronouns,
                 placeId: place.id,
                 centre: place.centre?.coarsened,
-                heightCm: ArchUnits.centimetres(fromHeight: details.height),
-                work: details.work.isEmpty ? nil : details.work
+                work: details.work.isEmpty ? nil : details.work,
+                heightCm: settingHeight
+                    ? ArchUnits.centimetres(fromHeight: details.height) : nil
             ),
             filters: ["account_id": "eq.\(session.userID)"]
         )
@@ -512,8 +574,15 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        /// **No `id`, and sending one is what lost every answer ever written.**
+        /// The column is a `uuid` with a default; the client's ids are view
+        /// identities, and the ones onboarding mints are `"you-q1"`, `"you-q2"`,
+        /// `"you-q3"`. Postgres refused the whole insert as invalid uuid syntax,
+        /// `commit()` wraps this call in `try?`, and three answers went quietly
+        /// nowhere. Letting the default do it removes the class of mistake rather
+        /// than the instance: these rows are deleted and rewritten on every save,
+        /// so a client-side id was never stable enough to be worth keeping.
         struct PromptWrite: Encodable {
-            let id: String
             let accountId: String
             let position: Int
             let promptKey: String
@@ -522,9 +591,19 @@ enum ArchBackend {
         try await SupabaseClient.shared.delete(
             "profile_prompts", filters: ["account_id": "eq.\(session.userID)"]
         )
-        let rows = prompts.enumerated().map { index, prompt in
+        // **Only the ones actually written.** `answer` is
+        // `check (length(trim(answer)) between 1 and 280)`, and onboarding starts
+        // with three empty slots so that `updatePrompt` has somewhere to write --
+        // so sending the whole set meant one unanswered slot failing the insert
+        // and taking the two real answers down with it. Filtered here rather than
+        // at each call site, because both callers had the same bug and a third
+        // would have had it too.
+        let written = prompts.filter {
+            !$0.question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && !$0.answer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let rows = written.enumerated().map { index, prompt in
             PromptWrite(
-                id: prompt.id,
                 accountId: session.userID,
                 position: index,
                 // Stored by id, not by its words: rewording a prompt is an ordinary
@@ -535,6 +614,9 @@ enum ArchBackend {
                 answer: prompt.answer
             )
         }
+        // An empty set is a legitimate state -- three questions chosen and none
+        // answered yet -- and PostgREST refuses an empty insert body.
+        guard !rows.isEmpty else { return }
         try await SupabaseClient.shared.insert("profile_prompts", rows)
     }
 
@@ -543,8 +625,9 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        /// Same as `PromptWrite`: no `id`. Onboarding's were `"draft-0"`,
+        /// `"draft-1"`, `"draft-2"`, and a `uuid` column refused all three.
         struct InterestWrite: Encodable {
-            let id: String
             let accountId: String
             let position: Int
             let text: String
@@ -552,10 +635,16 @@ enum ArchBackend {
         try await SupabaseClient.shared.delete(
             "profile_interests", filters: ["account_id": "eq.\(session.userID)"]
         )
-        let rows = interests.enumerated().map { index, interest in
-            InterestWrite(id: interest.id, accountId: session.userID,
+        // `text` carries the same kind of length check, so a blank chip would
+        // refuse the whole set the way an unanswered prompt did.
+        let filled = interests.filter {
+            !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let rows = filled.enumerated().map { index, interest in
+            InterestWrite(accountId: session.userID,
                           position: index, text: interest.text)
         }
+        guard !rows.isEmpty else { return }
         try await SupabaseClient.shared.insert("profile_interests", rows)
     }
 
@@ -564,19 +653,39 @@ enum ArchBackend {
     /// Sent as one upsert rather than sixteen inserts so that a connection dropping
     /// halfway cannot leave somebody with a half-answered questionnaire that the
     /// matcher would then score against everybody.
-    static func saveAnswers(_ answers: [String: Int]) async throws {
+    ///
+    /// Written again, whole, when somebody answers again from Settings. The
+    /// time is sent rather than left to the column's default, because on an
+    /// upsert the default only applies to a row being made -- and the row is
+    /// already there. It is what "when did you last answer" is read from.
+    static func saveAnswers(_ answers: [String: Int], at time: Date = .now) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
-        struct AnswerRow: Encodable {
+        struct AnswerWrite: Encodable {
             let accountId: String
             let questionId: String
             let optionIndex: Int
+            let answeredAt: Date
         }
         let rows = answers.sorted { $0.key < $1.key }.map {
-            AnswerRow(accountId: session.userID, questionId: $0.key, optionIndex: $0.value)
+            AnswerWrite(accountId: session.userID, questionId: $0.key,
+                        optionIndex: $0.value, answeredAt: time)
         }
         try await SupabaseClient.shared.upsert("questionnaire_answers", rows)
+    }
+
+    /// Your own answers, and only yours: the policy on the table admits nobody
+    /// else, and this is the one read of it the app makes. Settings uses it to
+    /// start the questions from what you said rather than from nothing, and to
+    /// know when you last said it.
+    static func answers() async throws -> [AnswerRow] {
+        guard let session = await SupabaseClient.shared.restore() else { return [] }
+        return try await SupabaseClient.shared.select(
+            "questionnaire_answers",
+            columns: "question_id,option_index,answered_at",
+            filters: ["account_id": "eq.\(session.userID)"]
+        )
     }
 
     // MARK: The roster
@@ -894,4 +1003,28 @@ enum ArchClock {
         formatter.dateFormat = "yyyy-MM-dd"
         return formatter.string(from: date)
     }
+}
+
+// MARK: - Registration wire shapes
+
+/// What `register` is sent, and what it answers.
+///
+/// At file scope rather than inside `register` so the background attestation can
+/// build one without capturing anything out of a function body.
+private struct RegisterBody: Encodable {
+    let challenge: String?
+    let keyId: String?
+    let attestation: String?
+    let deviceToken: String?
+    let name: String?
+    let email: String?
+}
+
+private struct RegisterReply: Decodable {
+    /// Absent on a refusal, which answers with `error` instead.
+    let status: String?
+    let isNewAccount: Bool?
+    let needsOnboarding: Bool?
+    let attested: Bool?
+    let error: String?
 }

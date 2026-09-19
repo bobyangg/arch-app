@@ -116,3 +116,7 @@ CLLocationCoordinate2D
 CLLocation
 CLGeocoder
 CLPlacemark
+
+# In-memory photograph cache, added when reordering blanked tiles
+NSCache
+Locale

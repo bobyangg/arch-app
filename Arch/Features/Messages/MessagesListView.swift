@@ -24,6 +24,11 @@ struct MessagesListView: View {
 
     // NavigationPath, not [Conversation]: the requests folder pushes a different
     // type into this same stack.
+    /// Bumped by the shell when the tab already showing is tapped again. Every
+    /// change means "go back to the root", and the value itself means nothing.
+    /// Defaulted so no `#Preview` has to supply one.
+    var popToRoot: Int = 0
+
     @State private var path = NavigationPath()
 
     var body: some View {
@@ -36,8 +41,8 @@ struct MessagesListView: View {
                 }
             }
             .background(ArchColor.night)
-            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
+            .archBackSwipe()
             .navigationDestination(for: Conversation.self) { conversation in
                 MessageThreadView(
                     conversation: conversation,
@@ -56,10 +61,14 @@ struct MessagesListView: View {
                 )
             }
         }
+        // Emptying the path is the whole of it: `NavigationStack` animates back
+        // through whatever was on it, so an open thread slides away exactly as
+        // the back button would have sent it.
+        .onChange(of: popToRoot) { _, _ in path = NavigationPath() }
     }
 
     private var list: some View {
-        ScrollView {
+        TopBarScroll {
             VStack(alignment: .leading, spacing: 0) {
                 Text("Messages")
                     .archText(.titleL)
@@ -86,7 +95,6 @@ struct MessagesListView: View {
             .padding(.horizontal, ArchSpacing.screenMargin)
             .padding(.bottom, ArchSpacing.sectionGap)
         }
-        .scrollIndicators(.hidden)
     }
 
     /// Requests sit above the conversations rather than mixed into them. Somebody
@@ -120,6 +128,10 @@ struct MessagesListView: View {
 
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            // Nothing to scroll, so nothing to hide behind: the lock-up simply
+            // sits at the top.
+            TopBar()
+                .padding(.horizontal, -ArchSpacing.screenMargin)
             Spacer()
             Text("No conversations yet")
                 .archText(.titleM)

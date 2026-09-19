@@ -86,7 +86,7 @@ struct OnboardingAnswers: View {
             .background(ArchColor.stone)
             .presentationDetents([.large])
             .presentationCornerRadius(ArchRadius.sheet)
-            .presentationBackground(ArchColor.stone)
+            .archSheetBackground()
         }
     }
 

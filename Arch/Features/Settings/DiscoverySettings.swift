@@ -115,6 +115,111 @@ struct IntentionSetting: View {
     }
 }
 
+/// Where you are.
+///
+/// On the profile, not in discovery settings, because it is the chip under your
+/// name as much as it is a filter -- but this is where somebody looks for it, so
+/// this is where the row is. The screen changes the profile through the same
+/// `updateDetails` the details sheet uses, so there is one write and one rule
+/// about what it does to your stored position.
+///
+/// **Two ways to set it, and one of them is Premium.** Everybody can put
+/// themselves where their phone says they are. Choosing a place you are not in
+/// -- the city you are moving to next month, the one you are in every other
+/// week -- is part of Arch Premium, and the picker says so rather than hiding
+/// the search.
+struct LocationSetting: View {
+    let store: SettingsStore
+    var profile: ProfileStore?
+    var onOpenPremium: () -> Void = {}
+
+    @State private var isPicking = false
+    /// Held by the view, not made inside the button, for the reason given on
+    /// `EditDetailsSheet.location`: a manager made in a closure is gone before
+    /// iOS answers it.
+    @State private var location = DeviceLocation()
+    @State private var locationPermission = LocationPermission.notAsked
+    @State private var locationNote: String?
+
+    private var place: Place? { profile?.person.place }
+
+    var body: some View {
+        SettingsPage(title: "Where you are") {
+            Text(place?.label ?? "Not set")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+
+            SettingNote("This is the chip under your name, and with your distance it decides who could plausibly meet you. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+
+            ArchButton(title: "Change", action: { isPicking = true })
+
+            if !store.isSubscribed {
+                SettingNote("Without Premium this puts you where your phone says you are. Choosing somewhere else is part of Arch Premium.")
+            }
+        }
+        .sheet(isPresented: $isPicking) {
+            PlacePickerView(
+                permission: locationPermission,
+                current: place,
+                onChoose: { choose($0) },
+                onUseLocation: useDeviceLocation,
+                onCancel: { isPicking = false },
+                locationNote: locationNote,
+                canChoose: store.isSubscribed,
+                onOpenPremium: { isPicking = false; onOpenPremium() }
+            )
+            .padding(.horizontal, ArchSpacing.screenMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(ArchColor.stone)
+            .presentationDetents([.large])
+            .presentationCornerRadius(ArchRadius.sheet)
+            .archSheetBackground()
+        }
+    }
+
+    /// The one write. Everything else on the details row is carried through
+    /// unchanged, and the place arrives carrying its centre, which is what moves
+    /// the stored position.
+    private func choose(_ chosen: Place) {
+        guard let profile else { return }
+        var details = profile.person.details
+        details.place = chosen
+        profile.updateDetails(details)
+        isPicking = false
+    }
+
+    /// The same path `EditDetailsSheet` takes, with the same stand-in for a
+    /// design build, which has no location to give and UI tests that cannot
+    /// answer a permission prompt.
+    private func useDeviceLocation() {
+        locationNote = nil
+        guard ArchConfig.isConfigured else {
+            let fix = Coordinate(latitude: 40.6913, longitude: -73.9742)
+            locationPermission = .granted
+            if let found = PlaceLibrary.nearest(to: fix) { choose(found) }
+            return
+        }
+        location.request { outcome in
+            switch outcome {
+            case .fix(let point):
+                locationPermission = .granted
+                Task { @MainActor in
+                    if let found = await PlaceSearch.place(at: point) {
+                        choose(found)
+                    } else {
+                        locationNote = "Arch found where you are but could not "
+                            + "name it. Try again in a moment."
+                    }
+                }
+            case .refused:
+                locationPermission = .denied
+            case .unavailable:
+                locationNote = "Arch could not get a position just now."
+            }
+        }
+    }
+}
+
 #Preview("Distance") {
     NavigationStack { DistanceSetting(store: SettingsStore()) }
         .preferredColorScheme(.dark)
@@ -133,4 +238,11 @@ struct IntentionSetting: View {
 #Preview("Who you want to meet") {
     NavigationStack { SeekingSetting(store: SettingsStore()) }
         .preferredColorScheme(.dark)
+}
+
+#Preview("Where you are") {
+    NavigationStack {
+        LocationSetting(store: SettingsStore(), profile: ProfileStore(person: MockData.you))
+    }
+    .preferredColorScheme(.dark)
 }

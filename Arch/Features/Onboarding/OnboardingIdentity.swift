@@ -44,7 +44,8 @@ struct OnboardingIdentity: View {
 ///
 /// Height is a picker. It was a text field, which accepted "tall" and "1.8m" and
 /// every other way people write this, none of which two profiles can be compared
-/// on. Pronouns are the one optional thing on the screen and are marked as such.
+/// on. Pronouns are chips for the same reason, with a field kept for whatever the
+/// chips leave out; they are the one optional thing on the screen and say so.
 struct OnboardingAbout: View {
     let store: OnboardingStore
 
@@ -65,13 +66,11 @@ struct OnboardingAbout: View {
             )
 
             VStack(spacing: ArchSpacing.xs) {
-                ArchField(
-                    text: Binding(get: { store.ageText }, set: { store.ageText = $0 }),
-                    label: "Age",
-                    placeholder: "30",
-                    keyboard: .numberPad,
-                    surface: ArchColor.stone
-                )
+                // **No age field.** It is worked out from the birthday collected
+                // on the first screen. A typed age is a number that stops being
+                // true: it was stored as a date computed backwards from the day
+                // it was typed, so it drifted a year every birthday, and two
+                // places to change one fact is how they come to disagree.
                 PlaceRow(place: store.place, surface: ArchColor.stone) {
                     isPickingPlace = true
                 }
@@ -98,11 +97,8 @@ struct OnboardingAbout: View {
                 }
             }
 
-            ArchField(
+            PronounPicker(
                 text: Binding(get: { store.pronounsDraft }, set: { store.pronounsDraft = $0 }),
-                label: "Pronouns",
-                placeholder: "Optional",
-                characterLimit: 20,
                 surface: ArchColor.stone
             )
 
@@ -185,7 +181,7 @@ struct OnboardingAbout: View {
             .background(ArchColor.stone)
             .presentationDetents([.large])
             .presentationCornerRadius(ArchRadius.sheet)
-            .presentationBackground(ArchColor.stone)
+            .archSheetBackground()
         }
     }
 }
@@ -200,7 +196,7 @@ struct OnboardingAbout: View {
 
 #Preview("About you") {
     OnboardingAbout(store: .configured {
-        $0.ageText = "30"
+        $0.birthYear = 1996; $0.birthMonth = 3; $0.birthDay = 14
         $0.place = PlaceLibrary.place(matching: "bk-fort-greene")
     })
         .padding(ArchSpacing.screenMargin)

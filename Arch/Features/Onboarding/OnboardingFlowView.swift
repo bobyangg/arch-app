@@ -221,6 +221,8 @@ struct OnboardingFlowView: View {
     @ViewBuilder
     private var content: some View {
         switch store.step {
+        case .birthday:
+            OnboardingBirthday(store: store)
         case .identity:
             OnboardingIdentity(store: store)
         case .about:
@@ -264,7 +266,7 @@ struct OnboardingFlowView: View {
         let person = store.profile.person
         try? await ArchBackend.createProfile(
             PersonDetails(
-                name: person.name, age: person.age,
+                name: person.name, age: person.age, birthday: person.birthday,
                 gender: person.gender, pronouns: person.pronouns,
                 place: person.place, height: person.height, work: person.work
             ),

@@ -17,6 +17,11 @@ struct YouProfileView: View {
     var onOpenPremium: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
     var onSignOut: () -> Void = {}
+    /// Bumped by the shell when the tab already showing is tapped again. Every
+    /// change means "go back to the root", and the value itself means nothing.
+    /// Defaulted so no `#Preview` has to supply one.
+    var popToRoot: Int = 0
+
 
     // NavigationPath rather than [Route]: Settings pushes SettingsRow values into
     // this same stack, and a typed array path only accepts one type.
@@ -43,19 +48,19 @@ struct YouProfileView: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            VStack(spacing: 0) {
-                header
-                scroll
+            TopBarScroll(pinned: { header }) {
+                scrollContent
             }
             .background(ArchColor.night)
-            .safeAreaInset(edge: .top) { TopBar() }
             .toolbar(.hidden, for: .navigationBar)
+            .archBackSwipe()
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case .arrange:  ArrangeProfileView(store: store)
                 case .settings:
                     SettingsView(
                         store: settings,
+                        profile: store,
                         onOpenPremium: onOpenPremium,
                         onDeleteAccount: onDeleteAccount,
                         onSignOut: onSignOut
@@ -64,10 +69,18 @@ struct YouProfileView: View {
                 }
             }
         }
+        // Emptying the path is the whole of it: `NavigationStack` animates back
+        // through whatever was on it, so Settings slides away exactly as the back
+        // button would have sent it.
+        .onChange(of: popToRoot) { _, _ in path = NavigationPath() }
         .sheet(item: $editing) { sheet in
             switch sheet {
             case .details:
-                EditDetailsSheet(person: person) { details in
+                EditDetailsSheet(
+                    person: person,
+                    canChoosePlace: settings.isSubscribed,
+                    onOpenPremium: { editing = nil; onOpenPremium() }
+                ) { details in
                     store.updateDetails(details)
                     editing = nil
                 }
@@ -128,18 +141,15 @@ struct YouProfileView: View {
 
     // MARK: Scroll
 
-    private var scroll: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 0) {
-                leadPhoto
-                identity
-                completeness
-                rows
-                reviewRow
-            }
-            .padding(.bottom, ArchSpacing.sectionGap)
+    private var scrollContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            leadPhoto
+            identity
+            completeness
+            rows
+            reviewRow
         }
-        .scrollIndicators(.hidden)
+        .padding(.bottom, ArchSpacing.sectionGap)
     }
 
     @ViewBuilder
@@ -239,10 +249,6 @@ struct YouProfileView: View {
     /// same way the paywall itself refuses to sell with colour.
     private var reviewRow: some View {
         VStack(spacing: 0) {
-            Rectangle()
-                .fill(ArchColor.hairline)
-                .frame(height: ArchSpacing.hairline)
-
             Button {
                 if settings.isSubscribed {
                     path.append(Route.review)

@@ -59,8 +59,11 @@ struct ArchSlotIndicator: View {
             if index < filled || isDropping {
                 segment.fill(ArchColor.lamp)
             } else {
+                // Frosted rather than outlined: an open slot is a stone that is
+                // not there yet, and a ghost of one says that better than a
+                // drawing of its edge.
                 segment
-                    .stroke(ArchColor.mortar.opacity(0.30), lineWidth: 1)
+                    .fill(ArchColor.mortar.opacity(0.14))
                     .animation(ArchMotion.quick, value: droppingIndex)
             }
         }

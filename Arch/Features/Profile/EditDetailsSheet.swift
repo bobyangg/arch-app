@@ -10,6 +10,10 @@ import SwiftUI
 /// it is.
 struct EditDetailsSheet: View {
     let person: Person
+    /// Whether the place can be picked from a list, or only taken from the
+    /// device. See `PlacePickerView.canChoose`.
+    var canChoosePlace: Bool = true
+    var onOpenPremium: (() -> Void)? = nil
     let onSave: (PersonDetails) -> Void
 
     @State private var name = ""
@@ -19,8 +23,14 @@ struct EditDetailsSheet: View {
     @State private var place: Place?
     @State private var height = ""
     @State private var work = ""
-    @State private var isPickingHeight = false
     @State private var isPickingPlace = false
+    @State private var isPickingHeight = false
+    /// **Only when the profile arrived without one.** Every exactly-round height
+    /// was lost to a conversion that required two numbers and got one, so there
+    /// are profiles with no height at all — and freezing the field outright
+    /// would freeze those empty forever. Filling a blank is not changing a
+    /// value; a height that is already there stays put.
+    @State private var canSetHeight = false
     /// Held by the view, not made inside the button: `CLLocationManager` answers
     /// through a delegate, and one created inside a closure is deallocated
     /// before iOS calls back. The symptom is a button that does nothing.
@@ -29,12 +39,7 @@ struct EditDetailsSheet: View {
     @State private var locationNote: String?
     @Environment(\.dismiss) private var dismiss
 
-    private var isValid: Bool {
-        !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && Int(age) != nil
-            && gender != nil
-            && place != nil
-    }
+    private var isValid: Bool { place != nil }
 
     var body: some View {
         ScrollView {
@@ -45,16 +50,48 @@ struct EditDetailsSheet: View {
                     .padding(.top, ArchSpacing.l)
 
                 VStack(spacing: ArchSpacing.xs) {
-                    ArchField(text: $name, label: "Name")
-                    ArchField(text: $age, label: "Age", keyboard: .numberPad)
+                    // **The name is what somebody was introduced to you as.**
+                    // Changing it after the fact means the person in a
+                    // conversation is not the person on the profile any more,
+                    // and there is no notice anywhere that would say so.
+                    FixedRow(label: "Name", value: name)
+                    // **Age and height are shown and not edited.**
+                    //
+                    // Age never was editable in any meaningful sense -- it was a
+                    // field over a birthdate recomputed from whatever number was
+                    // in it, so saving an edit to your job title moved your
+                    // birthday. It is worked out from a date now, and a date does
+                    // not change.
+                    //
+                    // Height is frozen for the product reason rather than a
+                    // technical one: an age and a height somebody can quietly
+                    // revise are the two facts a profile is least able to be
+                    // trusted on, and the profile is supposed to be the one
+                    // somebody read yesterday. A genuine mistake is a support
+                    // question, not a settings screen.
+                    FixedRow(label: "Age", value: age)
+                    // **Gender joins the settled facts.** Pronouns sit below and
+                    // stay editable, which is the distinction worth keeping: what
+                    // you are is what somebody was shown, and what you are called
+                    // is yours to correct.
+                    FixedRow(label: "Gender", value: gender?.label ?? "")
                     PlaceRow(place: place) { isPickingPlace = true }
-                    HeightRow(height: height) { isPickingHeight = true }
+                    if canSetHeight {
+                        HeightRow(height: height) { isPickingHeight = true }
+                    } else {
+                        FixedRow(label: "Height", value: height)
+                    }
                     ArchField(text: $work, label: "Work")
                 }
 
-                genderSection
+                Text(canSetHeight
+                     ? "Your name, age and gender cannot be changed here. Your height is missing — once you set it, it stays."
+                     : "Your name, age, gender and height are set when you sign up and cannot be changed here.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
 
-                ArchField(text: $pronouns, label: "Pronouns", placeholder: "Optional")
+                PronounPicker(text: $pronouns)
 
                 ArchButton(title: "Save", isEnabled: isValid) {
                     onSave(
@@ -79,13 +116,10 @@ struct EditDetailsSheet: View {
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchColor.stone)
-        .presentationDetents([.height(720)])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
-        .sheet(isPresented: $isPickingHeight) {
-            HeightPickerSheet(current: height) { height = $0 }
-        }
+        .archSheetBackground()
         .sheet(isPresented: $isPickingPlace) {
             PlacePickerView(
                 permission: locationPermission,
@@ -136,14 +170,16 @@ struct EditDetailsSheet: View {
                     }
                 },
                 onCancel: { isPickingPlace = false },
-                locationNote: locationNote
+                locationNote: locationNote,
+                canChoose: canChoosePlace,
+                onOpenPremium: onOpenPremium
             )
             .padding(.horizontal, ArchSpacing.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(ArchColor.stone)
             .presentationDetents([.large])
             .presentationCornerRadius(ArchRadius.sheet)
-            .presentationBackground(ArchColor.stone)
+            .archSheetBackground()
         }
         .onAppear {
             let details = person.details
@@ -154,24 +190,16 @@ struct EditDetailsSheet: View {
             place = details.place
             height = details.height
             work = details.work
+            // Decided once, on the way in. Reading it from `height` later would
+            // flip the row back to fixed the moment one was chosen, mid-edit.
+            canSetHeight = details.height.isEmpty
+        }
+        .sheet(isPresented: $isPickingHeight) {
+            HeightPickerSheet(current: height) { height = $0 }
         }
     }
 
     // MARK: Pieces
-
-    private var genderSection: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-            Text("Gender")
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-
-            ForEach(Gender.allCases) { option in
-                OptionRow(text: option.label, isSelected: gender == option) {
-                    gender = option
-                }
-            }
-        }
-    }
 
 }
 

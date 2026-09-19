@@ -13,9 +13,12 @@
   --limestone:#232120; --mortar:#6F675F;
   --lamp:#C9512F; --ember:#A9661A; --verdigris:#3F7359;
   --onLamp:#FAF6F0;
-  --hairline:rgba(111,103,95,.16);
+  --hairline:rgba(111,103,95,.10);
   --quiet:rgba(111,103,95,.28);
-  --lampQuiet:rgba(201,81,47,.45);
+  --quietFill:rgba(111,103,95,.12);
+  --lampWash:rgba(201,81,47,.10); --lampGlow:rgba(201,81,47,.26);
+  --inkGlow:rgba(35,33,32,.18); --frost:rgba(35,33,32,.07);
+  --scrim:rgba(35,33,32,.40);
   --selected:rgba(35,33,32,.30);
   --surround:#EDE4D8;
 
@@ -43,9 +46,12 @@ html[data-theme="dark"]{
   --limestone:#F5EFE6; --mortar:#9A8F86;
   --lamp:#E5714D; --ember:#F0A243; --verdigris:#7FA98F;
   --onLamp:#1F1C1A;
-  --hairline:rgba(154,143,134,.16);
+  --hairline:rgba(154,143,134,.10);
   --quiet:rgba(154,143,134,.28);
-  --lampQuiet:rgba(229,113,77,.45);
+  --quietFill:rgba(154,143,134,.12);
+  --lampWash:rgba(229,113,77,.10); --lampGlow:rgba(229,113,77,.26);
+  --inkGlow:rgba(245,239,230,.18); --frost:rgba(245,239,230,.07);
+  --scrim:rgba(14,13,12,.55);
   --selected:rgba(245,239,230,.30);
   --surround:#0E0D0C;
 
@@ -57,6 +63,9 @@ html[data-theme="dark"]{
   --tone5a:#4A4640; --tone5b:#413E38;
   color-scheme:dark;
 }
+@keyframes glassIn{from{opacity:0; transform:scale(.985)} to{opacity:1; transform:none}}
+#root.tab-in>.screen{animation:glassIn .28s ease-out;}
+@media (prefers-reduced-motion:reduce){#root.tab-in>.screen,.tab[aria-selected="true"]::before{animation:none;}}
 *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
 html,body{height:100%;}
 body{
@@ -100,7 +109,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .limestone{color:var(--limestone);}
 
 /* ---- scroll region ---- */
-.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain;}
+.screen{flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; touch-action:pan-y;}
+#root.has-tabs>.screen{padding-bottom:calc(66px + env(safe-area-inset-bottom,0px));}
+#root.has-tabs>.bottombar{margin-bottom:calc(66px + env(safe-area-inset-bottom,0px));}
 .pad{padding-left:var(--s-l); padding-right:var(--s-l);}
 .safetop{height:env(safe-area-inset-top,0px);}
 .hairline{height:.5px; background:var(--hairline);}
@@ -114,16 +125,31 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 /* The tab bar's twin: same surface, same hairline, the lock-up at the left and
    nothing else. Root screens only — a thread or a profile has somebody else's
    name at the top, and the brand has no business above that. */
-.topbar{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
-        display:flex; align-items:center; gap:8px; padding:env(safe-area-inset-top,0px) 20px 0;
-        height:calc(52px + env(safe-area-inset-top,0px));}
+/* Bars are solid blocks of stoneRaised with no line at their edge: the step up
+   from the page is what separates them. The top and tab bars float over the page
+   so a screen can scroll to its very end beneath them. Mirrors ArchGlass.swift. */
+#root{position:relative;}
+/* Ink on the page, not a bar: the lock-up collapses as you read down and comes
+   back the moment you scroll up. Mirrors TopBarScroll in TopBar.swift. */
+.topbar{flex:none; background:var(--night); overflow:hidden;
+        /* A plain 52px, not calc() with env(): Chrome will not interpolate the
+           latter and the collapse silently never happens. The safe-area inset is
+           an untransitioned margin instead. */
+        transition:height .34s ease-out, opacity .34s ease-out;
+        display:flex; align-items:center; gap:8px; padding:0 20px;
+        margin-top:env(safe-area-inset-top,0px); height:52px;}
+.topbar.hidden{height:0; opacity:0;}
 .topbar .word{font-family:var(--serif); font-optical-sizing:auto;
-        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:25px; line-height:30px; font-weight:600;}
+        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:22px; line-height:26px; font-weight:600;}
 .topbar svg{display:block;}
 
-.tabbar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+.tabbar{position:absolute; bottom:0; left:0; right:0; z-index:5;
+        background:var(--stoneRaised);
         display:flex; padding:8px 0 calc(4px + env(safe-area-inset-bottom,0px));}
-.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0;}
+.tab{flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px 0; position:relative;}
+.tab[aria-selected="true"]::before{content:""; position:absolute; inset:0 8px; border-radius:14px;
+  background:var(--frost); animation:glassIn .32s ease-out;}
+.tab>*{position:relative;}
 .tab .lbl{font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
 .tab[aria-selected="true"] .lbl{color:var(--lamp);}
 .glyph{width:26px; height:26px; position:relative;}
@@ -138,21 +164,30 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
       font-size:12px; line-height:16px; font-weight:500; color:var(--mortar);}
 .interest{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
           font-size:13px; line-height:18px; color:var(--limestone);}
-.interest.add{background:none; border:1px solid var(--quiet); color:var(--mortar);}
+/* A chip you can pick and unpick. Selected is a border and a lift, like .opt,
+   rather than lamp: the accent means "this is the action", and every chip is one. */
+.pchip{background:var(--stone); border-radius:var(--r-control); padding:8px 12px;
+       font-size:13px; line-height:18px; color:var(--limestone); border:0; font:inherit;
+       transition:background .16s, box-shadow .16s;}
+.pchip.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
+.interest.add{background:var(--quietFill); color:var(--mortar);}
 
 .card{background:var(--stone); border-radius:var(--r-card); padding:var(--s-xl); position:relative;}
-.card.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
-.photo.sel{box-shadow:inset 0 0 0 1px var(--lampQuiet);}
+/* Selection: a wash of the accent over the card and a glow of it around, in
+   place of a one-pixel ring. The inset shadow at full spread is the wash. */
+.card.sel,.photo.sel{box-shadow:inset 0 0 0 100vmax var(--lampWash), 0 0 14px var(--lampGlow);}
+.card,.photo{transition:box-shadow .32s ease-out;}
 
 .btn{height:52px; border-radius:var(--r-control); display:flex; align-items:center;
      justify-content:center; font-size:15px; font-weight:600; width:100%;}
 .btn.primary{background:var(--lamp); color:var(--onLamp);}
 .btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
-.btn.quiet{border:1px solid var(--quiet); color:var(--mortar);}
+.btn.quiet{background:var(--quietFill); color:var(--mortar);}
 .btntext{height:44px; display:flex; align-items:center; justify-content:center;
          font-size:15px; font-weight:600; color:var(--mortar); width:100%;}
 
-.slotcard{height:112px; background:var(--stone); border:1px solid var(--hairline);
+.slotcard{height:112px; background:color-mix(in srgb, var(--stone) 62%, transparent);
+          -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
           border-radius:var(--r-photo); display:flex; flex-direction:column;
           align-items:center; justify-content:center; gap:4px;}
 
@@ -160,9 +195,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
    app, not to the roster. It pushes the app down rather than floating over it —
    a bar that overlays content covers what you were reading at the moment you least
    want to lose your place. No red: this is a train tunnel, not a fault. */
-.offline{flex:none; background:var(--stoneRaised); border-bottom:.5px solid var(--hairline);
+.offline{flex:none; background:var(--stoneRaised);
          padding:12px 20px; text-align:center;}
-.bottombar{flex:none; background:var(--stoneRaised); border-top:.5px solid var(--hairline);
+.bottombar{flex:none; background:var(--stoneRaised);
            padding:12px 20px calc(4px + env(safe-area-inset-bottom,0px));}
 
 /* ---- rows ---- */
@@ -183,10 +218,11 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .quoted{background:var(--stoneRaised); border-radius:var(--r-control); padding:var(--s-s);}
 
 /* ---- sheets ---- */
-#scrim{position:absolute; inset:0; background:rgba(15,19,25,.72); opacity:0;
+#scrim{position:absolute; inset:0; background:var(--scrim); opacity:0;
        transition:opacity .25s ease; pointer-events:none; z-index:20;}
 #scrim.on{opacity:1; pointer-events:auto;}
-#sheet{position:absolute; left:0; right:0; bottom:0; background:var(--stone);
+#sheet{position:absolute; left:0; right:0; bottom:0;
+       background:color-mix(in srgb, var(--stone) 72%, transparent); -webkit-backdrop-filter:blur(24px); backdrop-filter:blur(24px);
        border-radius:var(--r-sheet) var(--r-sheet) 0 0; z-index:21;
        padding:0 20px calc(16px + env(safe-area-inset-bottom,0px));
        transform:translateY(110%); transition:transform .28s cubic-bezier(.2,.8,.2,1);
@@ -241,7 +277,8 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
           font-size:17px; font-weight:600; width:100%;}
 .opt{background:var(--stone); border-radius:var(--r-control); padding:var(--s-m);
      font-size:17px; line-height:24px;}
-.opt.sel{background:var(--stoneRaised); box-shadow:inset 0 0 0 1px var(--selected);}
+.opt.sel{background:var(--stoneRaised); box-shadow:0 0 14px var(--inkGlow);}
+.opt{transition:box-shadow .32s ease-out, background .32s ease-out;}
 .grid3{display:grid; grid-template-columns:repeat(3,1fr); gap:var(--s-xs);}
 .slot{aspect-ratio:1; border-radius:var(--r-control); position:relative; overflow:hidden;}
 
@@ -502,7 +539,46 @@ const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2]
    anything about. A paywall is the easiest place to ship a lie. */
 const BENEFITS=[["Seven people instead of five","Two more slots. The same care choosing them \u2014 a longer queue is not the point."],
  ["Fifteen conversations instead of ten","More room before Arch holds your roster and asks you to answer someone."],
- ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."]];
+ ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."],
+ ["Be somewhere you are not yet","Choose any town for where you are \u2014 the city you are moving to, or the one you keep visiting \u2014 instead of where your phone says."],
+ ["Answer the questions whenever you like","Everyone can answer again once a month. Premium drops the wait."]];
+
+/* Pronouns as chips, and one string underneath. More than one is allowed and is
+   written by subject ("she/they"); what the chips do not cover is typed and
+   follows after a comma. parse() reads a string back into picks and a remainder,
+   so a profile written before the chips existed lights the right ones. */
+const PRONOUNS=[["she","her"],["he","him"],["they","them"],["xe","xem"],["ze","zir"]];
+function composePronouns(picked,other){
+  const on=PRONOUNS.filter(p=>picked.includes(p[0]));
+  const joined=on.length===0?"":on.length===1?on[0][0]+"/"+on[0][1]:on.map(p=>p[0]).join("/");
+  const typed=(other||"").trim();
+  if(!joined&&!typed) return "";
+  if(!typed) return joined;
+  if(!joined) return typed;
+  return joined+", "+typed;
+}
+function parsePronouns(text){
+  const at=(text||"").indexOf(",");
+  const head=(at<0?(text||""):text.slice(0,at)).trim(), tail=at<0?"":text.slice(at+1).trim();
+  if(!head) return {picked:[],other:""};
+  const picked=[]; let unknown=false;
+  head.toLowerCase().split("/").forEach(w=>{
+    const p=PRONOUNS.find(p=>p[0]===w||p[1]===w);
+    if(!p) unknown=true; else if(!picked.includes(p[0])) picked.push(p[0]);
+  });
+  if(unknown) return {picked:[],other:(text||"").trim()};
+  return {picked,other:tail};
+}
+function pronounPicker(target,text,onNight){
+  const {picked,other}=parsePronouns(text);
+  return `<div class="v gap-xs">
+    <div style="display:flex; justify-content:space-between; align-items:baseline">
+      <div class="footnote mortar">Pronouns</div><div class="caption mortar">Optional</div></div>
+    <div class="chips">${PRONOUNS.map(p=>`<button class="pchip ${picked.includes(p[0])?"sel":""}"
+      data-a="pickPronoun" data-t="${target}" data-o="${p[0]}">${p[0]}/${p[1]}</button>`).join("")}</div>
+    <div class="field ${onNight?"onNight":""}"><input id="pronounOther" data-t="${target}" maxlength="20"
+      value="${esc(other)}" placeholder="Something else"></div></div>`;
+}
 
 /* What people picked out of your profile when they wrote to you. Not likes \u2014 Arch
    has none. This is the photo or answer somebody quoted in the composer, which is a
@@ -661,8 +737,11 @@ const S={
        msgAlert:true,
        distance:10,minAge:26,maxAge:36,intent:"Something serious",paused:false,
        locationPermission:"notAsked",
+       /* The questionnaire, as answered: an array by question, and when. Null
+          until answered in this session, which is also what a design build has. */
+       qa:[],answeredAt:null,answerRun:null,
        seeking:["man","woman","nonBinary"],notifsAllowed:true,
-       visibility:"Anyone Arch picks me for",blocked:[],
+       blocked:[],
        theme:"Match my phone"},
   edit:null,
   report:{reason:null,block:true,sent:false},
@@ -798,15 +877,14 @@ function rows(p){
   return out.slice(1); // the lead photo is drawn separately
 }
 
-/* Same fractions as TopBar.swift: a 30pt mark at its wordmark stroke, beside the word. */
+/* Same fractions as TopBar.swift: a 24pt mark at its wordmark stroke, beside the word. */
 function topbar(){
-  return `<div class="topbar">${markSVG(30,3.9,"var(--lamp)")}<div class="word">arch</div></div>`;
+  return `<div class="topbar">${markSVG(24,3.1,"var(--lamp)")}<div class="word">arch</div></div>`;
 }
 
 function navbar(title,right){
   return `<div class="navbar"><button class="iconbtn" data-a="back">‹</button>
-    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>
-    <div class="hairline"></div>`;
+    <div class="titleM">${esc(title)}</div><div style="flex:1"></div>${right||""}</div>`;
 }
 
 /* ============================ screens ============================ */
@@ -818,8 +896,7 @@ function dailyRoot(){
   let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-m" style="padding-top:16px; padding-bottom:24px;">
       <div class="titleL">${title}</div>
-      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div>
-      <div class="hairline"></div></div>`;
+      <div id="arch">${archSVG(people.length,S.slots.length,132)}</div></div>`;
   if(open10>=LIMIT()){
     /* Not an error and not a telling-off. The people are still yours; the rule is
        stated once and the way out is a button rather than a lecture. */
@@ -1065,7 +1142,7 @@ function premiumRoot(){
   PLANS.forEach(([d,total,per,rec],i)=>{
     h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
       <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
-        border-radius:var(--r-control); ${S.plan===i?"box-shadow:inset 0 0 0 1px var(--selected)":""}">
+        border-radius:var(--r-control); transition:box-shadow .32s ease-out; ${S.plan===i?"box-shadow:0 0 14px var(--inkGlow)":""}">
         <div><div class="subhead">${d}</div><div class="footnote mortar">${per}</div></div>
         <div style="flex:1"></div>
         <div style="text-align:right"><div class="subhead">${total}</div>
@@ -1440,13 +1517,14 @@ function settingsSections(){
       ["a-delete","Delete your account",null,"push"]]],
     ["Notifications",notif],
     ["Appearance",[["x-theme","Light and dark",x.theme,"push"]]],
-    ["Discovery",[["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
+    ["Discovery",[["d-location","Where you are",S.you.place?placeLabel(S.you.place):null,"push"],
+      ["d-seeking","Who you want to meet",gSentence(x.seeking),"push"],
       ["d-distance","Distance",distanceText(),"push"],
       ["d-age","Age range",x.minAge+" to "+x.maxAge,"push"],
       ["d-intent","Looking for",x.intent,"push"],
+      ["d-answers","Your answers",x.answeredAt?"Answered "+shortDate(x.answeredAt):null,"push"],
       ["d-pause","Pause my profile",x.paused?"Paused":null,"toggle"]]],
-    ["Privacy",[["p-visible","Who can see me",x.visibility,"push"],
-      ["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
+    ["Privacy",[["p-blocked","Blocked people",x.blocked.length?String(x.blocked.length):"None","push"],
       ["p-data","Download your data",null,"push"]]],
     ["Help",[["h-how","How Arch works",null,"push"],["h-safety","Safety",null,"push"],
       ["h-contact","Contact us",null,"push"]]]];
@@ -1550,9 +1628,42 @@ const SET_TITLES={"a-email":"Email","a-premium":"Arch Premium",
   "a-delete":"Delete your account","n-blocked":"Notifications are off",
   "d-seeking":"Who you want to meet","x-theme":"Light and dark",
   "d-distance":"Distance","d-age":"Age range","d-intent":"Looking for",
-  "p-visible":"Who can see me","p-blocked":"Blocked people","p-data":"Download your data",
+  "d-location":"Where you are","d-answers":"Your answers",
+  "p-blocked":"Blocked people","p-data":"Download your data",
   "h-how":"How Arch works","h-safety":"Safety","h-contact":"Contact us"};
 
+const ANSWER_WAIT=30*24*60*60*1000;
+function shortDate(ms){return new Date(ms).toLocaleDateString(undefined,{day:"numeric",month:"short"});}
+function answerAgainOn(){
+  const x=S.set; if(x.sub||!x.answeredAt) return null;
+  const opens=x.answeredAt+ANSWER_WAIT; return opens>Date.now()?opens:null;
+}
+/* The questionnaire again, from Settings. The same questions one per screen with
+   the last answer already picked, driven by a run that is thrown away after.
+   There is a month between one set and the next; Premium waives it, and the
+   screen says when the wait ends rather than hiding the button. */
+function answersDetail(){
+  const x=S.set, run=x.answerRun;
+  if(run){
+    const [q,options]=QUESTIONS[run.q];
+    let segs=""; for(let i=0;i<QUESTIONS.length;i++) segs+=`<div class="seg ${i<=run.q?"on":""}"></div>`;
+    return `<div class="rule">${segs}</div>
+      <div class="titleM mt-l">${esc(q)}</div><div class="v gap-xs mt-xl">${
+        options.map(o=>`<button data-a="setAnswer" data-o="${esc(o)}" style="display:block;width:100%">
+          <div class="opt ${run.qa[run.q]===o?"sel":""}">${esc(o)}</div></button>`).join("")}</div>
+      <div style="display:flex; gap:24px" class="mt-m">${run.q>0?'<button class="btntext" data-a="answerBack">Back a question</button>':""}
+        <button class="btntext" data-a="answerStop">Stop</button></div>`;
+  }
+  const opens=answerAgainOn();
+  return `<div class="v gap-s"><div class="body">${QUESTIONS.length} questions decide who reaches ${rosterName()}.</div>
+      ${x.answeredAt?`<div class="footnote mortar">You last answered on ${shortDate(x.answeredAt)}.</div>`:""}</div>`
+    +(opens
+      ? `<div class="v gap-s"><div class="body">You can answer again from ${shortDate(opens)}.</div>`
+        +NOTE("Arch waits a month between one set of answers and the next, so that the people it chooses for you were chosen against something that held. Arch Premium lets you answer whenever you like.")
+        +`<button class="btntext" data-a="goPremium">See Arch Premium</button></div>`
+      : `<button class="btn primary" data-a="answerAgain">Answer again</button>`)
+    +NOTE("Your answers are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and "+rosterName()+" from tomorrow is chosen against the new answers.");
+}
 function settingDetail(id){
   const x=S.set; let b="";
   if(id==="d-distance"){
@@ -1591,12 +1702,16 @@ function settingDetail(id){
     b=themeSpecimen()
      +opts(THEMES,x.theme,"setTheme")
      +NOTE(THEME_NOTES[x.theme]);
+  } else if(id==="d-location"){
+    b='<div class="titleM">'+(S.you.place?esc(placeLabel(S.you.place)):"Not set")+'</div>'
+     +NOTE("This is the chip under your name, and with your distance it decides who could plausibly meet you. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+     +'<button class="btn primary" data-a="youPlace">Change</button>'
+     +(x.sub?"":NOTE("Without Premium this puts you where your phone says you are. Choosing somewhere else is part of Arch Premium."));
+  } else if(id==="d-answers"){
+    b=answersDetail();
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
      +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
-  } else if(id==="p-visible"){
-    b=opts(["Anyone Arch picks me for","Nobody new while I have unread messages"],x.visibility,"setVisibility")
-     +NOTE("Either way you keep the people already in "+rosterName()+", and they keep you. To come off Arch entirely, pause your profile.");
   } else if(id==="p-blocked"){
     b='<div class="titleM">Nobody blocked</div>'
      +NOTE("Blocking someone takes them out of "+rosterName()+", stops them appearing again, and stops you appearing in theirs. They are not told.");
@@ -1696,8 +1811,7 @@ function onboarding(){
       <div class="v gap-xs mt-xl"><div class="footnote mortar">Gender</div>
         ${GENDERS.map(g=>`<button data-a="obGender" data-o="${g[0]}" style="display:block;width:100%">
           <div class="opt ${o.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
-      <div class="field onNight mt-m"><div class="lbl">Pronouns</div>
-        <input id="obPronouns" maxlength="20" value="${esc(o.pronouns)}" placeholder="Optional"></div>
+      <div class="mt-m">${pronounPicker("ob",o.pronouns,true)}</div>
       ${loc?`<div class="v gap-xs mt-l"><div class="footnote mortar">People will see this as</div>
         <div class="chips"><div class="chip">${esc(loc)}</div></div></div>`:""}`;
     enabled=o.age&&o.place&&o.height.trim()&&o.work.trim()&&o.gender;
@@ -2004,6 +2118,7 @@ function render(){
       <div class="subhead">No connection</div>
       <div class="footnote mortar" style="margin-top:4px">You can read what is already here.
         Anything you write waits until Arch is back.</div></div>`:"";
+  r.className="v";
   if(S.removal){ r.innerHTML=removedRoot(); return; }
   if(S.picker){ r.innerHTML=offlineBar+(S.picker.step<0?pickerRoot():cropRoot()); return; }
   if(S.onboarding){ r.innerHTML=offlineBar+onboarding(); return; }
@@ -2029,6 +2144,7 @@ function render(){
       <div class="lbl"${S.tab===k&&k==="premium"?' style="color:var(--ember)"':""}>${label}</div></button>`;
   }).join("");
   r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
+  r.className="v"+(t?"":" has-top")+(hideTabs?"":" has-tabs");
 }
 
 /* ============================ sheets ============================ */
@@ -2110,8 +2226,7 @@ function openDetails(){
       <div class="v gap-xs mt-m"><div class="footnote mortar">Gender</div>
         ${GENDERS.map(g=>`<button data-a="youGender" data-o="${g[0]}" style="display:block;width:100%">
           <div class="opt ${S.you.gender===g[0]?"sel":""}">${g[1]}</div></button>`).join("")}</div>
-      <div class="field mt-m"><div class="lbl">Pronouns</div>
-        <input maxlength="20" value="${esc(S.you.pronouns)}" placeholder="Optional"></div>`
+      <div class="mt-m">${pronounPicker("you",S.you.pronouns,false)}</div>`
     +`<button class="btn primary mt-m" data-a="closeSheet">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`);
 }
@@ -2147,6 +2262,10 @@ function placeSheet(target,query){
       `<div class="v gap-xs"><div class="prompt mortar">${esc(city)}</div>
         <div class="v gap-xs">${list.map(row).join("")}</div></div>`).join("");
   }
+  /* Onboarding may choose from the list; after that, choosing a place you are
+     not in is part of Arch Premium, and everybody else gets the one button that
+     puts them where they are. */
+  const canChoose=target==="ob"||S.set.sub;
   const offer=S.set.locationPermission!=="denied"&&!searching
     ? `<button data-a="useLocation" data-t="${target}" style="display:block;width:100%">
         <div class="srow" style="background:var(--stoneRaised); border-radius:var(--r-control)">
@@ -2154,9 +2273,15 @@ function placeSheet(target,query){
             <div class="footnote mortar" style="margin-top:4px">Fills this in, and places you to
               about a kilometre. Arch keeps nothing finer than that.</div></div></div></button>`
     : "";
-  openSheet(`<div class="titleM" style="padding-top:8px">Where you live</div>
-    <div class="field mt-m"><input id="placeSearch" data-t="${target}"
-      placeholder="Search" value="${esc(q)}"></div>
+  if(!canChoose){
+    body=`<div class="v gap-s">${S.set.locationPermission==="denied"
+        ?`<div class="body">Arch places you from your phone&rsquo;s location, which is off for Arch. Turn it on in your iPhone settings, and this puts you where you are.</div>`:""}
+      <div class="footnote mortar">Choosing somewhere you are not &mdash; a city you are moving to, or one you visit &mdash; is part of Arch Premium.</div>
+      <button class="btntext" data-a="premiumFromSheet">See Arch Premium</button></div>`;
+  }
+  openSheet(`<div class="titleM" style="padding-top:8px">${canChoose?"Where you live":"Where you are"}</div>
+    ${canChoose?`<div class="field mt-m"><input id="placeSearch" data-t="${target}"
+      placeholder="Search" value="${esc(q)}"></div>`:""}
     <div class="v gap-xl mt-m" style="max-height:420px; overflow-y:auto">${offer}${body}</div>
     <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);
 }
@@ -2307,7 +2432,8 @@ document.addEventListener("click",e=>{
   const a=el.dataset.a, id=el.dataset.id, o=S.onboarding;
 
   const acts={
-    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();},
+    tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
+      const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
@@ -2403,7 +2529,26 @@ document.addEventListener("click",e=>{
       const t=el.dataset.t, target=t==="ob"?S.onboarding:S.you;
       target.coord=coarse(fix);
       if(!target.place) target.place=nearestPlace(fix);
-      placeSheet(t);
+      if(t==="ob"||S.set.sub) placeSheet(t); else { closeSheet(); render(); }
+    },
+    premiumFromSheet:()=>{ closeSheet(); acts.goPremium(); },
+    pickPronoun:()=>{
+      const target=el.dataset.t==="ob"?S.onboarding:S.you;
+      const cur=parsePronouns(target.pronouns), w=el.dataset.o;
+      const i=cur.picked.indexOf(w); if(i<0) cur.picked.push(w); else cur.picked.splice(i,1);
+      target.pronouns=composePronouns(cur.picked,cur.other);
+      if(el.dataset.t==="ob") render(); else openDetails();
+    },
+    answerAgain:()=>{ S.set.answerRun={q:0,qa:S.set.qa.slice()}; render(); },
+    answerBack:()=>{ S.set.answerRun.q--; render(); },
+    answerStop:()=>{ S.set.answerRun=null; render(); },
+    setAnswer:()=>{
+      const run=S.set.answerRun; run.qa[run.q]=el.dataset.o; render();
+      setTimeout(()=>{
+        if(run.q+1<QUESTIONS.length) run.q++;
+        else { S.set.qa=run.qa; S.set.answeredAt=Date.now(); S.set.answerRun=null; }
+        render();
+      },260);
     },
     youHeight:()=>heightSheet("you"),
     obGender:()=>{S.onboarding.gender=el.dataset.o; render();},
@@ -2419,7 +2564,6 @@ document.addEventListener("click",e=>{
       m[3]="sending"; render();
       setTimeout(()=>{ m[3]=S.offline?"failed":"sent"; m[2]="Just now"; render(); },1400);
     },
-    setVisibility:()=>{S.set.visibility=el.dataset.o; render();},
     goPremium:()=>{S.stacks.you=[]; S.tab="premium"; render();},
     subscribe:()=>setSubscribed(true),
     review:()=>{ if(S.set.sub) push({name:"review"}); else acts.goPremium(); },
@@ -2625,6 +2769,11 @@ document.addEventListener("input",e=>{
     const b=document.querySelector('[data-a="obEmailNext"]');
     if(b) b.disabled=S.emailSignIn.code.length!==6;
     return; }
+  if(t.id==="pronounOther"){
+    const target=t.dataset.t==="ob"?S.onboarding:S.you;
+    const cur=parsePronouns(target.pronouns);
+    target.pronouns=composePronouns(cur.picked,t.value);
+    return; }
   if(t.id==="placeSearch"){
     const at=t.selectionStart;
     placeSheet(t.dataset.t,t.value);
@@ -2633,8 +2782,7 @@ document.addEventListener("input",e=>{
     return;
   }
   if(o){
-    const map={obName:"name",obEmail:"email",obAge:"age",
-               obWork:"work",obPronouns:"pronouns"};
+    const map={obName:"name",obEmail:"email",obAge:"age",obWork:"work"};
     if(map[t.id]){
       o[map[t.id]]=t.value;
       if(document.querySelector('[data-a="obNext"]')) refreshCTA();
@@ -2671,6 +2819,7 @@ function finishOnboarding(){
     S.you.h=o.height||S.you.h; S.you.work=o.work||S.you.work;
     S.you.gender=o.gender||S.you.gender; S.you.pronouns=o.pronouns||S.you.pronouns;
     if(o.seeking.length) S.set.seeking=o.seeking.slice();
+    if(o.qa&&o.qa.length){ S.set.qa=o.qa.slice(); S.set.answeredAt=Date.now(); }
     if(o.photos.length>=4){ S.you.photos=o.photos.slice(); S.you.up=o.up.slice(); }
     o.answers.forEach((a,i)=>{
       if(a.trim()&&o.questions[i]) S.you.prompts[i]=[o.questions[i],a.trim()];
@@ -2716,8 +2865,78 @@ function mountRange(){
   knobs.max.addEventListener("pointerdown",drag("max"));
   paint();
 }
+/* The lock-up gives way as you read down and returns on any scroll up, not only
+   at the top: wanting the top of the page and wanting to see where you are are the
+   same gesture on a phone. */
+function watchTopBar(){
+  const r=document.getElementById("root"), bar=r.querySelector(".topbar"), sc=r.querySelector(".screen");
+  if(!bar||!sc) return;
+  let last=sc.scrollTop;
+  sc.addEventListener("scroll",()=>{
+    const y=sc.scrollTop, d=y-last; last=y;
+    if(y<=52){ bar.classList.remove("hidden"); return; }
+    if(d>4) bar.classList.add("hidden"); else if(d<-4) bar.classList.remove("hidden");
+  },{passive:true});
+}
+/* Where you were. Rebuilding the screen's HTML on every state change threw the
+   scroll position away, so choosing a plan on the paywall put you back at the top
+   of it. The app does not do that -- a state change is not a navigation -- so
+   this remembers the position per screen and puts it back, the same way the four
+   tabs in the app each keep their own scroll while you are on another. A pushed
+   screen you come back to starts at the top, as it does in the app. */
+const scrollMemory={};
+let lastScreenKey=null;
+function screenKey(){
+  const t=current();
+  return [S.tab, t?t.name+":"+(t.id||""):"", S.onboarding?"ob"+S.onboarding.step:"",
+          S.picker?"pick":"", S.removal?"rm":""].join("|");
+}
 const _render=render;
-render=function(){ _render(); mountRange(); mountCrop(); };
+render=function(){
+  const r=document.getElementById("root"), prev=r.querySelector(".screen");
+  if(prev&&lastScreenKey!==null) scrollMemory[lastScreenKey]=prev.scrollTop;
+  _render(); mountRange(); mountCrop(); watchTopBar();
+  const key=screenKey(), next=r.querySelector(".screen");
+  const isRoot=!current()&&!S.onboarding&&!S.picker&&!S.removal;
+  if(next&&(key===lastScreenKey||isRoot)){
+    const y=scrollMemory[key]||0;
+    next.scrollTop=y;
+    const bar=r.querySelector(".topbar");
+    if(bar&&y>52){ bar.style.transition="none"; bar.classList.add("hidden"); void bar.offsetHeight; bar.style.transition=""; }
+  }
+  lastScreenKey=key;
+};
+
+/* Swipe in from the left edge to go back, on any pushed screen. The screen
+   follows the finger and lets go past a third of the width; short of that it
+   settles back. Roots do not take it -- a swipe there has nowhere to go and
+   would only fight the scroll -- and sheets already come down on their own.
+   Mirrors BackSwipe.swift, which re-enables the same gesture in the app. */
+(function(){
+  const device=document.getElementById("device");
+  let start=null, moved=0, parts=[];
+  const canPop=()=>!!current()&&!S.onboarding&&!S.picker&&!S.removal;
+  device.addEventListener("pointerdown",e=>{
+    if(!canPop()||e.clientX-device.getBoundingClientRect().left>28) return;
+    start=e.clientX; moved=0;
+    parts=[...document.getElementById("root").children].filter(el=>!el.classList.contains("tabbar"));
+    parts.forEach(el=>el.style.transition="none");
+  });
+  device.addEventListener("pointermove",e=>{
+    if(start===null) return;
+    moved=Math.max(0,e.clientX-start);
+    parts.forEach(el=>el.style.transform=`translateX(${moved}px)`);
+  });
+  const end=()=>{
+    if(start===null) return;
+    const goes=moved>device.clientWidth/3;
+    parts.forEach(el=>{ el.style.transition="transform .34s ease-out"; el.style.transform=goes?`translateX(${device.clientWidth}px)`:""; });
+    start=null;
+    if(goes) setTimeout(pop,200);
+  };
+  device.addEventListener("pointerup",end);
+  device.addEventListener("pointercancel",end);
+})();
 
 applyTheme();
 render();
