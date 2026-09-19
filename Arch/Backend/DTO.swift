@@ -82,6 +82,13 @@ struct DiscoveryRow: Codable, Hashable {
     var notifyMessages: Bool
 }
 
+/// One questionnaire answer, as stored. Read back only by its owner.
+struct AnswerRow: Decodable, Hashable {
+    let questionId: String
+    let optionIndex: Int
+    let answeredAt: Date
+}
+
 // MARK: - Pairing
 
 struct PairingRow: Decodable, Hashable, Identifiable {

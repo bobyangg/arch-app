@@ -68,6 +68,7 @@ struct SettingNote: View {
 struct SettingsDetailView: View {
     let row: SettingsRow
     let store: SettingsStore
+    var profile: ProfileStore? = nil
     var onOpenPremium: () -> Void = {}
     var onDeleteAccount: () -> Void = {}
 
@@ -78,11 +79,12 @@ struct SettingsDetailView: View {
         case "a-delete":   DeleteAccountSetting(store: store, onDelete: onDeleteAccount)
         case "n-blocked":  NotificationsBlockedSetting(store: store)
         case "x-theme":    AppearanceSetting(store: store)
+        case "d-location": LocationSetting(store: store, profile: profile, onOpenPremium: onOpenPremium)
+        case "d-answers":  AnswersSetting(store: store, onOpenPremium: onOpenPremium)
         case "d-seeking":  SeekingSetting(store: store)
         case "d-distance": DistanceSetting(store: store)
         case "d-age":      AgeSetting(store: store)
         case "d-intent":   IntentionSetting(store: store)
-        case "p-visible":  VisibilitySetting(store: store)
         case "p-blocked":  BlockedSetting(store: store)
         case "p-data":     DataSetting(store: store)
         case "h-how":      HelpPage(topic: .how)

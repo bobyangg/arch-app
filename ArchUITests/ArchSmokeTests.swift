@@ -224,6 +224,37 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertEqual(app.state, .runningForeground)
     }
 
+    // MARK: Settings
+
+    /// The two rows added with the profile controls go somewhere.
+    ///
+    /// A settings row is routed by its string id, and a mistyped id is not a
+    /// compile error -- it is a screen that says "This setting is not built
+    /// yet". Both new rows are opened and asked for the one control each has.
+    func testWhereYouAreAndYourAnswersOpen() {
+        let app = launch()
+        app.buttons["tab.you"].tap()
+        app.buttons["Settings"].tap()
+
+        func open(_ title: String, expecting control: String) {
+            let row = app.staticTexts[title]
+            // Settings is one scroll; the later rows start below the fold.
+            var tries = 0
+            while !row.isHittable && tries < 4 { app.swipeUp(); tries += 1 }
+            XCTAssertTrue(row.isHittable, "No settings row called \(title).")
+            row.tap()
+            XCTAssertTrue(
+                app.buttons[control].waitForExistence(timeout: 5),
+                "\(title) opened without its \(control) button."
+            )
+            app.buttons["Back to settings"].tap()
+        }
+
+        open("Where you are", expecting: "Change")
+        open("Your answers", expecting: "Answer again")
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     // MARK: The profile editor
 
     /// Into Arrange and back.
