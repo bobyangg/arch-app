@@ -10,6 +10,10 @@ import SwiftUI
 /// it is.
 struct EditDetailsSheet: View {
     let person: Person
+    /// Whether the place can be picked from a list, or only taken from the
+    /// device. See `PlacePickerView.canChoose`.
+    var canChoosePlace: Bool = true
+    var onOpenPremium: (() -> Void)? = nil
     let onSave: (PersonDetails) -> Void
 
     @State private var name = ""
@@ -87,7 +91,7 @@ struct EditDetailsSheet: View {
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
 
-                ArchField(text: $pronouns, label: "Pronouns", placeholder: "Optional")
+                PronounPicker(text: $pronouns)
 
                 ArchButton(title: "Save", isEnabled: isValid) {
                     onSave(
@@ -112,7 +116,7 @@ struct EditDetailsSheet: View {
         .scrollIndicators(.hidden)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchColor.stone)
-        .presentationDetents([.height(720)])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .archSheetBackground()
@@ -166,7 +170,9 @@ struct EditDetailsSheet: View {
                     }
                 },
                 onCancel: { isPickingPlace = false },
-                locationNote: locationNote
+                locationNote: locationNote,
+                canChoose: canChoosePlace,
+                onOpenPremium: onOpenPremium
             )
             .padding(.horizontal, ArchSpacing.screenMargin)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

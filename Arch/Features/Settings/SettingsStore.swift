@@ -74,6 +74,10 @@ final class SettingsStore {
         maxAge = row.maxAge
         isPaused = row.paused
         messageAlert = row.notifyMessages
+
+        let rows = try await ArchBackend.answers()
+        answers = Dictionary(rows.map { ($0.questionId, $0.optionIndex) }, uniquingKeysWith: { $1 })
+        answersAnsweredAt = rows.map(\.answeredAt).max()
     }
 
     /// Written whole rather than field by field. Every one of these is a filter the
@@ -108,8 +112,45 @@ final class SettingsStore {
     var lookingFor = "Something serious"
     var isPaused = false
 
+    // The questionnaire
+
+    /// What you said, by question id, as the index of the option -- the same
+    /// shape the server keeps, so a reword of an option cannot move an answer.
+    var answers: [String: Int] = [:]
+    /// When you last answered, whether in onboarding or again from Settings.
+    /// Nil until the server has said, or in a design build, where there is no
+    /// server and the wait is therefore never applied.
+    var answersAnsweredAt: Date?
+
+    /// How long between one set of answers and the next, without Premium.
+    ///
+    /// Thirty days, and the reason is not upsell. The matcher pairs on these
+    /// answers every night, and an answer that changes every evening is not a
+    /// fact about somebody, it is a mood -- and the people it puts in front of
+    /// you tomorrow were chosen against the mood. A month is long enough for
+    /// an answer to have been true. Premium waives it on the reasoning that
+    /// somebody paying for the app is not gaming it.
+    static let answerAgainWait: TimeInterval = 30 * 24 * 60 * 60
+
+    /// When answering again opens up, or nil if it is open now.
+    var answerAgainAvailableOn: Date? {
+        guard !isSubscribed, let last = answersAnsweredAt else { return nil }
+        let opens = last.addingTimeInterval(Self.answerAgainWait)
+        return opens > .now ? opens : nil
+    }
+    var canAnswerAgain: Bool { answerAgainAvailableOn == nil }
+
+    /// Written whole, like everything else the matcher reads.
+    func saveAnswers(_ chosen: [String: Int]) {
+        answers = chosen
+        answersAnsweredAt = .now
+        guard ArchConfig.isConfigured else { return }
+        Task { [chosen] in
+            try? await ArchBackend.saveAnswers(chosen)
+        }
+    }
+
     // Privacy
-    var visibility = "Anyone Arch picks me for"
     var blocked: [String] = []
 
     // Appearance
@@ -142,7 +183,6 @@ final class SettingsStore {
     static func isUnlimited(_ distance: Int) -> Bool { distance >= distanceRange.upperBound }
     static let ageRange = 18...70
     static let intentions = ["Something serious", "Still working it out", "Something casual"]
-    static let visibilities = ["Anyone Arch picks me for", "Nobody new while I have unread messages"]
 
     // MARK: Display
 
@@ -159,13 +199,21 @@ final class SettingsStore {
     /// The row says so, so that pausing does not need a second screen to be legible.
     var pausedText: String? { isPaused ? "Paused" : nil }
     var blockedText: String { blocked.isEmpty ? "None" : "\(blocked.count)" }
+    /// When you last answered, as a date on the row. Nothing until it is known.
+    var answersText: String? {
+        answersAnsweredAt.map { "Answered " + $0.formatted(.dateTime.day().month()) }
+    }
 
     /// The whole list, rebuilt from current values.
     ///
     /// Toggles sit *in* the row. A row that pushes somewhere gets a chevron and a
     /// row that flips gets a switch — never both, and never a switch hidden behind
     /// a push.
-    var sections: [SettingsSection] {
+    var sections: [SettingsSection] { sections(place: nil) }
+
+    /// `place` is the label on the profile, which this store does not hold; the
+    /// screen that has the profile passes it in so the row can say where you are.
+    func sections(place: String?) -> [SettingsSection] {
         var notifications: [SettingsRow] = []
         if systemNotificationsAllowed {
             notifications.append(.init(id: "n-msg", title: "Messages", control: .toggle(messageAlert)))
@@ -199,14 +247,19 @@ final class SettingsStore {
                 .init(id: "x-theme", title: "Light and dark", detail: theme.title, control: .push)
             ]),
             SettingsSection(id: "discovery", title: "Discovery", rows: [
+                .init(id: "d-location", title: "Where you are", detail: place, control: .push),
                 .init(id: "d-seeking", title: "Who you want to meet", detail: seekingText, control: .push),
                 .init(id: "d-distance", title: "Distance", detail: distanceText, control: .push),
                 .init(id: "d-age", title: "Age range", detail: ageText, control: .push),
                 .init(id: "d-intent", title: "Looking for", detail: lookingFor, control: .push),
+                .init(id: "d-answers", title: "Your answers", detail: answersText, control: .push),
                 .init(id: "d-pause", title: "Pause my profile", detail: pausedText, control: .toggle(isPaused))
             ]),
+            // "Who can see me" was here, with two options. The first was what
+            // Arch does anyway and the second was never wired to anything, so
+            // the row was a choice between the default and a promise. Pausing
+            // is the one real control over being seen, and it is in Discovery.
             SettingsSection(id: "privacy", title: "Privacy", rows: [
-                .init(id: "p-visible", title: "Who can see me", detail: visibility, control: .push),
                 .init(id: "p-blocked", title: "Blocked people", detail: blockedText, control: .push),
                 .init(id: "p-data", title: "Download your data", control: .push)
             ]),
