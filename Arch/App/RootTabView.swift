@@ -32,6 +32,19 @@ struct RootTabView: View {
     /// is the screen a new account starts on.
     var onSignOut: () -> Void = {}
 
+    /// **Tapping the tab you are already on returns it to its root**, which is
+    /// what a tab bar has meant since the first one. Without it, Settings was a
+    /// place you could only leave the way you came in, and the You button under
+    /// it did nothing at all.
+    ///
+    /// A count rather than a flag, and the reason is that the signal is "it was
+    /// tapped again" -- an event, not a state. A `Bool` set true twice in a row
+    /// changes nothing, so the second tap would be swallowed, and it would have
+    /// to be reset afterwards by whoever consumed it. An `Int` that only ever
+    /// goes up has neither problem.
+    @State private var youPops = 0
+    @State private var messagePops = 0
+
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
 
@@ -48,7 +61,26 @@ struct RootTabView: View {
             if isOffline { OfflineBanner() }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            TabBar(selection: $selection, unreadCount: store.unreadCount)
+            TabBar(
+                selection: Binding(
+                    get: { selection },
+                    // `TabBar` writes the selection on every tap, including a tap
+                    // on the tab already showing, so this is where "again" is
+                    // known -- the only place that sees both what was tapped and
+                    // what was already there.
+                    set: { tapped in
+                        if tapped == selection {
+                            switch tapped {
+                            case .you:      youPops += 1
+                            case .messages: messagePops += 1
+                            default:        break
+                            }
+                        }
+                        selection = tapped
+                    }
+                ),
+                unreadCount: store.unreadCount
+            )
         }
         .animation(ArchMotion.standard, value: isOffline)
         .background(ArchColor.night)
@@ -104,6 +136,7 @@ struct RootTabView: View {
                 MessagesListView(
                     conversations: store.openConversations,
                     requests: store.requests,
+                    popToRoot: messagePops,
                     onAccept: { store.accept($0) },
                     onDecline: { store.decline($0) },
                     onOpenDaily: { selection = .daily },
@@ -115,6 +148,7 @@ struct RootTabView: View {
                 YouProfileView(
                     store: profile,
                     settings: settings,
+                    popToRoot: youPops,
                     writtenAbout: MockData.writtenAbout,
                     onOpenPremium: { selection = .premium },
                     onDeleteAccount: onDeleteAccount,

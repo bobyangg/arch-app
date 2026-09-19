@@ -24,6 +24,11 @@ struct MessagesListView: View {
 
     // NavigationPath, not [Conversation]: the requests folder pushes a different
     // type into this same stack.
+    /// Bumped by the shell when the tab already showing is tapped again. Every
+    /// change means "go back to the root", and the value itself means nothing.
+    /// Defaulted so no `#Preview` has to supply one.
+    var popToRoot: Int = 0
+
     @State private var path = NavigationPath()
 
     var body: some View {
@@ -56,6 +61,10 @@ struct MessagesListView: View {
                 )
             }
         }
+        // Emptying the path is the whole of it: `NavigationStack` animates back
+        // through whatever was on it, so an open thread slides away exactly as
+        // the back button would have sent it.
+        .onChange(of: popToRoot) { _, _ in path = NavigationPath() }
     }
 
     private var list: some View {
