@@ -1,28 +1,5 @@
 import SwiftUI
 
-/// Whether Arch can keep putting you in other people's fives.
-///
-/// The second option is the one that only makes sense in a slow app: stop new
-/// people arriving while you still owe someone a reply. Every other app would call
-/// that losing momentum. Here it is the point.
-struct VisibilitySetting: View {
-    let store: SettingsStore
-
-    var body: some View {
-        SettingsPage(title: "Who can see me") {
-            VStack(spacing: ArchSpacing.xs) {
-                ForEach(SettingsStore.visibilities, id: \.self) { option in
-                    OptionRow(text: option, isSelected: store.visibility == option) {
-                        store.visibility = option
-                    }
-                }
-            }
-
-            SettingNote("Either way you keep the people already in \(store.rosterName), and they keep you. To come off Arch entirely, pause your profile.")
-        }
-    }
-}
-
 /// People you have blocked.
 struct BlockedSetting: View {
     let store: SettingsStore
@@ -184,11 +161,6 @@ struct DataSetting: View {
             }
         }
     }
-}
-
-#Preview("Who can see me") {
-    NavigationStack { VisibilitySetting(store: SettingsStore()) }
-        .preferredColorScheme(.dark)
 }
 
 #Preview("Blocked, empty") {

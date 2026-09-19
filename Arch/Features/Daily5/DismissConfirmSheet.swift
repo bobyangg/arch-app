@@ -45,7 +45,7 @@ struct DismissConfirmSheet: View {
         .presentationDetents([.height(288)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
-        .presentationBackground(ArchColor.stone)
+        .archSheetBackground()
     }
 }
 

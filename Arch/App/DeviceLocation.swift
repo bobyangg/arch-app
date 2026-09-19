@@ -34,6 +34,20 @@ final class DeviceLocation: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var answer: ((Outcome) -> Void)?
 
+    /// **A delegate that never fires is the worst outcome of the three.**
+    /// `requestLocation()` is documented to call back exactly once, and in
+    /// practice it can sit there: indoors, on a device with no recent fix, or
+    /// when a previous request was superseded. The closure then never runs, the
+    /// button that is waiting on it shows nothing, and tapping it again does the
+    /// same nothing -- which is precisely what this looked like on a phone.
+    private var deadline: Task<Void, Never>?
+
+    /// How long to wait before giving the answer that is available.
+    ///
+    /// Longer than a good fix takes and shorter than somebody will stare at a
+    /// button wondering whether they missed the tap.
+    private static let patience = Duration.seconds(12)
+
     override init() {
         super.init()
         manager.delegate = self
@@ -45,6 +59,7 @@ final class DeviceLocation: NSObject, CLLocationManagerDelegate {
     /// Ask once. The closure is called exactly once, whatever happens.
     func request(_ answer: @escaping (Outcome) -> Void) {
         self.answer = answer
+        startDeadline()
 
         switch manager.authorizationStatus {
         case .notDetermined:
@@ -66,9 +81,37 @@ final class DeviceLocation: NSObject, CLLocationManagerDelegate {
     private func finish(_ outcome: Outcome) {
         // Once, and then never again: a delegate can fire more than once, and a
         // second call would re-run whatever the caller does with the answer.
+        deadline?.cancel()
+        deadline = nil
         let pending = answer
         answer = nil
         pending?(outcome)
+    }
+
+    private func startDeadline() {
+        deadline?.cancel()
+        deadline = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: DeviceLocation.patience)
+            guard !Task.isCancelled else { return }
+            self?.finishWithWhateverExists()
+        }
+    }
+
+    /// The best answer available without waiting any longer.
+    ///
+    /// **`manager.location` is the fix iOS already has**, from whatever asked for
+    /// one most recently -- Maps, the weather, this app a minute ago. It costs
+    /// nothing, needs no new authorisation, and is accurate to far better than
+    /// the kilometre Arch rounds to anyway. Using it is strictly better than
+    /// telling somebody their phone does not know where it is while it plainly
+    /// does.
+    private func finishWithWhateverExists() {
+        if let known = manager.location {
+            finish(.fix(Coordinate(latitude: known.coordinate.latitude,
+                                   longitude: known.coordinate.longitude).coarsened))
+        } else {
+            finish(.unavailable)
+        }
     }
 
     // MARK: CLLocationManagerDelegate
@@ -113,9 +156,10 @@ final class DeviceLocation: NSObject, CLLocationManagerDelegate {
         didFailWithError error: Error
     ) {
         Task { @MainActor in
-            // A failure is the same outcome as no permission as far as the screen
-            // is concerned: the list is still there, and it is still the path.
-            self.finish(.unavailable)
+            // A failure is not the end of it. `kCLErrorLocationUnknown` is common
+            // and transient -- indoors, or a cold start -- and the phone very
+            // often still holds a perfectly good recent fix.
+            self.finishWithWhateverExists()
         }
     }
 }

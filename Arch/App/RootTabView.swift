@@ -32,6 +32,19 @@ struct RootTabView: View {
     /// is the screen a new account starts on.
     var onSignOut: () -> Void = {}
 
+    /// **Tapping the tab you are already on returns it to its root**, which is
+    /// what a tab bar has meant since the first one. Without it, Settings was a
+    /// place you could only leave the way you came in, and the You button under
+    /// it did nothing at all.
+    ///
+    /// A count rather than a flag, and the reason is that the signal is "it was
+    /// tapped again" -- an event, not a state. A `Bool` set true twice in a row
+    /// changes nothing, so the second tap would be swallowed, and it would have
+    /// to be reset afterwards by whoever consumed it. An `Int` that only ever
+    /// goes up has neither problem.
+    @State private var youPops = 0
+    @State private var messagePops = 0
+
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
 
@@ -41,12 +54,33 @@ struct RootTabView: View {
     /// and writes here; everything below reads it and nothing else changes.
     @State private var isOffline = false
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var body: some View {
         VStack(spacing: 0) {
             if isOffline { OfflineBanner() }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            TabBar(selection: $selection, unreadCount: store.unreadCount)
+            TabBar(
+                selection: Binding(
+                    get: { selection },
+                    // `TabBar` writes the selection on every tap, including a tap
+                    // on the tab already showing, so this is where "again" is
+                    // known -- the only place that sees both what was tapped and
+                    // what was already there.
+                    set: { tapped in
+                        if tapped == selection {
+                            switch tapped {
+                            case .you:      youPops += 1
+                            case .messages: messagePops += 1
+                            default:        break
+                            }
+                        }
+                        selection = tapped
+                    }
+                ),
+                unreadCount: store.unreadCount
+            )
         }
         .animation(ArchMotion.standard, value: isOffline)
         .background(ArchColor.night)
@@ -106,7 +140,8 @@ struct RootTabView: View {
                     onDecline: { store.decline($0) },
                     onOpenDaily: { selection = .daily },
                     actions: conversationActions,
-                    holdsSlot: { store.holdsSlot($0) }
+                    holdsSlot: { store.holdsSlot($0) },
+                    popToRoot: messagePops
                 )
             }
             tab(.you) {
@@ -116,21 +151,34 @@ struct RootTabView: View {
                     writtenAbout: MockData.writtenAbout,
                     onOpenPremium: { selection = .premium },
                     onDeleteAccount: onDeleteAccount,
-                    onSignOut: onSignOut
+                    onSignOut: onSignOut,
+                    popToRoot: youPops
                 )
             }
         }
     }
 
+    /// All four stay in the tree; the one you chose is the one you can see.
+    ///
+    /// The change is a cross-fade, on the same curve the tab bar's pill moves
+    /// on, so the two read as one gesture. The incoming tab is layered on top and
+    /// settles from a hair under full size — enough to say "this is a new place",
+    /// not enough to be a slide: the tabs are not arranged left to right in any
+    /// sense that matters, and a slide would claim they were. Under Reduce Motion
+    /// the scale is dropped and only the fade remains.
     @ViewBuilder
     private func tab<Content: View>(
         _ which: ArchTab,
         @ViewBuilder content: () -> Content
     ) -> some View {
+        let isCurrent = selection == which
         content()
-            .opacity(selection == which ? 1 : 0)
-            .allowsHitTesting(selection == which)
-            .accessibilityHidden(selection != which)
+            .opacity(isCurrent ? 1 : 0)
+            .scaleEffect(isCurrent || reduceMotion ? 1 : 0.99)
+            .zIndex(isCurrent ? 1 : 0)
+            .animation(ArchMotion.honouring(reduceMotion, ArchMotion.tabSwitch), value: selection)
+            .allowsHitTesting(isCurrent)
+            .accessibilityHidden(!isCurrent)
     }
 }
 

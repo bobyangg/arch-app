@@ -73,7 +73,10 @@ final class ArchSession {
     func refresh() async {
         do {
             guard let account = try await ArchBackend.account() else {
-                // A session whose account has gone is a session worth nothing.
+                // No row, which is different from no session: the account really
+                // is gone, so the credential pointing at it is worth nothing.
+                // A missing *session* throws `notSignedIn` and is caught below
+                // without destroying anything.
                 await ArchBackend.signOut()
                 state = .signedOut
                 return
