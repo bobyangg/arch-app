@@ -35,9 +35,7 @@ struct EditDetailsSheet: View {
     @State private var locationNote: String?
     @Environment(\.dismiss) private var dismiss
 
-    private var isValid: Bool {
-        gender != nil && place != nil
-    }
+    private var isValid: Bool { place != nil }
 
     var body: some View {
         ScrollView {
@@ -68,6 +66,11 @@ struct EditDetailsSheet: View {
                     // somebody read yesterday. A genuine mistake is a support
                     // question, not a settings screen.
                     FixedRow(label: "Age", value: age)
+                    // **Gender joins the settled facts.** Pronouns sit below and
+                    // stay editable, which is the distinction worth keeping: what
+                    // you are is what somebody was shown, and what you are called
+                    // is yours to correct.
+                    FixedRow(label: "Gender", value: gender?.label ?? "")
                     PlaceRow(place: place) { isPickingPlace = true }
                     if canSetHeight {
                         HeightRow(height: height) { isPickingHeight = true }
@@ -78,13 +81,11 @@ struct EditDetailsSheet: View {
                 }
 
                 Text(canSetHeight
-                     ? "Your name and age cannot be changed here. Your height is missing — once you set it, it stays."
-                     : "Your name, age and height are set when you sign up and cannot be changed here.")
+                     ? "Your name, age and gender cannot be changed here. Your height is missing — once you set it, it stays."
+                     : "Your name, age, gender and height are set when you sign up and cannot be changed here.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
-
-                genderSection
 
                 ArchField(text: $pronouns, label: "Pronouns", placeholder: "Optional")
 
@@ -193,20 +194,6 @@ struct EditDetailsSheet: View {
     }
 
     // MARK: Pieces
-
-    private var genderSection: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-            Text("Gender")
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-
-            ForEach(Gender.allCases) { option in
-                OptionRow(text: option.label, isSelected: gender == option) {
-                    gender = option
-                }
-            }
-        }
-    }
 
 }
 
