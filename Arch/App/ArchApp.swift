@@ -10,6 +10,10 @@ struct ArchApp: App {
     /// a UIKit callback with no SwiftUI equivalent. No app state lives in it.
     @UIApplicationDelegateAdaptor(ArchAppDelegate.self) private var appDelegate
     @State private var hasLaunched = false
+    /// The bridge going up again between signing in and the roster. The first
+    /// roster is loading behind it, and a spinner would say "wait" where this
+    /// says "here it comes".
+    @State private var isBuilding = false
 
     /// Which of the six things the app is doing, and the stores behind it.
     ///
@@ -27,6 +31,9 @@ struct ArchApp: App {
 
                 if !hasLaunched {
                     LaunchView { hasLaunched = true }
+                        .transition(.opacity)
+                } else if isBuilding {
+                    LaunchView { isBuilding = false }
                         .transition(.opacity)
                 }
             }
@@ -77,6 +84,9 @@ struct ArchApp: App {
 
         case .signedOut, .onboarding:
             OnboardingFlowView { _, allowed in
+                // The sequence starts before the reload, so it covers the load
+                // rather than following it. Its own random pick, like a launch.
+                withAnimation(ArchMotion.standard) { isBuilding = true }
                 Task { await session.finishedOnboarding(allowing: allowed) }
             }
 
