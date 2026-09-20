@@ -49,7 +49,7 @@ final class SettingsStore {
     /// It is one now, and the two that went were both the app telling you to come
     /// back. Your roster is there when you open it; a person writing to you is the
     /// only thing that has any business interrupting your day.
-    var messageAlert = true
+    var messageAlert = true { didSet { scheduleSave() } }
 
     // Discovery
     /// A requirement rather than a preference: nobody outside it reaches you.
@@ -57,8 +57,29 @@ final class SettingsStore {
     ///
     /// The defaults above are what a design build shows and what a brand-new
     /// account gets; this replaces them once there is somewhere to read from.
+    /// True while `load()` is writing the server's answer into these fields, so
+    /// reading a row does not immediately schedule a write of the same row.
+    @ObservationIgnored private var isLoading = false
+    @ObservationIgnored private var saveTask: Task<Void, Never>?
+
+    /// **Debounced, because a slider is a hundred values on the way to one.**
+    /// Dragging distance from 25 to 60 passes through every mile between them,
+    /// and a write per mile is thirty-five wasted round trips and a race over
+    /// which one lands last. The last value wins by being the only one sent.
+    private func scheduleSave() {
+        guard !isLoading, ArchConfig.isConfigured else { return }
+        saveTask?.cancel()
+        saveTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(500))
+            guard !Task.isCancelled else { return }
+            self?.save()
+        }
+    }
+
     func load() async throws {
         guard ArchConfig.isConfigured else { return }
+        isLoading = true
+        defer { isLoading = false }
 
         // On the account rather than on the discovery row, so it is fetched
         // separately. A failure here is not worth failing the whole screen for:
@@ -101,16 +122,28 @@ final class SettingsStore {
         }
     }
 
-    var seeking: Set<Gender> = [.man, .woman, .nonBinary]
+    // **Every one of these saves itself, and none of them used to.**
+    //
+    // `save()` existed, was correct, and was called from nowhere at all. So the
+    // sliders moved, the list underneath them said the new number, and the app
+    // reported exactly what it was about to throw away -- every account on the
+    // project still holds the 25 / 26 / 36 that `createDiscovery` wrote at
+    // signup. `seeking` looked like it worked only because onboarding writes it
+    // once; changing it in Settings was lost the same way.
+    //
+    // `didSet` rather than a Save button, because the rest of Settings has none
+    // and a screen where five controls apply themselves and one does not is
+    // worse than either rule applied consistently.
+    var seeking: Set<Gender> = [.man, .woman, .nonBinary] { didSet { scheduleSave() } }
     /// Twenty-five miles, not ten. Ten reached most of four boroughs and was a
     /// sensible default while New York was the whole app; across the US and
     /// Canada it is a radius that finds nobody outside a metro, and an empty
     /// roster is the one failure the product does not survive.
-    var distance = 25
-    var minAge = 26
-    var maxAge = 36
+    var distance = 25 { didSet { scheduleSave() } }
+    var minAge = 26 { didSet { scheduleSave() } }
+    var maxAge = 36 { didSet { scheduleSave() } }
     var lookingFor = "Something serious"
-    var isPaused = false
+    var isPaused = false { didSet { scheduleSave() } }
 
     // The questionnaire
 
