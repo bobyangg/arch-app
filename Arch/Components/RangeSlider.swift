@@ -85,21 +85,70 @@ struct RangeSlider: View {
 }
 
 /// One handle, for a single value. Same construction, half the parts.
+///
+/// **It said that and was a native `Slider`.** Which meant the two controls in
+/// Discovery were drawn by different hands: the age range in Arch's stone and
+/// lamp, the distance in iOS's own greys, one above the other on the same screen
+/// and plainly not the same control. Every other borrowed component in this app
+/// was turned down for exactly that — see `HeightPickerSheet` on the wheel
+/// picker, and `ConversationMenuSheet` on `Menu`.
 struct ValueSlider: View {
     @Binding var value: Int
     var bounds: ClosedRange<Int>
+    /// What the handle is called, for anybody who cannot see where it is.
+    var label: String = "Value"
+
+    private let handleSize: CGFloat = 26
+    private let trackHeight: CGFloat = 4
+    private let space = "valueTrack"
 
     var body: some View {
-        Slider(
-            value: Binding(
-                get: { Double(value) },
-                set: { value = Int($0.rounded()) }
-            ),
-            in: Double(bounds.lowerBound)...Double(bounds.upperBound),
-            step: 1
-        )
-        .tint(ArchColor.lamp)
+        GeometryReader { geometry in
+            let usable = max(1, geometry.size.width - handleSize)
+
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(ArchColor.stone)
+                    .frame(height: trackHeight)
+
+                // From the left edge to the middle of the handle, so the filled
+                // part ends where the handle says the value is.
+                Capsule()
+                    .fill(ArchColor.lamp)
+                    .frame(width: x(value, usable) + handleSize / 2, height: trackHeight)
+
+                Circle()
+                    .fill(ArchColor.lamp)
+                    .frame(width: handleSize, height: handleSize)
+                    .offset(x: x(value, usable))
+                    .gesture(
+                        DragGesture(minimumDistance: 0, coordinateSpace: .named(space))
+                            .onChanged { value = self.value(at: $0.location.x, usable: usable) }
+                    )
+                    .accessibilityLabel("\(label), \(value)")
+                    .accessibilityAddTraits(.isButton)
+            }
+            .frame(height: handleSize)
+            .frame(maxHeight: .infinity)
+            .coordinateSpace(name: space)
+        }
         .frame(height: 44)
+    }
+
+    // MARK: Geometry
+
+    private var span: CGFloat {
+        CGFloat(max(1, bounds.upperBound - bounds.lowerBound))
+    }
+
+    private func x(_ value: Int, _ usable: CGFloat) -> CGFloat {
+        CGFloat(value - bounds.lowerBound) / span * usable
+    }
+
+    private func value(at position: CGFloat, usable: CGFloat) -> Int {
+        let clamped = min(max(0, position - handleSize / 2), usable)
+        let raw = bounds.lowerBound + Int((clamped / usable * span).rounded())
+        return min(max(bounds.lowerBound, raw), bounds.upperBound)
     }
 }
 

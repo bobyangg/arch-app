@@ -215,16 +215,45 @@ struct PhotoCropView: View {
     /// can be inside the stage with a margin left over on every side for the part
     /// of the photograph you are cutting off.
     private func frameSize(in stage: CGSize) -> CGSize {
-        let width = min(
-            stage.width - Self.inset * 2,
-            (stage.height - Self.inset * 2) * PhotoCard.aspect
-        )
-        let safe = max(width, 1)
-        return CGSize(width: safe, height: safe / PhotoCard.aspect)
+        let available = CGSize(width: max(stage.width - Self.inset * 2, 1),
+                               height: max(stage.height - Self.inset * 2, 1))
+        var width = max(min(available.width, available.height * PhotoCard.aspect), 1)
+
+        // **The frame also has to be small enough to see the photograph around
+        // it.** At zoom 100 the picture exactly covers the frame, and the frame
+        // was as large as the stage would allow -- so a landscape photograph came
+        // out wider than the stage and was clipped at both edges before the
+        // reader had touched anything. The first sight of your own photograph was
+        // one already cut, with no way to see what had been lost and nothing
+        // saying any had been.
+        //
+        // Shrinking the frame until the covering picture fits is what makes the
+        // opening view the whole picture. It costs frame size on wide photographs
+        // and buys the thing this screen is for: choosing, rather than being
+        // shown a choice already made.
+        let covering = imageSize(covering: CGSize(width: width,
+                                                  height: width / PhotoCard.aspect),
+                                 atZoom: 100)
+        let overflow = max(covering.width / max(stage.width, 1),
+                           covering.height / max(stage.height, 1))
+        if overflow > 1 { width /= overflow }
+
+        // A floor, because a 3:1 panorama would otherwise shrink the frame to a
+        // postage stamp to show two strips of sky. Past this the edges are
+        // clipped again, which is the right trade at that shape.
+        width = max(width, available.width * 0.45)
+        return CGSize(width: width, height: width / PhotoCard.aspect)
     }
 
     /// The photograph at its own shape, scaled so it covers the frame, then zoomed.
     private func imageSize(covering frame: CGSize) -> CGSize {
+        imageSize(covering: frame, atZoom: zoom)
+    }
+
+    /// Taking the zoom rather than reading it, so `frameSize` can ask what the
+    /// picture would measure at rest without the answer moving as somebody
+    /// pinches.
+    private func imageSize(covering frame: CGSize, atZoom zoom: Int) -> CGSize {
         let factor = max(frame.width / max(photo.aspect, 0.01), frame.height)
         let scale = CGFloat(zoom) / 100
         return CGSize(width: photo.aspect * factor * scale, height: factor * scale)
