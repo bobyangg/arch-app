@@ -45,6 +45,13 @@ enum ArchMotion {
     /// The launch mark drawing itself in, once.
     static let launchDraw = Animation.easeInOut(duration: 0.85)
 
+    /// The other way the bridge goes up at launch. The piers rise and stop --
+    /// stone does not bounce. The deck is the one piece that settles: it lands
+    /// on the piers with a little give, which is what makes it read as having
+    /// weight.
+    static let pierRises = Animation.easeOut(duration: 0.40)
+    static let deckLands = Animation.spring(duration: 0.42, bounce: 0.28)
+
     /// Under Reduce Motion every orchestrated animation collapses to a plain
     /// cross-fade — the moment still reads, nothing moves.
     static func honouring(_ reduceMotion: Bool, _ animation: Animation) -> Animation {
