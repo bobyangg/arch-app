@@ -263,15 +263,45 @@ final class OnboardingStore {
         questionnaireAnswers[question.id] = option
     }
 
+    /// The first question with no answer, or nil when all sixteen have one.
+    var firstUnansweredQuestion: Int? {
+        Questionnaire.questions.firstIndex { questionnaireAnswers[$0.id] == nil }
+    }
+
     /// Advances, or leaves the questionnaire entirely when the last one is done.
+    ///
+    /// **Nothing may advance past an unanswered question.** A tap schedules the
+    /// move 260ms later and nothing tied that pending move to the question that
+    /// was tapped, so two taps queued two moves: the first went to the next
+    /// question and the second went straight past it. The skipped one was never
+    /// answered, `commit()` drops unanswered questions with a `continue`, and
+    /// `match_population` requires exactly sixteen -- so the reader finished
+    /// onboarding, saw nothing wrong, and was silently unmatchable. One account
+    /// on the project has fourteen answers for this reason, missing q12 and q15.
+    ///
+    /// The guard here is the invariant rather than the timing fix, because the
+    /// same view drives re-answering from Settings and would have had the same
+    /// hole.
     func advanceQuestion() {
-        guard let index = questionIndex else { return }
+        guard let index = questionIndex, index < Questionnaire.count else { return }
+        guard questionnaireAnswers[Questionnaire.questions[index].id] != nil else { return }
+
         if index + 1 < Questionnaire.count {
             questionIndex = index + 1
-        } else {
-            questionIndex = nil
-            step = .notifications
+            return
         }
+
+        // The last one is answered. Anything still missing is a gap left by the
+        // race above, or by somebody whose answers were written short before it
+        // was fixed -- go there rather than out. Leaving with fifteen of sixteen
+        // is the failure this is for, and it is invisible from inside the app.
+        if let gap = firstUnansweredQuestion {
+            questionIndex = gap
+            return
+        }
+
+        questionIndex = nil
+        step = .notifications
     }
 
     // MARK: Details
