@@ -73,8 +73,13 @@ struct OnboardingQuestionnaire: View {
     /// always in the top bar.
     private func choose(_ option: String, for question: QuestionnaireQuestion) {
         store.answer(question, with: option)
+        let tapped = store.questionIndex
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(260))
+            // Only if this is still the question that was tapped. Two taps used
+            // to queue two moves, and the second one stepped past the next
+            // question without it being answered.
+            guard store.questionIndex == tapped else { return }
             withAnimation(ArchMotion.standard) {
                 store.advanceQuestion()
             }
