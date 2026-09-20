@@ -247,8 +247,20 @@ final class OnboardingStore {
         return steps[index - 1]
     }
 
+    /// **Being in a question is `questionIndex`, not `step`, and testing the
+    /// wrong one made the back button do nothing in Settings.**
+    ///
+    /// Re-answering from Settings builds a bare `OnboardingStore` and calls
+    /// `startQuestions()`, which sets the index and has no reason to touch
+    /// `step` -- there is no flow to be a step of. So `step` sat at its default
+    /// of `.birthday`, `step == .questions` was false, and back fell through to
+    /// looking for a step before the first one, found none, and returned having
+    /// done nothing at all. The button was drawn, was tappable, and was inert.
+    ///
+    /// The index is the honest test: if there is a question on screen, back means
+    /// the previous question, whatever brought the reader here.
     func back() {
-        if step == .questions, let index = questionIndex {
+        if let index = questionIndex {
             questionIndex = index == 0 ? nil : index - 1
             return
         }
@@ -257,7 +269,13 @@ final class OnboardingStore {
 
     // MARK: Questionnaire
 
-    func startQuestions() { questionIndex = 0 }
+    /// Sets `step` as well as the index, so a store driving the questionnaire
+    /// describes itself correctly to anything that reads either one. `back()` no
+    /// longer depends on this, but it was wrong that they could disagree.
+    func startQuestions() {
+        step = .questions
+        questionIndex = 0
+    }
 
     func answer(_ question: QuestionnaireQuestion, with option: String) {
         questionnaireAnswers[question.id] = option
