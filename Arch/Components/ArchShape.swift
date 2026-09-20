@@ -52,6 +52,10 @@ struct ArchMark: Shape {
     /// How much of the path is drawn, 0...1. Animating this draws the mark in.
     var trim: CGFloat = 1
 
+    /// Which of the three strokes to draw. The whole mark, unless a launch
+    /// sequence is moving the pieces separately -- see `LaunchView`.
+    var parts: ArchMarkParts = .all
+
     /// Intrinsic proportion of the mark: height as a fraction of width.
     ///
     /// Equal to `baseline`, because the deck's crown sits exactly on the top edge
@@ -103,29 +107,46 @@ struct ArchMark: Shape {
         // Left pier. The control sits inboard of the chord, so the pier leaves the
         // deck almost upright and does its splaying near the ground — a leg taking
         // weight, rather than a compass opening.
-        path.move(to: CGPoint(x: x(Self.pierTop), y: springY))
-        path.addQuadCurve(
-            to: CGPoint(x: x(Self.pierFoot), y: footY),
-            control: CGPoint(x: x(Self.pierTop - 0.01), y: y(0.40))
-        )
+        if parts.contains(.leftPier) {
+            path.move(to: CGPoint(x: x(Self.pierTop), y: springY))
+            path.addQuadCurve(
+                to: CGPoint(x: x(Self.pierFoot), y: footY),
+                control: CGPoint(x: x(Self.pierTop - 0.01), y: y(0.40))
+            )
+        }
 
         // Right pier, mirrored.
-        path.move(to: CGPoint(x: x(1 - Self.pierTop), y: springY))
-        path.addQuadCurve(
-            to: CGPoint(x: x(1 - Self.pierFoot), y: footY),
-            control: CGPoint(x: x(1 - Self.pierTop + 0.01), y: y(0.40))
-        )
+        if parts.contains(.rightPier) {
+            path.move(to: CGPoint(x: x(1 - Self.pierTop), y: springY))
+            path.addQuadCurve(
+                to: CGPoint(x: x(1 - Self.pierFoot), y: footY),
+                control: CGPoint(x: x(1 - Self.pierTop + 0.01), y: y(0.40))
+            )
+        }
 
         // The deck, bowed so its crown sits at the top of the frame. A quadratic
         // reaches half way to its control point, so the control goes twice as far.
-        path.move(to: CGPoint(x: x(Self.deckInset), y: y(Self.deckEnd)))
-        path.addQuadCurve(
-            to: CGPoint(x: x(1 - Self.deckInset), y: y(Self.deckEnd)),
-            control: CGPoint(x: x(0.5), y: y(-Self.deckEnd))
-        )
+        if parts.contains(.deck) {
+            path.move(to: CGPoint(x: x(Self.deckInset), y: y(Self.deckEnd)))
+            path.addQuadCurve(
+                to: CGPoint(x: x(1 - Self.deckInset), y: y(Self.deckEnd)),
+                control: CGPoint(x: x(0.5), y: y(-Self.deckEnd))
+            )
+        }
 
         return trim >= 1 ? path : path.trimmedPath(from: 0, to: max(0, trim))
     }
+}
+
+/// The three strokes of the mark, so a launch sequence can move them one at a
+/// time. Everything else draws `.all`.
+struct ArchMarkParts: OptionSet {
+    let rawValue: Int
+    static let leftPier  = ArchMarkParts(rawValue: 1 << 0)
+    static let rightPier = ArchMarkParts(rawValue: 1 << 1)
+    static let deck      = ArchMarkParts(rawValue: 1 << 2)
+    static let piers: ArchMarkParts = [.leftPier, .rightPier]
+    static let all: ArchMarkParts = [.leftPier, .rightPier, .deck]
 }
 
 // MARK: - The wordmark
