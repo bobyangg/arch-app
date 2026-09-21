@@ -44,6 +44,7 @@ struct RootTabView: View {
     /// goes up has neither problem.
     @State private var youPops = 0
     @State private var messagePops = 0
+    @State private var dailyPops = 0
 
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
@@ -73,6 +74,7 @@ struct RootTabView: View {
                             switch tapped {
                             case .you:      youPops += 1
                             case .messages: messagePops += 1
+                            case .daily:    dailyPops += 1
                             default:        break
                             }
                         }
@@ -129,7 +131,8 @@ struct RootTabView: View {
                     isOffline: isOffline,
                     onDismiss: { store.dismiss($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
-                    actions: conversationActions
+                    actions: conversationActions,
+                    popToRoot: dailyPops
                 )
             }
             tab(.messages) {
