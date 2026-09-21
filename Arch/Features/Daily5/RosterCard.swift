@@ -17,7 +17,15 @@ struct RosterCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Button(action: onOpen) {
-                PhotoPlaceholder(toneIndex: person.avatarToneIndex)
+                // **The url was never passed, so this could only ever draw the
+                // tone.** `ArchBackend.roster()` fetches the photographs and
+                // signs their URLs in the same batch it fetches the people, so
+                // the picture was loaded, in memory, and thrown away one
+                // argument short of the screen. Opening the profile worked
+                // because `ProfileDetailView` does pass it.
+                PhotoPlaceholder(toneIndex: person.avatarToneIndex,
+                                 url: person.mainPhoto?.url,
+                                 data: person.mainPhoto?.local)
                     .aspectRatio(PhotoCard.aspect, contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
             }
