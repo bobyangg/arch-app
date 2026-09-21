@@ -489,6 +489,20 @@ jobs:
               | sort -u | head -15 | while IFS= read -r line; do
               printf '::error::%s\n' "$line"
             done
+
+            # **The end of the log, unconditionally, as one annotation.**
+            #
+            # Neither the logs nor the step summary above can be read
+            # without signing in, and on a public repository annotations
+            # are the only channel that can. An upload failed with exit 70,
+            # matched none of the patterns grepped for above, and left
+            # nothing to go on but the number. The tail goes out whether it
+            # matched anything or not.
+            #
+            # One annotation rather than thirty: GitHub keeps ten per level
+            # per step, and %0A is how a multi-line message survives.
+            tail=$(tail -n 30 "$log" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            printf '::notice title=End of %s::%s\n' "$log" "$tail"
           done
 
       - name: Keep the logs
