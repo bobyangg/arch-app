@@ -216,6 +216,7 @@ extension ThreadRow {
             id: id,
             person: person,
             state: ConversationState(rawValue: state) ?? .open,
+            openedByMe: openedBy == me,
             opening: nil,
             messages: messages.sorted { $0.createdAt < $1.createdAt }
                 .map { row in

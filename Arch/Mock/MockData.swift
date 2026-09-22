@@ -648,6 +648,16 @@ struct Conversation: Identifiable, Hashable {
     let id: String
     let person: Person
     var state: ConversationState = .open
+    /// **Whether you started it, which is what makes a request a request.**
+    ///
+    /// The server has always sent `opened_by` and the client has always thrown
+    /// it away, so a conversation in `request` state looked identical from both
+    /// ends — and the folder that collects them showed the sender their own
+    /// unanswered message as though it were somebody asking to reach them.
+    ///
+    /// A request you sent is a conversation you are in, waiting. A request you
+    /// received is a decision. They belong in different places.
+    var openedByMe: Bool = false
     /// The photo or prompt the first message quoted, if it quoted one. Pinned to
     /// the top of the thread so neither person has to remember why they started.
     let opening: ProfileItem?

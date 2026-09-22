@@ -128,7 +128,21 @@ final class DailyFiveStore {
     var openConversations: [Conversation] { conversations.filter { $0.state == .open } }
 
     /// People who have written to you and are waiting.
-    var requests: [Conversation] { conversations.filter { $0.state == .request } }
+    /// Only the ones somebody sent *you*. A request you sent is in `threads`.
+    var requests: [Conversation] {
+        conversations.filter { $0.state == .request && !$0.openedByMe }
+    }
+
+    /// What the Messages list shows: everything open, plus the ones you have
+    /// written and are waiting on.
+    ///
+    /// Deliberately not the same as `openConversations`, which stays the count
+    /// the roster hold is computed from — the server works that out from
+    /// `state = 'open'` alone, and the two have to agree or the app and the
+    /// matcher disagree about whether you are full.
+    var threads: [Conversation] {
+        conversations.filter { $0.state == .open || ($0.state == .request && $0.openedByMe) }
+    }
 
     /// Your people are still there and still yours — they are just not shown
     /// until you are back under the limit. Nothing is lost by waiting.
@@ -212,9 +226,23 @@ final class DailyFiveStore {
         if let existing = conversations.first(where: { $0.person.id == person.id }) {
             return existing
         }
+        // **Shown at once and sent immediately after, and the sending is what
+        // was missing.** `ArchBackend.startConversation` existed, was correct,
+        // and had no callers: this built a conversation with an invented id,
+        // put it in the list, and stopped. The message lived in memory on one
+        // phone until the app closed. Nothing was written, so the other person
+        // was never told, and the database held no conversations and no
+        // messages at all.
+        //
+        // `request` rather than `open`, because that is the state
+        // `start_conversation` creates and the reader should not see one thing
+        // now and a different one after a refresh. `openedByMe` keeps it out of
+        // your own requests folder.
         let conversation = Conversation(
-            id: "c-\(person.id)",
+            id: "pending-\(person.id)",
             person: person,
+            state: .request,
+            openedByMe: true,
             opening: item,
             messages: [
                 Message(
@@ -230,7 +258,33 @@ final class DailyFiveStore {
         conversations.insert(conversation, at: 0)
         // Writing to them spends the slot.
         dismiss(person)
+
+        // The id the server gives back replaces the placeholder, because every
+        // later call -- replying, leaving, ending -- is addressed by it. A
+        // thread left holding `pending-` would fail every one of them.
+        let placeholder = conversation.id
+        persist { [weak self] in
+            let id = try await ArchBackend.startConversation(with: person, body: text)
+            await MainActor.run { self?.adopt(serverID: id, replacing: placeholder) }
+        }
         return conversation
+    }
+
+    /// Swaps the placeholder id for the one the server assigned.
+    @MainActor
+    private func adopt(serverID: String, replacing placeholder: String) {
+        guard let index = conversations.firstIndex(where: { $0.id == placeholder }) else { return }
+        let old = conversations[index]
+        conversations[index] = Conversation(
+            id: serverID,
+            person: old.person,
+            state: old.state,
+            openedByMe: old.openedByMe,
+            opening: old.opening,
+            messages: old.messages,
+            unreadCount: old.unreadCount,
+            lastActivity: old.lastActivity
+        )
     }
 
     /// Leaving a conversation takes the person out of your five as well.

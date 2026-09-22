@@ -137,7 +137,11 @@ struct RootTabView: View {
             }
             tab(.messages) {
                 MessagesListView(
-                    conversations: store.openConversations,
+                    // `threads`, not `openConversations`: the list shows what
+                    // you have written and are waiting on as well as what is
+                    // open. The count above stays `openConversations`, because
+                    // that is what the server computes the roster hold from.
+                    conversations: store.threads,
                     requests: store.requests,
                     onAccept: { store.accept($0) },
                     onDecline: { store.decline($0) },
