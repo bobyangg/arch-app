@@ -38,7 +38,11 @@ struct MessageThreadView: View {
             header
             transcript
             switch conversation.state {
-            case .request: requestBar
+            case .request:
+                // The same state means opposite things at the two ends. Without
+                // this, your own unanswered message offered you "Decline" and
+                // "Answer" and told you that you had written to yourself.
+                if conversation.openedByMe { waitingBar } else { requestBar }
             case .ended:   endedBar
             case .open:    composer
             }
@@ -160,6 +164,24 @@ struct MessageThreadView: View {
     /// A request is read before it is answered, so the input bar is replaced by the
     /// decision. Accepting is the encouraged action and takes `lamp`; declining is
     /// quiet, and they are not told either way.
+    /// Your own message, not yet answered.
+    ///
+    /// No buttons, because there is nothing for you to do: it is their move.
+    /// Nor a composer — a request is one message until it is answered, which is
+    /// what stops it being somewhere to keep writing at somebody who has not
+    /// replied.
+    private var waitingBar: some View {
+        Text("Sent. It is in \(conversation.person.name)'s requests — if they answer, this moves into your messages.")
+            .archText(.footnote)
+            .foregroundStyle(ArchColor.mortar)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, ArchSpacing.screenMargin)
+            .padding(.top, ArchSpacing.s)
+            .padding(.bottom, ArchSpacing.xs)
+            .archBar(.bottom)
+    }
+
     private var requestBar: some View {
         VStack(spacing: ArchSpacing.xs) {
             Text("\(conversation.person.name) wrote to you. Answering moves this into your messages.")
