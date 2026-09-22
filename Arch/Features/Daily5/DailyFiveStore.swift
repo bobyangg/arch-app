@@ -79,7 +79,14 @@ final class DailyFiveStore {
     /// `[weak self]` captures a mutable optional, and reading it from a closure
     /// nested inside the task is a data race that Swift 6 rejects outright.
     /// Isolating the continuation removes the inner closure entirely.
-    private func persist(_ work: @escaping () async throws -> Void) {
+    ///
+    /// And on `work` as well, for the same reason one level up. Most of the work
+    /// here is one backend call and touches nothing, but `startConversation` has
+    /// to come back and swap the placeholder id for the server's -- so it needs
+    /// `self`, and without this it could only reach it through exactly the nested
+    /// `MainActor.run` the paragraph above rules out. Isolating the parameter
+    /// means the body is already on the main actor when it returns.
+    private func persist(_ work: @MainActor @escaping () async throws -> Void) {
         guard ArchConfig.isConfigured else { return }
         Task { @MainActor [weak self] in
             do {
@@ -265,7 +272,7 @@ final class DailyFiveStore {
         let placeholder = conversation.id
         persist { [weak self] in
             let id = try await ArchBackend.startConversation(with: person, body: text)
-            await MainActor.run { self?.adopt(serverID: id, replacing: placeholder) }
+            self?.adopt(serverID: id, replacing: placeholder)
         }
         return conversation
     }
