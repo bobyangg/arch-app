@@ -550,10 +550,10 @@ enum ArchBackend {
     /// same shape and defers the constraint to commit.
     static func reorderPhotos(_ ids: [String]) async throws {
         struct Arguments: Encodable { let ids: [String] }
-        struct Empty: Decodable {}
-        _ = try await SupabaseClient.shared.rpc(
-            "reorder_photos", Arguments(ids: ids), returning: Empty?.self
-        )
+        // `reorder_photos` returns void, and PostgREST answers that with 204 and an
+        // empty body. There is nothing there to decode into `Empty`, so asking for
+        // one threw on every successful reorder.
+        _ = try await SupabaseClient.shared.rpcRaw("reorder_photos", Arguments(ids: ids))
     }
 
     /// Signed URLs for a set of photographs, in one round trip.
