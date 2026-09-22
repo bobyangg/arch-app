@@ -105,6 +105,29 @@ final class ArchSession {
         }
     }
 
+    /// Reload what is already on screen, without being able to take it away.
+    ///
+    /// The app used to load once per process and never again: `refresh()` runs
+    /// from `start()`, and nothing else called it except the retry button. So a
+    /// message somebody sent you arrived in the database immediately and on your
+    /// phone only after the app had been force-quit and opened cold — putting it
+    /// in the background and coming back showed yesterday's roster and an empty
+    /// messages list. Sending worked; receiving waited for a relaunch.
+    ///
+    /// Separate from `refresh()` because coming back to the app is not launching
+    /// it. `refresh()` is allowed to decide you are signed out, removed, or
+    /// unreachable, and that is right at launch. Here it would mean that walking
+    /// into a lift with Arch open replaces the screen you were reading with an
+    /// error — so a failure leaves everything exactly as it was, and the next
+    /// return tries again.
+    func reload() async {
+        guard case .ready = state else { return }
+        // No `account()` and no `ownProfile()`: this is a refresh of the two
+        // stores the tabs are reading, not a re-decision about who you are.
+        try? await daily.load()
+        try? await settings.load()
+    }
+
     /// What the removal screen needs. Falls back to the least specific version
     /// rather than failing: a reader who cannot get in deserves an explanation even
     /// when the detail did not load.
