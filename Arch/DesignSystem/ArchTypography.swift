@@ -4,18 +4,22 @@ import UIKit
 
 /// The Arch type scale.
 ///
-/// Two families, hard-split roles. **Fraunces** is used *only* for the wordmark,
-/// screen titles, profile names and prompt questions — it is the brand's voice and
-/// it is not a UI font. **Instrument Sans** carries every piece of chrome.
+/// Three families, hard-split roles. **Outfit** sets one word, `arch`, wherever
+/// the mark is locked up with its name, and nothing else — a geometric sans whose
+/// round bowls answer the round strokes of the mark. **Fraunces** is used *only*
+/// for screen titles, profile names and prompt questions — it is the brand's voice
+/// and it is not a UI font. **Instrument Sans** carries every piece of chrome.
 /// Sentence case throughout — no all-caps labels, no tracked-out eyebrow text.
 ///
 /// Sizes are metered against a Dynamic Type text style, so the whole scale moves
 /// with the reader's text size instead of being frozen at a literal point size.
 enum ArchType: CaseIterable {
 
-    // Serif — Fraunces
-    /// 40 / medium — the wordmark.
+    // Geometric sans — Outfit
+    /// 40 / semibold — the wordmark.
     case display
+
+    // Serif — Fraunces
     /// 30 / semibold — screen titles, profile names.
     case titleL
     /// 24 / semibold — modal and empty-state headlines.
@@ -82,7 +86,7 @@ enum ArchType: CaseIterable {
     /// looking thin in a headline and muddy in a paragraph.
     var face: ArchFace {
         switch self {
-        case .display:            return .frauncesDisplayMedium
+        case .display:            return .outfitSemiBold
         case .titleL, .titleM:    return .frauncesDisplaySemiBold
         case .prompt:             return .frauncesText
         case .subhead, .badge:    return .instrumentSemiBold
@@ -118,13 +122,16 @@ enum ArchType: CaseIterable {
     var lineSpacing: CGFloat { ArchTypography.lineSpacing(self) }
 }
 
-/// The six cuts the app ships, by PostScript name.
+/// The seven cuts the app ships, by PostScript name.
 ///
-/// Both families come from Google Fonts as variable-only, and Fraunces' own
+/// All three families come from Google Fonts as variable-only, and Fraunces' own
 /// defaults are opsz 9 / wght 900 / WONK 1 — a wonky black at caption size. These
 /// are static instances pinned at build time rather than axes resolved at runtime,
-/// so what the app asks for is exactly what it draws.
+/// so what the app asks for is exactly what it draws. Outfit is pinned at wght 600
+/// and renamed to match, which is why its PostScript name is one the variable file
+/// does not carry.
 enum ArchFace: String, CaseIterable {
+    case outfitSemiBold          = "Outfit-SemiBold"
     case frauncesDisplayMedium   = "FrauncesDisplay-Medium"
     case frauncesDisplaySemiBold = "FrauncesDisplay-SemiBold"
     case frauncesText            = "FrauncesText-Regular"
@@ -138,7 +145,7 @@ enum ArchFace: String, CaseIterable {
     var isSerif: Bool {
         switch self {
         case .frauncesDisplayMedium, .frauncesDisplaySemiBold, .frauncesText: return true
-        case .instrumentRegular, .instrumentMedium, .instrumentSemiBold: return false
+        case .outfitSemiBold, .instrumentRegular, .instrumentMedium, .instrumentSemiBold: return false
         }
     }
 
@@ -146,7 +153,7 @@ enum ArchFace: String, CaseIterable {
     var fallbackWeight: UIFont.Weight {
         switch self {
         case .frauncesDisplayMedium, .instrumentMedium: return .medium
-        case .frauncesDisplaySemiBold, .instrumentSemiBold: return .semibold
+        case .frauncesDisplaySemiBold, .instrumentSemiBold, .outfitSemiBold: return .semibold
         case .frauncesText, .instrumentRegular: return .regular
         }
     }

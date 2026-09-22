@@ -35,8 +35,14 @@ private func roundedPolygon(_ points: [CGPoint], radius: CGFloat) -> Path {
 // MARK: - The mark
 
 /// The Arch mark: a letter A whose apex has been flattened into a bridge deck,
-/// drawn as three strokes and nothing else. The deck bows upward and overhangs its
-/// piers; the piers splay outward the way a real one carries load to the ground.
+/// drawn as four strokes and nothing else. The deck bows upward and overhangs its
+/// piers; the piers splay outward the way a real one carries load to the ground;
+/// and between the piers, under the deck, a semicircular span.
+///
+/// The span is what makes it a bridge. Without it the mark was a bar on two legs
+/// -- which is the letter pi, stroke for stroke, and people said so. A bridge is a
+/// deck carried on an arch, and the arch is the difference; it is also the most
+/// *Arch* thing in the drawing.
 ///
 /// It is one shape at every weight rather than two marks. Stroked at 1.75pt it is
 /// the Daily 5 tab glyph; stroked at 12pt it is the chunky terracotta mark on the
@@ -52,7 +58,7 @@ struct ArchMark: Shape {
     /// How much of the path is drawn, 0...1. Animating this draws the mark in.
     var trim: CGFloat = 1
 
-    /// Which of the three strokes to draw. The whole mark, unless a launch
+    /// Which of the four strokes to draw. The whole mark, unless a launch
     /// sequence is moving the pieces separately -- see `LaunchView`.
     var parts: ArchMarkParts = .all
 
@@ -72,6 +78,11 @@ struct ArchMark: Shape {
     private static let pierTop: CGFloat = 0.33
     private static let pierFoot: CGFloat = 0.19
     private static let baseline: CGFloat = 0.64
+    /// The span: a semicircle about this centre, this far across. Its springing
+    /// points land on the piers three quarters of the way down, where a pier is
+    /// already leaning out far enough to catch them.
+    private static let spanCentre: CGFloat = 0.48
+    private static let spanRadius: CGFloat = 0.24
 
     var animatableData: CGFloat {
         get { trim }
@@ -100,9 +111,10 @@ struct ArchMark: Shape {
 
         var path = Path()
 
-        // Subpath order matters only when `trim` is animating: the piers rise and
-        // the deck lands across them, which is the order a bridge is actually built
-        // in. Drawing the deck first would be a deck floating on nothing.
+        // Subpath order matters only when `trim` is animating: the piers rise, the
+        // span is turned between them, and the deck lands across the lot, which is
+        // the order a bridge is actually built in. Drawing the deck first would be
+        // a deck floating on nothing.
 
         // Left pier. The control sits inboard of the chord, so the pier leaves the
         // deck almost upright and does its splaying near the ground — a leg taking
@@ -124,6 +136,20 @@ struct ArchMark: Shape {
             )
         }
 
+        // The span, springing from pier to pier. Drawn left to right so that under
+        // `trim` it closes across the gap the way an arch is closed, from one side.
+        if parts.contains(.span) {
+            let centre = CGPoint(x: x(0.5), y: y(Self.spanCentre))
+            let radius = width * Self.spanRadius
+            path.move(to: CGPoint(x: centre.x - radius, y: centre.y))
+            path.addRelativeArc(
+                center: centre,
+                radius: radius,
+                startAngle: .degrees(180),
+                delta: .degrees(180)
+            )
+        }
+
         // The deck, bowed so its crown sits at the top of the frame. A quadratic
         // reaches half way to its control point, so the control goes twice as far.
         if parts.contains(.deck) {
@@ -138,15 +164,16 @@ struct ArchMark: Shape {
     }
 }
 
-/// The three strokes of the mark, so a launch sequence can move them one at a
+/// The four strokes of the mark, so a launch sequence can move them one at a
 /// time. Everything else draws `.all`.
 struct ArchMarkParts: OptionSet {
     let rawValue: Int
     static let leftPier  = ArchMarkParts(rawValue: 1 << 0)
     static let rightPier = ArchMarkParts(rawValue: 1 << 1)
     static let deck      = ArchMarkParts(rawValue: 1 << 2)
+    static let span      = ArchMarkParts(rawValue: 1 << 3)
     static let piers: ArchMarkParts = [.leftPier, .rightPier]
-    static let all: ArchMarkParts = [.leftPier, .rightPier, .deck]
+    static let all: ArchMarkParts = [.leftPier, .rightPier, .span, .deck]
 }
 
 // MARK: - The wordmark
@@ -155,6 +182,10 @@ struct ArchMarkParts: OptionSet {
 ///
 /// Lowercase, always: `arch` is a thing you build, not a proper noun shouting its
 /// own name. Body copy still calls the app Arch, because that is a sentence.
+///
+/// The word is set in Outfit, a geometric sans: its round bowls are the same
+/// curves the mark is drawn with, so the lock-up reads as one hand rather than a
+/// drawing next to a piece of typography.
 struct ArchWordmark: View {
     /// Width of the mark. The word is metered against it rather than given its own
     /// size, so the lock-up holds together at any scale.
@@ -164,6 +195,11 @@ struct ArchWordmark: View {
     /// 0...1, for the launch screen. The mark draws itself, then the word arrives.
     var drawn: CGFloat = 1
     var wordOpacity: Double = 1
+
+    /// The word's point size as a fraction of the mark's width, shared with the
+    /// launch screen so its word is the same word. Outfit is wider and heavier
+    /// than the serifs that came before it, so it is set smaller than they were.
+    static let wordScale: CGFloat = 0.40
 
     private var stroke: CGFloat { max(2, markWidth * 0.13) }
 
@@ -177,7 +213,7 @@ struct ArchWordmark: View {
                 .frame(width: markWidth, height: markWidth * ArchMark.aspect)
 
             Text("arch")
-                .font(ArchTypography.font(.frauncesDisplaySemiBold, size: markWidth * 0.42))
+                .font(ArchTypography.font(.outfitSemiBold, size: markWidth * ArchWordmark.wordScale))
                 .foregroundStyle(wordColor)
                 .opacity(wordOpacity)
         }

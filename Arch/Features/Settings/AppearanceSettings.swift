@@ -53,7 +53,7 @@ private struct AppearanceSpecimen: View {
                     .frame(width: 30, height: 30 * ArchMark.aspect)
 
                 Text("arch")
-                    .font(ArchTypography.font(.frauncesDisplaySemiBold, size: 24))
+                    .font(ArchTypography.font(.outfitSemiBold, size: 23))
                     .foregroundStyle(ArchColor.limestone)
 
                 Spacer(minLength: 0)
