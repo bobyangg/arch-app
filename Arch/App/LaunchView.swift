@@ -13,8 +13,8 @@ import SwiftUI
 enum LaunchVariant: CaseIterable {
     /// The mark draws itself: the piers rise, then the deck lands across them.
     case drawn
-    /// The mark arrives in pieces: the piers rise into place from below, and the
-    /// deck comes down and settles on them.
+    /// The mark arrives in pieces: the piers and the span rise into place from
+    /// below, and the deck comes down and settles on them.
     case raised
 
     static func random() -> LaunchVariant {
@@ -76,7 +76,8 @@ struct LaunchView: View {
 
     // MARK: The two
 
-    /// The piers below their place and the deck above it, until each arrives.
+    /// The piers and the span below their place and the deck above it, until
+    /// each arrives. The span rises with the piers: it is what the deck lands on.
     private var raised: some View {
         VStack(spacing: markWidth * 0.16) {
             ZStack {
@@ -84,6 +85,9 @@ struct LaunchView: View {
                     .offset(y: pierRise * markWidth * 0.30)
                     .opacity(1 - Double(pierRise))
                 piece(.rightPier)
+                    .offset(y: pierRise * markWidth * 0.30)
+                    .opacity(1 - Double(pierRise))
+                piece(.span)
                     .offset(y: pierRise * markWidth * 0.30)
                     .opacity(1 - Double(pierRise))
                 piece(.deck)
@@ -107,7 +111,7 @@ struct LaunchView: View {
     /// The same word `ArchWordmark` sets, metered the same way.
     private var word: some View {
         Text("arch")
-            .font(ArchTypography.font(.frauncesDisplaySemiBold, size: markWidth * 0.42))
+            .font(ArchTypography.font(.outfitSemiBold, size: markWidth * ArchWordmark.wordScale))
             .foregroundStyle(ArchColor.limestone)
             .opacity(wordOpacity)
     }
