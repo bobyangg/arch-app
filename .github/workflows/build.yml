@@ -262,9 +262,21 @@ jobs:
 
       - name: Keep the log
         if: always()
+        # **Losing a log must not lose the build.** Run 118 built cleanly,
+        # passed every test, and then failed the whole job here on a 403 from
+        # GitHub's artifact storage -- which skipped TestFlight and shipped
+        # nothing. These files are a convenience for reading a failure
+        # afterwards; they are not the build, and they are the only part of it
+        # that depends on a service with a storage quota behind it.
+        #
+        # Seven days rather than the default ninety for the same reason: the
+        # account holds 254 artifacts, and a log nobody read in a week is a log
+        # nobody will read.
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: build-log
+          retention-days: 7
           path: |
             build.log
             test.log
@@ -275,9 +287,11 @@ jobs:
       # what Arch looks like rather than asserting something about it.
       - name: Keep the screenshots
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: launch-screenshots
+          retention-days: 7
           path: |
             before.png
             launching.png
@@ -507,9 +521,11 @@ jobs:
 
       - name: Keep the logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: release-logs
+          retention-days: 7
           path: |
             archive.log
             export.log
