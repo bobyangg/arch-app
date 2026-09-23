@@ -22,7 +22,11 @@ struct DailyFiveView: View {
     /// that never arrived looked identical, and the empty one says "nothing here
     /// needs fixing" — which is a reassuring sentence and, offline, a lie.
     var isOffline: Bool = false
+    /// Dismissed today and not gone until nine. Shown under the open slots,
+    /// where they are out of the way of the decision they are no longer part of.
+    var waiting: [Person] = []
     let onDismiss: (Person) -> Void
+    var onRestore: (Person) -> Void = { _ in }
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
 
@@ -57,6 +61,7 @@ struct DailyFiveView: View {
                         } else {
                             openSlots
                         }
+                        waitingSection
                     }
                 }
                 .padding(.horizontal, ArchSpacing.screenMargin)
@@ -232,6 +237,44 @@ struct DailyFiveView: View {
             ArchMotion.honouring(reduceMotion, ArchMotion.cardCollapse),
             value: roster.people
         )
+    }
+
+    /// The people you dismissed today, until the morning takes them.
+    ///
+    /// Under the open slots rather than above them, because these are decisions
+    /// already made and the slots are the part that is still about to happen.
+    ///
+    /// The heading says what will happen and not what you should do about it.
+    /// Dismissing is meant to be a real decision, and an undo presented as a
+    /// second chance would make it a question again every time you opened the
+    /// tab — so this is stated once, flatly, with no count and no clock.
+    @ViewBuilder
+    private var waitingSection: some View {
+        if !waiting.isEmpty {
+            VStack(alignment: .leading, spacing: ArchSpacing.m) {
+                Text("Leaving in the morning")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+
+                Text("You dismissed these people. Nothing has happened yet — you can still write to them, or put them back.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, ArchSpacing.xxs)
+
+                ForEach(waiting) { person in
+                    WaitingCard(
+                        person: person,
+                        onOpen: { path.append(.profile(person)) },
+                        onRestore: { onRestore(person) }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .padding(.top, ArchSpacing.sectionGap)
+            .animation(ArchMotion.honouring(reduceMotion, ArchMotion.slotOpens),
+                       value: waiting)
+        }
     }
 
     @ViewBuilder

@@ -8,6 +8,14 @@ import SwiftUI
 /// private and do not add up to a score — before it starts asking.
 struct OnboardingQuestionnaire: View {
     let store: OnboardingStore
+    /// Whether Back on the *first* question may leave the questions entirely.
+    ///
+    /// In onboarding it goes to the intro, which is a real screen you can come
+    /// back from. In Settings leaving is *finishing* -- `questionIndex == nil` is
+    /// the signal that screen watches for to write the answers -- so there the
+    /// control is hidden on the first question rather than offered as a way to
+    /// end something you opened in order to edit.
+    var backLeavesQuestions: Bool = true
 
     var body: some View {
         if let index = store.questionIndex, index < Questionnaire.count {
@@ -62,7 +70,24 @@ struct OnboardingQuestionnaire: View {
                     }
                 }
             }
+
+            // **Said in words, next to the thing it undoes.** There has always
+            // been a chevron in the top bar and it has always worked, but a
+            // questionnaire that advances by itself 260ms after a tap is exactly
+            // where somebody picks the wrong option -- and at that moment they
+            // are looking at the answers, not at the corner of the screen. The
+            // same control the Settings version of this screen already had.
+            if canGoBack {
+                ArchTextButton(title: "Back a question") {
+                    withAnimation(ArchMotion.standard) { store.back() }
+                }
+            }
         }
+    }
+
+    private var canGoBack: Bool {
+        guard let index = store.questionIndex else { return false }
+        return index > 0 || backLeavesQuestions
     }
 
     /// Marks the choice, then moves on after a beat.

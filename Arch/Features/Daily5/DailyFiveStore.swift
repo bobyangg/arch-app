@@ -42,6 +42,16 @@ final class DailyFiveStore {
     /// Something a write to the server could not do. Screens read this to say so.
     var lastError: ArchAPIError?
 
+    /// Dismissed today, and not gone yet.
+    ///
+    /// They sit under the five until nine tomorrow morning, when the new roster
+    /// is built and they leave in the same move their replacement arrives in.
+    /// Until then you can put them back or write to them, and they have not been
+    /// told anything -- you are still in their five, and they can still write to
+    /// you. That is the point of the wait: a decision made in a second should not
+    /// take somebody else's morning away before they have opened the app.
+    private(set) var waiting: [Person] = []
+
     /// Tonight's roster and every conversation, from the server.
     ///
     /// One call rather than one per screen: the tabs are three views over the same
@@ -49,7 +59,8 @@ final class DailyFiveStore {
     /// message list end up disagreeing about whether somebody is still there.
     func load() async throws {
         guard ArchConfig.isConfigured else { return }
-        let people = try await ArchBackend.roster()
+        let load = try await ArchBackend.roster()
+        let people = load.people
         let threads = try await ArchBackend.conversations()
 
         // The slots the server did not fill are open, not missing. `capacity`
@@ -67,7 +78,9 @@ final class DailyFiveStore {
                                 opening: .yours))
         }
         roster = Roster(slots: Array(slots.prefix(capacity)),
-                        isFirstMorning: people.isEmpty && threads.isEmpty)
+                        isFirstMorning: people.isEmpty && threads.isEmpty
+                            && load.waiting.isEmpty)
+        waiting = load.waiting
         conversations = threads
         lastError = nil
     }
@@ -206,7 +219,17 @@ final class DailyFiveStore {
     /// Dismissing costs a slot until tomorrow. The person is replaced by an open
     /// slot in place; the screen groups open slots underneath the people.
     ///
-    /// There is no undo, and nothing anywhere records who dismissed whom.
+    /// **It can be taken back until nine tomorrow morning**, which it could not
+    /// before. They move to `waiting` rather than disappearing, and the server
+    /// schedules the dismissal for the next refill instead of applying it. The
+    /// roster is built once a day, so applying it sooner bought nothing and cost
+    /// the other person their chance to write to you.
+    ///
+    /// Nothing anywhere records who dismissed whom, and nothing about this is
+    /// visible to them -- not the dismissal, and not it being taken back.
+    ///
+    /// `opening: .theirs` is the one case that does not wait. It is how a slot
+    /// opens when somebody has written to you, and that has already happened.
     func dismiss(_ person: Person, opening: SlotOpening = .yours) {
         guard let index = roster.slots.firstIndex(where: { $0.id == person.id }) else { return }
         roster.slots[index] = .empty(
@@ -214,7 +237,28 @@ final class DailyFiveStore {
             refillsAt: Self.nextRefill(),
             opening: opening
         )
+        if opening == .yours, !waiting.contains(where: { $0.id == person.id }) {
+            waiting.append(person)
+        }
         persist { try await ArchBackend.dismiss(person) }
+    }
+
+    /// Back into the five, while the dismissal is still yours to take back.
+    ///
+    /// Into the slot they left if it is still open, and otherwise appended --
+    /// `load()` caps at `capacity` and the server counts the same pairing as
+    /// held, so this cannot hand anybody a sixth person.
+    func restore(_ person: Person) {
+        guard let index = waiting.firstIndex(where: { $0.id == person.id }) else { return }
+        waiting.remove(at: index)
+
+        if let slot = roster.slots.firstIndex(where: { $0.id == "slot-\(person.id)" })
+            ?? roster.slots.firstIndex(where: { if case .empty = $0 { return true } else { return false } }) {
+            roster.slots[slot] = .filled(person)
+        } else {
+            roster.slots.append(.filled(person))
+        }
+        persist { try await ArchBackend.restore(person) }
     }
 
     /// The first message.

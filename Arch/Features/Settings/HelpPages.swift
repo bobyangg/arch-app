@@ -43,6 +43,10 @@ struct HelpPage: View {
             "If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe."
         )
         section(
+            "A dismissal lands in the morning",
+            "Until then they wait under your roster, and you can write to them or put them back. Nothing has been sent and nothing has been said — from their side you are simply still there, and they can still write to you."
+        )
+        section(
             "There is no match step",
             "Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them. That is the whole mechanism."
         )

@@ -129,7 +129,9 @@ struct RootTabView: View {
                     isPaused: settings.isPaused,
                     onUnpause: { settings.isPaused = false },
                     isOffline: isOffline,
+                    waiting: store.waiting,
                     onDismiss: { store.dismiss($0) },
+                    onRestore: { store.restore($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
                     actions: conversationActions,
                     popToRoot: dailyPops
