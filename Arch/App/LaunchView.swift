@@ -103,7 +103,7 @@ struct LaunchView: View {
     private func piece(_ parts: ArchMarkParts) -> some View {
         ArchMark(lineWidth: stroke, parts: parts)
             .stroke(
-                ArchColor.lamp,
+                ArchColor.limestone,
                 style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
             )
     }

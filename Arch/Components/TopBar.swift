@@ -22,7 +22,7 @@ struct TopBar: View {
         HStack(spacing: ArchSpacing.xs) {
             ArchMark(lineWidth: stroke)
                 .stroke(
-                    ArchColor.lamp,
+                    ArchColor.limestone,
                     style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: markWidth, height: markWidth * ArchMark.aspect)
