@@ -47,13 +47,13 @@ private struct AppearanceSpecimen: View {
             HStack(spacing: ArchSpacing.s) {
                 ArchMark(lineWidth: 3.4)
                     .stroke(
-                        ArchColor.lamp,
+                        ArchColor.limestone,
                         style: StrokeStyle(lineWidth: 3.4, lineCap: .round, lineJoin: .round)
                     )
                     .frame(width: 30, height: 30 * ArchMark.aspect)
 
                 Text("arch")
-                    .font(ArchTypography.font(.frauncesDisplaySemiBold, size: 24))
+                    .font(ArchTypography.font(.outfitSemiBold, size: 23))
                     .foregroundStyle(ArchColor.limestone)
 
                 Spacer(minLength: 0)
