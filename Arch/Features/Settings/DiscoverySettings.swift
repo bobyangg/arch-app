@@ -124,11 +124,17 @@ struct IntentionSetting: View {
 /// `updateDetails` the details sheet uses, so there is one write and one rule
 /// about what it does to your stored position.
 ///
-/// **Two ways to set it, and one of them is Premium.** Everybody can put
-/// themselves where their phone says they are. Choosing a place you are not in
-/// -- the city you are moving to next month, the one you are in every other
-/// week -- is part of Arch Premium, and the picker says so rather than hiding
-/// the search.
+/// **Two ways to set it, and neither of them starts out closed.** Everybody can
+/// put themselves where their phone says they are, always. Choosing a place you
+/// are not in -- the city you are moving to next month, the one you are in every
+/// other week -- is free at signup and once afterwards; doing it again and again
+/// is what Arch Premium buys.
+///
+/// Onboarding used to allow the search and this screen used to refuse it, which
+/// gave a free account exactly one chance to set a town it was not in and no way
+/// to correct it -- and the moment somebody most needs to change their town is
+/// right after they find out it is wrong. One live profile was labelled Toronto
+/// and positioned in Vancouver with no route out of it.
 struct LocationSetting: View {
     let store: SettingsStore
     var profile: ProfileStore?
@@ -155,7 +161,12 @@ struct LocationSetting: View {
             ArchButton(title: "Change", action: { isPicking = true })
 
             if !store.isSubscribed {
-                SettingNote("Without Premium this puts you where your phone says you are. Choosing somewhere else is part of Arch Premium.")
+                // Two different sentences, because "you cannot" and "you can, once"
+                // are two different situations and one line covering both would be
+                // wrong in whichever one the reader is in.
+                SettingNote(store.canChangePlace
+                    ? "You can change your town by name once. After that it is part of Arch Premium — putting you where your phone says you are stays free either way."
+                    : "You have already changed your town once. Changing it again is part of Arch Premium. Putting you where your phone says you are stays free.")
             }
         }
         .sheet(isPresented: $isPicking) {
@@ -166,7 +177,7 @@ struct LocationSetting: View {
                 onUseLocation: useDeviceLocation,
                 onCancel: { isPicking = false },
                 locationNote: locationNote,
-                canChoose: store.isSubscribed,
+                canChoose: store.canChangePlace,
                 onOpenPremium: { isPicking = false; onOpenPremium() }
             )
             .padding(.horizontal, ArchSpacing.screenMargin)
@@ -184,8 +195,10 @@ struct LocationSetting: View {
     private func choose(_ chosen: Place) {
         guard let profile else { return }
         var details = profile.person.details
+        let moved = details.place?.id != chosen.id
         details.place = chosen
         profile.updateDetails(details)
+        if moved { store.placeDidChange() }
         isPicking = false
     }
 

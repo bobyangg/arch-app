@@ -310,7 +310,22 @@ actor SupabaseClient {
         let url = ArchConfig.restURL.appendingPathComponent("rpc").appendingPathComponent(name)
         let data = try await request(url: url, method: "POST",
                                      body: try encoder.encode(arguments))
-        return try decoder.decode(T.self, from: data)
+
+        // A function declared `returns table(...)` is a *set*, and PostgREST sends
+        // a set as an array — `[{"id": "..."}]`, the same shape `insert` above
+        // already unwraps. A function returning a scalar sends the value bare.
+        //
+        // Which of the two you get is a property of the SQL, not of the call, and
+        // decoding `T` straight out of the body only ever worked for the second
+        // kind. `start_conversation` and `delete_account` are both the first kind,
+        // so both threw on a request the server had already carried out — the
+        // conversation existed, the message was stored, and the sender was told it
+        // had failed. Accept either shape rather than asking every call site to
+        // remember which kind of function it is talking to.
+        if let value = try? decoder.decode(T.self, from: data) { return value }
+        let rows = try decoder.decode([T].self, from: data)
+        guard let first = rows.first else { throw ArchAPIError.notFound }
+        return first
     }
 
     /// An RPC whose answer is kept as bytes rather than decoded.

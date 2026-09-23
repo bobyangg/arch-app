@@ -334,17 +334,33 @@ enum ArchBackend {
             let heightCm: Int?
             let work: String?
         }
-        // The device fix wins when there is one, and the centre of the picked place
-        // otherwise. Either way it is coarsened before it leaves the phone -- the
-        // CHECK constraint on the column refuses anything finer, so this is belt
-        // and braces.
+        // **The picked place wins, and the device fix was winning.**
+        //
+        // These two are the label and the position of one profile, and only the
+        // label is visible: the chip says a town, the distance filter reads
+        // `coarse_lat`/`coarse_lon`, and no screen anywhere puts them side by
+        // side. So when they disagree nobody can see it, and the reader cannot
+        // correct what they cannot see.
+        //
+        // They disagreed for anybody who tapped "Use my location" and then picked
+        // a town from the list -- which is exactly what somebody does when the
+        // button has just put them somewhere wrong. The name moved and the fix
+        // stayed, and the profile went out reading one city while being matched
+        // two thousand miles away, inside nobody's radius and outside everybody
+        // else's, with nothing on screen to suggest why.
+        //
+        // Preferring the place gives up nothing: a place reverse-geocoded from
+        // the fix carries that fix as its centre, so tapping the button still
+        // writes the same numbers it always did. `coordinate` stays as the
+        // fallback for the one case it was written for -- a fix the geocoder
+        // could not name, where there is a position and no words for it.
         //
         // Both can be absent, now that a place can be one rebuilt from a stored id
         // rather than one just picked. On this path it means the picker was never
         // opened, and a profile with no position at all would be invisible to the
         // distance filter in both directions -- so it is refused rather than
         // written with a zero.
-        guard let centre = (coordinate ?? place.centre)?.coarsened else {
+        guard let centre = (place.centre ?? coordinate)?.coarsened else {
             throw ArchAPIError.conflict
         }
         try await SupabaseClient.shared.insert(
@@ -550,10 +566,10 @@ enum ArchBackend {
     /// same shape and defers the constraint to commit.
     static func reorderPhotos(_ ids: [String]) async throws {
         struct Arguments: Encodable { let ids: [String] }
-        struct Empty: Decodable {}
-        _ = try await SupabaseClient.shared.rpc(
-            "reorder_photos", Arguments(ids: ids), returning: Empty?.self
-        )
+        // `reorder_photos` returns void, and PostgREST answers that with 204 and an
+        // empty body. There is nothing there to decode into `Empty`, so asking for
+        // one threw on every successful reorder.
+        _ = try await SupabaseClient.shared.rpcRaw("reorder_photos", Arguments(ids: ids))
     }
 
     /// Signed URLs for a set of photographs, in one round trip.
@@ -709,25 +725,36 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else { return [] }
         let me = session.userID
 
+        let window = ArchClock.nightFilter()
         let rows: [PairingRow] = try await SupabaseClient.shared.select(
             "pairings",
             columns: "id,night,lo_account,hi_account",
-            filters: ["night": "eq.\(ArchClock.today())"],
-            order: "created_at.asc"
+            filters: ["night": window],
+            order: "night.desc,created_at.asc"
         )
-        let others = rows.map { $0.other(than: me) }
-        guard !others.isEmpty else { return [] }
+        guard !rows.isEmpty else { return [] }
 
-        // Anybody this person has already dismissed is gone from their own roster
-        // and nobody else's. The other side is never told.
-        let dismissed: [DismissalRow] = try await SupabaseClient.shared.select(
-            "dismissals",
-            columns: "other_account_id",
-            filters: ["account_id": "eq.\(me)", "night": "eq.\(ArchClock.today())"]
-        )
-        let hidden = Set(dismissed.map(\.otherAccountId))
-
-        return try await people(ids: others.filter { !hidden.contains($0) })
+        // No second query for dismissals. A dismissed pairing is not hidden here
+        // any more -- it is not returned at all, because `pairings_mine` stops
+        // selecting a pairing either side has dismissed.
+        //
+        // That has to be the server's job rather than this function's. You are
+        // allowed to read your own dismissals and nobody else's, which is the rule
+        // that keeps you from ever learning who dismissed whom -- so a client
+        // asking "has this person dismissed me?" would be asking the one question
+        // it must never be able to answer. Withholding the row answers it without
+        // disclosing it.
+        //
+        // Newest night first, and each person once: two nights of pairings can
+        // name the same person twice, and a roster showing somebody in two slots
+        // would spend two of five on one person.
+        var others: [String] = []
+        for row in rows {
+            let other = row.other(than: me)
+            guard !others.contains(other) else { continue }
+            others.append(other)
+        }
+        return try await people(ids: others)
     }
 
     /// Profiles for a set of accounts, with everything a card needs.
@@ -769,20 +796,38 @@ enum ArchBackend {
     }
 
     /// One-sided, and silent. The slot opens for you; their roster does not change.
+    ///
+    /// Written against the night of the pairing being dismissed, and not against
+    /// tonight. `match_population` frees a slot only when the dismissal and the
+    /// pairing agree on the night, so a dismissal stamped with the wrong one frees
+    /// nothing: the person leaves the screen, the slot stays held, and they are
+    /// back tomorrow. Both nights, if you are holding them on both.
+    ///
+    /// `upsert` rather than `insert` because the key is (you, them, night) and
+    /// `start_conversation` writes the same row itself, on both sides, when you
+    /// write to somebody. Two routes to one row is fine; a duplicate-key error
+    /// reported to the reader as a failure, after a message that was sent, is not.
     static func dismiss(_ person: Person) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        let me = session.userID
+        let rows: [PairingRow] = try await SupabaseClient.shared.select(
+            "pairings",
+            columns: "id,night,lo_account,hi_account",
+            filters: ["night": ArchClock.nightFilter()]
+        )
+        let nights = rows.filter { $0.other(than: me) == person.id }.map(\.night)
+        guard !nights.isEmpty else { return }
+
         struct Dismissal: Encodable {
             let accountId: String
             let otherAccountId: String
             let night: String
         }
-        try await SupabaseClient.shared.insert(
+        try await SupabaseClient.shared.upsert(
             "dismissals",
-            Dismissal(accountId: session.userID,
-                      otherAccountId: person.id,
-                      night: ArchClock.today())
+            nights.map { Dismissal(accountId: me, otherAccountId: person.id, night: $0) }
         )
     }
 
@@ -959,6 +1004,24 @@ enum ArchBackend {
         try await SupabaseClient.shared.upsert("discovery_settings", row)
     }
 
+    /// How many times this account has moved its town since signing up.
+    ///
+    /// Its own table rather than a column, and readable rather than writable: the
+    /// trigger that counts is the only thing that writes it, and there is no
+    /// update policy at all. A number the client could set back to zero would not
+    /// be a limit.
+    ///
+    /// No row means none used. The row is written on the first change, so a fresh
+    /// account has nothing to read and that is not an error.
+    static func placeChangesUsed() async throws -> Int {
+        guard let session = await SupabaseClient.shared.restore() else { return 0 }
+        struct Row: Decodable { let used: Int }
+        let row: Row? = try await SupabaseClient.shared.selectOne(
+            "place_changes", filters: ["account_id": "eq.\(session.userID)"]
+        )
+        return row?.used ?? 0
+    }
+
     /// Immediate and permanent, as the screen says.
     ///
     /// A function rather than a delete, because it has to end every conversation on
@@ -976,10 +1039,6 @@ enum ArchBackend {
     }
 }
 
-private struct DismissalRow: Decodable {
-    let otherAccountId: String
-}
-
 /// The clock the rosters run on.
 ///
 /// **One batch, on New York time, for everybody.** Not nine wherever you happen to
@@ -990,24 +1049,47 @@ enum ArchClock {
 
     static var zone: TimeZone { DailyFiveStore.refillZone }
 
-    /// The date the current roster belongs to, as Postgres wants it.
-    ///
-    /// Before nine in the morning, that is still yesterday's batch — the roster on
-    /// screen at eight is the one from the previous morning, and asking for today's
-    /// would come back empty.
-    static func today(_ now: Date = Date()) -> String {
+    /// Tonight's date in New York, which is what `private.arch_night()` computes
+    /// on the server. The same instant for everybody, by the same rule at both
+    /// ends.
+    static func night(_ now: Date = Date()) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
-        var date = now
-        let hour = calendar.component(.hour, from: now)
-        if hour < DailyFiveStore.refillHour {
-            date = calendar.date(byAdding: .day, value: -1, to: now) ?? now
-        }
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.timeZone = zone
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter.string(from: now)
+    }
+
+    /// The nights a roster spans, newest first.
+    ///
+    /// **Two, because two is what the server holds.** `match_population` keeps a
+    /// slot occupied for any pairing on a night later than `arch_night() - 2` that
+    /// you have not dismissed, and `start_conversation` will only let you write to
+    /// somebody inside that same window.
+    ///
+    /// Reading one night was the bug: somebody handed to you yesterday, who you
+    /// never dismissed and never wrote to, left the screen at nine this morning
+    /// while the server went on counting their slot as full. They did not go
+    /// anywhere -- the pairing is still there, undismissed -- and because the slot
+    /// was still held you were not offered anyone in their place either. A roster
+    /// of five could lose people and gain nothing on the same morning.
+    ///
+    /// Anchored on the plain New York date rather than stepping back before nine.
+    /// Yesterday is in the window either way, so the roster on screen at eight is
+    /// still last night's batch, and the anchor now matches `arch_night()` exactly
+    /// instead of approximately.
+    static func nights(_ now: Date = Date()) -> [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+        return [night(now), night(yesterday)]
+    }
+
+    /// The window as PostgREST wants it.
+    static func nightFilter(_ now: Date = Date()) -> String {
+        "in.(\(nights(now).joined(separator: ",")))"
     }
 }
 

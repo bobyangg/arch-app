@@ -262,9 +262,21 @@ jobs:
 
       - name: Keep the log
         if: always()
+        # **Losing a log must not lose the build.** Run 118 built cleanly,
+        # passed every test, and then failed the whole job here on a 403 from
+        # GitHub's artifact storage -- which skipped TestFlight and shipped
+        # nothing. These files are a convenience for reading a failure
+        # afterwards; they are not the build, and they are the only part of it
+        # that depends on a service with a storage quota behind it.
+        #
+        # Seven days rather than the default ninety for the same reason: the
+        # account holds 254 artifacts, and a log nobody read in a week is a log
+        # nobody will read.
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: build-log
+          retention-days: 7
           path: |
             build.log
             test.log
@@ -275,9 +287,11 @@ jobs:
       # what Arch looks like rather than asserting something about it.
       - name: Keep the screenshots
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: launch-screenshots
+          retention-days: 7
           path: |
             before.png
             launching.png
@@ -489,13 +503,29 @@ jobs:
               | sort -u | head -15 | while IFS= read -r line; do
               printf '::error::%s\n' "$line"
             done
+
+            # **The end of the log, unconditionally, as one annotation.**
+            #
+            # Neither the logs nor the step summary above can be read
+            # without signing in, and on a public repository annotations
+            # are the only channel that can. An upload failed with exit 70,
+            # matched none of the patterns grepped for above, and left
+            # nothing to go on but the number. The tail goes out whether it
+            # matched anything or not.
+            #
+            # One annotation rather than thirty: GitHub keeps ten per level
+            # per step, and %0A is how a multi-line message survives.
+            tail=$(tail -n 30 "$log" | sed 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+            printf '::notice title=End of %s::%s\n' "$log" "$tail"
           done
 
       - name: Keep the logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: release-logs
+          retention-days: 7
           path: |
             archive.log
             export.log
