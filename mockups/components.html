@@ -6,7 +6,7 @@
 <title>Arch — design system</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&family=Outfit:wght@600&display=swap">
 <style>
   :root{
     --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
@@ -27,7 +27,8 @@
   .rule{height:.5px; background:var(--hairline); margin-top:8px;}
 
   /* type */
-  .t-display{font-family:var(--serif); font-size:40px; line-height:46px; font-weight:500; letter-spacing:.5px;}
+  .t-display{font-family:"Outfit", ui-sans-serif, system-ui, sans-serif;
+        font-size:38px; line-height:46px; font-weight:600; letter-spacing:0;}
   .t-titleL{font-family:var(--serif); font-size:30px; line-height:36px; font-weight:600;}
   .t-titleM{font-family:var(--serif); font-size:24px; line-height:30px; font-weight:600;}
   .t-prompt{font-family:var(--serif); font-size:19px; line-height:26px; font-weight:400;}
@@ -98,7 +99,7 @@
 
   <div class="sec">
     <div class="sec-title">Type scale</div>
-    <div class="spec"><div class="meta">display &middot; Fraunces 40/46</div><div class="t-display">arch</div></div>
+    <div class="spec"><div class="meta">display &middot; Outfit 38/46</div><div class="t-display">arch</div></div>
     <div class="spec"><div class="meta">titleL &middot; Fraunces 30/36</div><div class="t-titleL">Today&rsquo;s five</div></div>
     <div class="spec"><div class="meta">titleM &middot; Fraunces 24/30</div><div class="t-titleM">You both set the same stone</div></div>
     <div class="spec"><div class="meta">prompt &middot; Fraunces 19/26</div><div class="t-prompt" style="color:var(--mortar)">The last thing I read twice</div></div>
@@ -186,8 +187,13 @@ if($('palette')) $('palette').innerHTML = tokens.map(([n,h,u]) =>
 /* ---------- arch mark (identical proportions to ArchMark.swift) ---------- */
 function archMarkPath(W, sw){
   const f = (n) => n*W;
+  /* Four strokes: two piers, the span between them, the bowed deck over the lot.
+     The span is an arc of .26 about (.5,.52), cut at .292/.364 where it meets
+     each pier, so the middle line lands on the side ones instead of crossing
+     them. Without it the mark was a bar on two legs -- the letter pi. */
   return `M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
        + ` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+       + ` M${f(.292)},${f(.364)} A${f(.26)},${f(.26)} 0 0 1 ${f(.708)},${f(.364)}`
        + ` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
 }
 function drawMark(el, W, sw, color){
@@ -199,7 +205,7 @@ function drawMark(el, W, sw, color){
   p.setAttribute('transform', `translate(${sw/2},${sw/2})`);
   el.appendChild(p);
 }
-if($('mark')) drawMark($('mark'), 48, 3.4, C.lamp);
+if($('mark')) drawMark($('mark'), 48, 3.4, C.limestone);
 
 /* ---------- daily arch (identical maths to ArchBand.swift) ---------- */
 function pt(cx,cy,r,deg){const a=deg*Math.PI/180; return [cx+r*Math.cos(a), cy+r*Math.sin(a)];}
