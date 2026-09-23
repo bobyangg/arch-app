@@ -78,16 +78,18 @@ struct ArchMark: Shape {
     private static let pierTop: CGFloat = 0.33
     private static let pierFoot: CGFloat = 0.19
     private static let baseline: CGFloat = 0.64
-    /// The span: a semicircle about this centre, this far across. Its springing
-    /// points land on the piers three quarters of the way down, where a pier is
-    /// already leaning out far enough to catch them.
+    /// The span: a semicircle about this centre, this far across.
     ///
-    /// Set from the app icon, where the mark is drawn largest and any crowding
-    /// shows first: a little lower and a little tighter than the first drawing,
-    /// so the air between the crown of the span and the underside of the deck
-    /// survives at a heavy stroke.
-    private static let spanCentre: CGFloat = 0.50
-    private static let spanRadius: CGFloat = 0.23
+    /// Wide enough that its springing points land *inside* the piers rather than
+    /// against their inner edge, so the arc is seen to spring off them and the
+    /// three strokes read as one structure. A narrower span met the piers at a
+    /// tangent, which drew a notch at each joint and left the arch looking like
+    /// a separate piece resting between the legs.
+    ///
+    /// Set from the app icon, where the mark is drawn largest and the stroke is
+    /// heaviest, so any crowding shows there first.
+    private static let spanCentre: CGFloat = 0.52
+    private static let spanRadius: CGFloat = 0.26
 
     var animatableData: CGFloat {
         get { trim }
