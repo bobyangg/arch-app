@@ -190,7 +190,11 @@ struct ArchWordmark: View {
     /// Width of the mark. The word is metered against it rather than given its own
     /// size, so the lock-up holds together at any scale.
     var markWidth: CGFloat = 96
-    var tint: Color = ArchColor.lamp
+    /// Ink, not terracotta. The accent has one job -- marking what you can press
+    /// -- and it stops doing that job the moment the brand also wears it. The
+    /// mark keeps the accent only where nothing is pressable beside it: the
+    /// active Daily 5 tab, where terracotta means "this tab", not "this brand".
+    var tint: Color = ArchColor.limestone
     var wordColor: Color = ArchColor.limestone
     /// 0...1, for the launch screen. The mark draws itself, then the word arrives.
     var drawn: CGFloat = 1
