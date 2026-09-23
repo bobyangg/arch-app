@@ -78,10 +78,12 @@ struct YouProfileView: View {
             case .details:
                 EditDetailsSheet(
                     person: person,
-                    canChoosePlace: settings.isSubscribed,
+                    canChoosePlace: settings.canChangePlace,
                     onOpenPremium: { editing = nil; onOpenPremium() }
                 ) { details in
+                    let moved = details.place?.id != person.details.place?.id
                     store.updateDetails(details)
+                    if moved { settings.placeDidChange() }
                     editing = nil
                 }
             case .interests:
