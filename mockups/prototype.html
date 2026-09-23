@@ -804,13 +804,14 @@ function archSVG(filled,total,w,dropIndex){
 }
 /* The mark: a letter A whose apex has flattened into a bridge deck, carried on
    a span. Same fractions as ArchMark.swift — piers at .33 splaying to .19, the
-   span a semicircle of .26 about (.5,.52), deck bowed .07. Without the span it
+   span an arc of .26 about (.5,.52) cut where it meets each pier, deck bowed
+   .07. Without the span it
    was a bar on two legs, which is the letter pi. */
 function markSVG(size,stroke,color){
   const W=size-stroke, A=.64, f=(x)=>x*W;
   const d=`M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
         +` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
-        +` M${f(.24)},${f(.52)} A${f(.26)},${f(.26)} 0 0 1 ${f(.76)},${f(.52)}`
+        +` M${f(.292)},${f(.364)} A${f(.26)},${f(.26)} 0 0 1 ${f(.708)},${f(.364)}`
         +` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
   return `<svg width="${size}" height="${size*A+stroke}" viewBox="0 0 ${size} ${size*A+stroke}" aria-hidden="true">
     <path d="${d}" fill="none" stroke="${color}" stroke-width="${stroke}"

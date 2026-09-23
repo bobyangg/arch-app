@@ -90,6 +90,14 @@ struct ArchMark: Shape {
     /// heaviest, so any crowding shows there first.
     private static let spanCentre: CGFloat = 0.52
     private static let spanRadius: CGFloat = 0.26
+    /// How far past the horizontal the span's ends are cut, in degrees.
+    ///
+    /// The arc stops *on* each pier's centreline rather than running the full
+    /// semicircle: at this width a half circle carried its round caps out past
+    /// the legs, so the middle line was seen crossing the side ones. Measured
+    /// off the geometry above -- the arc and the pier meet at 216.88 degrees --
+    /// so it has to be recomputed if either the span or the piers move.
+    private static let spanSpringing: Double = 36.88
 
     var animatableData: CGFloat {
         get { trim }
@@ -148,12 +156,13 @@ struct ArchMark: Shape {
         if parts.contains(.span) {
             let centre = CGPoint(x: x(0.5), y: y(Self.spanCentre))
             let radius = width * Self.spanRadius
-            path.move(to: CGPoint(x: centre.x - radius, y: centre.y))
+            let start = Angle.degrees(180 + Self.spanSpringing)
+            path.move(to: pointOnCircle(centre, radius, start))
             path.addRelativeArc(
                 center: centre,
                 radius: radius,
-                startAngle: .degrees(180),
-                delta: .degrees(180)
+                startAngle: start,
+                delta: .degrees(180 - 2 * Self.spanSpringing)
             )
         }
 
