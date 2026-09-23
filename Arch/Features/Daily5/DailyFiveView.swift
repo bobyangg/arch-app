@@ -26,6 +26,10 @@ struct DailyFiveView: View {
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
 
+    /// Bumped by the shell when the tab already showing is tapped again. Every
+    /// change means "back to the five"; the value itself means nothing.
+    var popToRoot: Int = 0
+
     @State private var path: [Route] = []
     @State private var pendingDismissal: Person?
 
@@ -84,6 +88,11 @@ struct DailyFiveView: View {
                 }
             }
         }
+        // Tapping the tab you are already on returns it to the five. The You
+        // and Messages tabs already did this; being in a profile and pressing
+        // Daily 5 did nothing, which is the one place it is most obviously
+        // meant to.
+        .onChange(of: popToRoot) { _, _ in path = [] }
         .sheet(item: $pendingDismissal) { person in
             DismissConfirmSheet(
                 rosterName: roster.name,

@@ -90,14 +90,28 @@ struct ProfileDetailView: View {
         .padding(.vertical, ArchSpacing.xs)
     }
 
+    /// **The screen says "Tap a photo or answer to write about it", and the
+    /// first photograph was the one photograph you could not tap.**
+    ///
+    /// It was drawn as a bare `PhotoPlaceholder` because it sits above the
+    /// scroll rather than inside it — `Person.scrollRows` skips index 0 for
+    /// exactly that reason — and in being lifted out it lost the selection every
+    /// other card has. It is a `PhotoCard` now, like the rest, which is also
+    /// what gives it the selected border and carries it into the composer as
+    /// quoted context.
+    ///
+    /// The lead photograph is the one most people would write about, so this
+    /// was the most likely tap on the screen landing on nothing.
     @ViewBuilder
     private var leadPhoto: some View {
         if let photo = person.photos.first {
-            PhotoPlaceholder(toneIndex: photo.toneIndex, url: photo.url)
-                .aspectRatio(PhotoCard.aspect, contentMode: .fit)
-                .clipShape(RoundedRectangle(cornerRadius: ArchRadius.photo, style: .continuous))
-                .padding(.horizontal, ArchSpacing.screenMargin)
-                .accessibilityLabel("Photo 1")
+            PhotoCard(
+                photo: photo,
+                position: 1,
+                isSelected: selected?.id == ProfileItem.photo(photo).id,
+                onTap: { toggle(.photo(photo)) }
+            )
+            .padding(.horizontal, ArchSpacing.screenMargin)
         }
     }
 

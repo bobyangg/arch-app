@@ -14,6 +14,9 @@ struct ArchApp: App {
     /// roster is loading behind it, and a spinner would say "wait" where this
     /// says "here it comes".
     @State private var isBuilding = false
+    /// Foreground and background. The only reason the app has for reloading
+    /// without being asked — see `ArchSession.reload()`.
+    @Environment(\.scenePhase) private var scenePhase
 
     /// Which of the six things the app is doing, and the stores behind it.
     ///
@@ -52,6 +55,14 @@ struct ArchApp: App {
                 if case .ready = session.state, session.allowsNotifications {
                     await PushNotifications.shared.enable()
                 }
+            }
+            // Somebody who wrote to you while the app was in your pocket is on
+            // screen when you come back to it, rather than after the next cold
+            // launch. `reload()` cannot fail loudly, so this is safe to do every
+            // time without a network check in front of it.
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await session.reload() }
             }
         }
     }
