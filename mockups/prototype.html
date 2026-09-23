@@ -208,6 +208,19 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .rowbody{flex:1; min-width:0;}
 .rowline{display:flex; align-items:baseline; gap:var(--s-xs);}
 .dot{width:8px; height:8px; border-radius:4px; background:var(--lamp); margin-top:5px; flex:none;}
+
+/* The Premium rail. One benefit at a time, snapping, so the plans and the
+   button sit on the first screen instead of a screen and a half down. */
+.rail{display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory;
+      scrollbar-width:none; -webkit-overflow-scrolling:touch; padding:2px 20px;}
+.rail::-webkit-scrollbar{display:none;}
+.bubble{flex:0 0 78%; scroll-snap-align:center; min-height:124px;
+        background:var(--stone); border-radius:var(--r-card); padding:16px;
+        display:flex; flex-direction:column; gap:8px;}
+.rdots{display:flex; gap:6px; justify-content:center; padding:14px 0 20px;}
+.rdots i{width:6px; height:6px; border-radius:3px; background:var(--quiet);
+         transition:width .24s ease-out, background .24s ease-out;}
+.rdots i.on{width:16px; background:var(--lamp);}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
 /* ---- bubbles ---- */
@@ -1135,18 +1148,25 @@ function thread(id){
         style="background:var(--lamp); color:var(--onLamp); border-radius:18px; width:36px; height:36px">↑</button></div>`;
 }
 
+/* Nobody scrolls to be sold to. The benefits used to run at full length down
+   the page, which put the plans and the only button about a screen and a half
+   down. They are a rail of bubbles now -- every one of the five still here and
+   still in full, because a carousel that drops two of them would be the paywall
+   lying by layout -- and the room that frees puts the price, the button and its
+   footnote on the first screen. */
 function premiumRoot(){
-  let h=`<div class="screen"><div class="pad pb-xxxl">
-    <div class="v gap-s" style="padding-top:16px">
+  let h=`<div class="screen"><div style="padding-bottom:16px">
+    <div class="pad v gap-s" style="padding-top:8px">
       <div class="titleL">Arch Premium</div>
       <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
-    <div class="mt-xxxl">`;
-  BENEFITS.forEach(([t,d],i)=>{
-    h+=`<div class="v gap-xxs" style="padding:16px 0">
-      <div class="subhead">${esc(t)}</div><div class="footnote mortar">${esc(d)}</div></div>`;
-    if(i<BENEFITS.length-1) h+=`<div class="hairline"></div>`;
+    <div class="rail mt-l" id="prail">`;
+  BENEFITS.forEach(([t,d])=>{
+    h+=`<div class="bubble"><div class="subhead">${esc(t)}</div>
+      <div class="footnote mortar">${esc(d)}</div></div>`;
   });
-  h+=`</div><div class="v gap-s mt-xxxl">`;
+  h+=`</div><div class="rdots" id="pdots">${BENEFITS.map((b,i)=>
+      `<i class="${i===0?"on":""}"></i>`).join("")}</div>
+    <div class="pad v gap-s">`;
   PLANS.forEach(([d,total,per,rec],i)=>{
     h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
       <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
@@ -1156,13 +1176,32 @@ function premiumRoot(){
         <div style="text-align:right"><div class="subhead">${total}</div>
           ${rec?'<div class="footnote mortar">Recommended</div>':""}</div></div></button>`;
   });
-  h+=`</div>${S.set.sub
-    ?`<button class="btn quiet mt-l">You have Arch Premium</button>`
-    :`<button class="btn primary mt-l" data-a="subscribe">Subscribe for ${PLANS[S.plan][1]}</button>`}
+  h+=`${S.set.sub
+    ?`<button class="btn quiet mt-m">You have Arch Premium</button>`
+    :`<button class="btn primary mt-m" data-a="subscribe">Subscribe for ${PLANS[S.plan][1]}</button>`}
     <div class="footnote mortar center mt-s">Payment is charged to your Apple account.
       Renews until you cancel, which you can do in Settings.</div>
-    <div class="btntext">Restore purchases</div>`;
+    <div class="btntext">Restore purchases</div></div>`;
   return h+`</div></div>`;
+}
+
+/* The dots follow the rail rather than the other way round: the rail is the
+   thing being dragged, and a dot row that led it would be lying about where the
+   scroll actually is. */
+function railDots(){
+  const rail=document.getElementById("prail"), dots=document.getElementById("pdots");
+  if(!rail||!dots) return;
+  const mark=()=>{
+    const cards=rail.children, mid=rail.scrollLeft+rail.clientWidth/2;
+    let best=0, bestD=Infinity;
+    for(let i=0;i<cards.length;i++){
+      const c=cards[i], d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid);
+      if(d<bestD){bestD=d; best=i;}
+    }
+    for(let i=0;i<dots.children.length;i++) dots.children[i].classList.toggle("on", i===best);
+  };
+  rail.addEventListener("scroll", mark, {passive:true});
+  mark();
 }
 
 function youRoot(){
@@ -2134,6 +2173,7 @@ function render(){
   let screen;
   if(!t){
     screen=topbar()+{premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
+    if(S.tab==="premium") queueMicrotask(railDots);
   } else if(t.name==="profile") screen=profile(t.id);
   else if(t.name==="thread") screen=thread(t.id);
   else if(t.name==="requests") screen=requestsRoot();

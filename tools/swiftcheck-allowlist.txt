@@ -37,6 +37,7 @@ Preview
 ProgressView
 Rectangle
 RoundedRectangle
+ScrollView
 Slider
 Spacer
 State
