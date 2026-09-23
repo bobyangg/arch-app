@@ -709,25 +709,41 @@ enum ArchBackend {
         guard let session = await SupabaseClient.shared.restore() else { return [] }
         let me = session.userID
 
+        let window = ArchClock.nightFilter()
         let rows: [PairingRow] = try await SupabaseClient.shared.select(
             "pairings",
             columns: "id,night,lo_account,hi_account",
-            filters: ["night": "eq.\(ArchClock.today())"],
-            order: "created_at.asc"
+            filters: ["night": window],
+            order: "night.desc,created_at.asc"
         )
-        let others = rows.map { $0.other(than: me) }
-        guard !others.isEmpty else { return [] }
+        guard !rows.isEmpty else { return [] }
 
         // Anybody this person has already dismissed is gone from their own roster
         // and nobody else's. The other side is never told.
+        //
+        // Matched to the pairing it cancels, night and all, because that is how
+        // `match_population` reads it: a dismissal frees the slot held by the
+        // pairing on *that* night and says nothing about any other. Comparing on
+        // the person alone would hide somebody handed to you again tonight
+        // because you passed on them yesterday.
         let dismissed: [DismissalRow] = try await SupabaseClient.shared.select(
             "dismissals",
-            columns: "other_account_id",
-            filters: ["account_id": "eq.\(me)", "night": "eq.\(ArchClock.today())"]
+            columns: "night,other_account_id",
+            filters: ["account_id": "eq.\(me)", "night": window]
         )
-        let hidden = Set(dismissed.map(\.otherAccountId))
+        let hidden = Set(dismissed.map { "\($0.night)|\($0.otherAccountId)" })
 
-        return try await people(ids: others.filter { !hidden.contains($0) })
+        // Newest night first, and each person once: two nights of pairings can
+        // name the same person twice, and a roster showing somebody in two slots
+        // would spend two of five on one person.
+        var others: [String] = []
+        for row in rows {
+            let other = row.other(than: me)
+            guard !hidden.contains("\(row.night)|\(other)") else { continue }
+            guard !others.contains(other) else { continue }
+            others.append(other)
+        }
+        return try await people(ids: others)
     }
 
     /// Profiles for a set of accounts, with everything a card needs.
@@ -769,20 +785,38 @@ enum ArchBackend {
     }
 
     /// One-sided, and silent. The slot opens for you; their roster does not change.
+    ///
+    /// Written against the night of the pairing being dismissed, and not against
+    /// tonight. `match_population` frees a slot only when the dismissal and the
+    /// pairing agree on the night, so a dismissal stamped with the wrong one frees
+    /// nothing: the person leaves the screen, the slot stays held, and they are
+    /// back tomorrow. Both nights, if you are holding them on both.
+    ///
+    /// `upsert` rather than `insert` because the key is (you, them, night) and
+    /// `start_conversation` writes the same row itself, on both sides, when you
+    /// write to somebody. Two routes to one row is fine; a duplicate-key error
+    /// reported to the reader as a failure, after a message that was sent, is not.
     static func dismiss(_ person: Person) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
+        let me = session.userID
+        let rows: [PairingRow] = try await SupabaseClient.shared.select(
+            "pairings",
+            columns: "id,night,lo_account,hi_account",
+            filters: ["night": ArchClock.nightFilter()]
+        )
+        let nights = rows.filter { $0.other(than: me) == person.id }.map(\.night)
+        guard !nights.isEmpty else { return }
+
         struct Dismissal: Encodable {
             let accountId: String
             let otherAccountId: String
             let night: String
         }
-        try await SupabaseClient.shared.insert(
+        try await SupabaseClient.shared.upsert(
             "dismissals",
-            Dismissal(accountId: session.userID,
-                      otherAccountId: person.id,
-                      night: ArchClock.today())
+            nights.map { Dismissal(accountId: me, otherAccountId: person.id, night: $0) }
         )
     }
 
@@ -977,6 +1011,7 @@ enum ArchBackend {
 }
 
 private struct DismissalRow: Decodable {
+    let night: String
     let otherAccountId: String
 }
 
@@ -990,24 +1025,47 @@ enum ArchClock {
 
     static var zone: TimeZone { DailyFiveStore.refillZone }
 
-    /// The date the current roster belongs to, as Postgres wants it.
-    ///
-    /// Before nine in the morning, that is still yesterday's batch — the roster on
-    /// screen at eight is the one from the previous morning, and asking for today's
-    /// would come back empty.
-    static func today(_ now: Date = Date()) -> String {
+    /// Tonight's date in New York, which is what `private.arch_night()` computes
+    /// on the server. The same instant for everybody, by the same rule at both
+    /// ends.
+    static func night(_ now: Date = Date()) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = zone
-        var date = now
-        let hour = calendar.component(.hour, from: now)
-        if hour < DailyFiveStore.refillHour {
-            date = calendar.date(byAdding: .day, value: -1, to: now) ?? now
-        }
         let formatter = DateFormatter()
         formatter.calendar = calendar
         formatter.timeZone = zone
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+        return formatter.string(from: now)
+    }
+
+    /// The nights a roster spans, newest first.
+    ///
+    /// **Two, because two is what the server holds.** `match_population` keeps a
+    /// slot occupied for any pairing on a night later than `arch_night() - 2` that
+    /// you have not dismissed, and `start_conversation` will only let you write to
+    /// somebody inside that same window.
+    ///
+    /// Reading one night was the bug: somebody handed to you yesterday, who you
+    /// never dismissed and never wrote to, left the screen at nine this morning
+    /// while the server went on counting their slot as full. They did not go
+    /// anywhere -- the pairing is still there, undismissed -- and because the slot
+    /// was still held you were not offered anyone in their place either. A roster
+    /// of five could lose people and gain nothing on the same morning.
+    ///
+    /// Anchored on the plain New York date rather than stepping back before nine.
+    /// Yesterday is in the window either way, so the roster on screen at eight is
+    /// still last night's batch, and the anchor now matches `arch_night()` exactly
+    /// instead of approximately.
+    static func nights(_ now: Date = Date()) -> [String] {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let yesterday = calendar.date(byAdding: .day, value: -1, to: now) ?? now
+        return [night(now), night(yesterday)]
+    }
+
+    /// The window as PostgREST wants it.
+    static func nightFilter(_ now: Date = Date()) -> String {
+        "in.(\(nights(now).joined(separator: ",")))"
     }
 }
 
