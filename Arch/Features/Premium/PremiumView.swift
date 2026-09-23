@@ -13,6 +13,14 @@ import SwiftUI
 /// Nothing here sells scores, rankings, or information about who has looked at you.
 /// None of that exists in Arch, and a paywall is the easiest place to accidentally
 /// invent it.
+///
+/// **Nobody scrolls to be sold to.** The benefits used to be a list at full length,
+/// which put the plans and the button about a screen and a half down: buying was
+/// something you arrived at rather than something you could do. They are a rail of
+/// bubbles now -- one at a time, pushed sideways -- so the price and the button sit
+/// on the first screen at the app's smallest size. The page is still a scroll, and
+/// that is deliberate: at the largest Dynamic Type sizes the column is taller than
+/// any phone, and clipping the button would be worse than scrolling to it.
 struct PremiumView: View {
     var benefits: [PremiumBenefit] = MockData.premiumBenefits
     var plans: [PremiumPlan] = MockData.premiumPlans
@@ -21,6 +29,8 @@ struct PremiumView: View {
     var onSubscribe: () -> Void = {}
 
     @State private var selectedPlanID: String?
+    /// Which bubble the rail has settled on. Drives the dots, and nothing else.
+    @State private var currentBenefitID: String?
 
     private var selectedPlan: PremiumPlan? {
         plans.first { $0.id == selectedPlanID }
@@ -32,12 +42,18 @@ struct PremiumView: View {
         TopBarScroll {
             VStack(alignment: .leading, spacing: 0) {
                 masthead
-                benefitList
+                    .padding(.horizontal, ArchSpacing.screenMargin)
+                // The rail is the one thing that reaches the screen's edges: a
+                // bubble cut off by the margin is what tells you to push it.
+                benefitRail
+                dots
+                    .padding(.horizontal, ArchSpacing.screenMargin)
                 planList
+                    .padding(.horizontal, ArchSpacing.screenMargin)
                 footer
+                    .padding(.horizontal, ArchSpacing.screenMargin)
             }
-            .padding(.horizontal, ArchSpacing.screenMargin)
-            .padding(.bottom, ArchSpacing.sectionGap)
+            .padding(.bottom, ArchSpacing.l)
         }
         .background(ArchColor.night)
     }
@@ -59,35 +75,63 @@ struct PremiumView: View {
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(.top, ArchSpacing.m)
-        .padding(.bottom, ArchSpacing.sectionGap)
+        .padding(.top, ArchSpacing.xs)
+        .padding(.bottom, ArchSpacing.l)
     }
 
-    /// Hairlines rather than bullets. A marker on every row would either be a fifth
-    /// use of `lamp` or a piece of decoration; a rule is structure.
-    private var benefitList: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            ForEach(Array(benefits.enumerated()), id: \.element.id) { index, benefit in
-                VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
-                    Text(benefit.title)
-                        .archText(.subhead)
-                        .foregroundStyle(ArchColor.limestone)
-                    Text(benefit.detail)
-                        .archText(.footnote)
-                        .foregroundStyle(ArchColor.mortar)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, ArchSpacing.m)
-
-                if index < benefits.count - 1 {
-                    Rectangle()
-                        .fill(ArchColor.hairline)
-                        .frame(height: ArchSpacing.hairline)
+    /// The benefits, one at a time, on a rail that snaps.
+    ///
+    /// Every benefit is still here and still in full: a carousel that quietly drops
+    /// two of the five would be the paywall lying by layout. What it saves is the
+    /// vertical space five of them at once were spending.
+    ///
+    /// The bubbles are cards rather than a new shape -- the roster card's anatomy,
+    /// a subhead over a footnote, at a third the size -- and each is a little
+    /// narrower than the screen so the next one shows past the margin. That peek is
+    /// the affordance; there is no arrow and no "swipe" label.
+    private var benefitRail: some View {
+        ScrollView(.horizontal) {
+            // Five cards: an HStack, not a lazy one. Laziness on a list this
+            // short buys nothing and costs the rail its measured width.
+            HStack(spacing: ArchSpacing.s) {
+                ForEach(benefits) { benefit in
+                    BenefitBubble(benefit: benefit)
+                        .containerRelativeFrame(.horizontal, alignment: .center) { width, _ in
+                            width * Self.bubbleWidth
+                        }
                 }
             }
+            .scrollTargetLayout()
         }
-        .padding(.bottom, ArchSpacing.sectionGap)
+        .scrollIndicators(.hidden)
+        .scrollTargetBehavior(.viewAligned)
+        .scrollPosition(id: $currentBenefitID, anchor: .center)
+        .safeAreaPadding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.s)
+    }
+
+    /// How much of the screen's width one bubble takes. The remainder is what the
+    /// next bubble shows by.
+    private static let bubbleWidth: CGFloat = 0.78
+
+    /// Where you are on the rail. The one the rail has settled on is a bar rather
+    /// than a dot, so the row reads at a glance and does not need colour to do it.
+    ///
+    /// Hidden from VoiceOver: it is a picture of the rail's state, and the rail
+    /// itself already announces each bubble as you reach it.
+    private var dots: some View {
+        HStack(spacing: ArchSpacing.xxs + 2) {
+            ForEach(benefits) { benefit in
+                let isCurrent = (currentBenefitID ?? benefits.first?.id) == benefit.id
+                Capsule(style: .continuous)
+                    .fill(isCurrent ? ArchColor.lamp : ArchColor.quietBorder)
+                    .frame(width: isCurrent ? 16 : 6, height: 6)
+                    .animation(ArchMotion.standard, value: isCurrent)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.bottom, ArchSpacing.l)
+        .accessibilityHidden(true)
     }
 
     private var planList: some View {
@@ -105,7 +149,7 @@ struct PremiumView: View {
     private var footer: some View {
         VStack(spacing: ArchSpacing.s) {
             ArchButton(title: subscribeTitle, isEnabled: !isSubscribed, action: onSubscribe)
-                .padding(.top, ArchSpacing.l)
+                .padding(.top, ArchSpacing.m)
 
             Text(MockData.premiumFootnote)
                 .archText(.footnote)
@@ -121,6 +165,36 @@ struct PremiumView: View {
         if isSubscribed { return "You have Arch Premium" }
         guard let plan = selectedPlan else { return "Subscribe" }
         return "Subscribe for \(plan.total)"
+    }
+}
+
+/// One benefit, as a card on the rail.
+///
+/// A fixed height rather than a hugging one, so the rail does not change shape as
+/// it moves and the dots below it never shift. The tallest of the five sets it;
+/// the shorter ones carry air at the bottom, which is the price of a rail that
+/// holds still.
+struct BenefitBubble: View {
+    let benefit: PremiumBenefit
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+            Text(benefit.title)
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+            Text(benefit.detail)
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity, minHeight: 124, alignment: .topLeading)
+        .padding(ArchSpacing.m)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .fill(ArchColor.stone)
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
