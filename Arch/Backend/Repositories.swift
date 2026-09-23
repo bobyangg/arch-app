@@ -718,28 +718,23 @@ enum ArchBackend {
         )
         guard !rows.isEmpty else { return [] }
 
-        // Anybody this person has already dismissed is gone from their own roster
-        // and nobody else's. The other side is never told.
+        // No second query for dismissals. A dismissed pairing is not hidden here
+        // any more -- it is not returned at all, because `pairings_mine` stops
+        // selecting a pairing either side has dismissed.
         //
-        // Matched to the pairing it cancels, night and all, because that is how
-        // `match_population` reads it: a dismissal frees the slot held by the
-        // pairing on *that* night and says nothing about any other. Comparing on
-        // the person alone would hide somebody handed to you again tonight
-        // because you passed on them yesterday.
-        let dismissed: [DismissalRow] = try await SupabaseClient.shared.select(
-            "dismissals",
-            columns: "night,other_account_id",
-            filters: ["account_id": "eq.\(me)", "night": window]
-        )
-        let hidden = Set(dismissed.map { "\($0.night)|\($0.otherAccountId)" })
-
+        // That has to be the server's job rather than this function's. You are
+        // allowed to read your own dismissals and nobody else's, which is the rule
+        // that keeps you from ever learning who dismissed whom -- so a client
+        // asking "has this person dismissed me?" would be asking the one question
+        // it must never be able to answer. Withholding the row answers it without
+        // disclosing it.
+        //
         // Newest night first, and each person once: two nights of pairings can
         // name the same person twice, and a roster showing somebody in two slots
         // would spend two of five on one person.
         var others: [String] = []
         for row in rows {
             let other = row.other(than: me)
-            guard !hidden.contains("\(row.night)|\(other)") else { continue }
             guard !others.contains(other) else { continue }
             others.append(other)
         }
@@ -1008,11 +1003,6 @@ enum ArchBackend {
     static func signOut() async {
         await SupabaseClient.shared.clearSession()
     }
-}
-
-private struct DismissalRow: Decodable {
-    let night: String
-    let otherAccountId: String
 }
 
 /// The clock the rosters run on.
