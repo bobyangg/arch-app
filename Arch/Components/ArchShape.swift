@@ -81,8 +81,13 @@ struct ArchMark: Shape {
     /// The span: a semicircle about this centre, this far across. Its springing
     /// points land on the piers three quarters of the way down, where a pier is
     /// already leaning out far enough to catch them.
-    private static let spanCentre: CGFloat = 0.48
-    private static let spanRadius: CGFloat = 0.24
+    ///
+    /// Set from the app icon, where the mark is drawn largest and any crowding
+    /// shows first: a little lower and a little tighter than the first drawing,
+    /// so the air between the crown of the span and the underside of the deck
+    /// survives at a heavy stroke.
+    private static let spanCentre: CGFloat = 0.50
+    private static let spanRadius: CGFloat = 0.23
 
     var animatableData: CGFloat {
         get { trim }
