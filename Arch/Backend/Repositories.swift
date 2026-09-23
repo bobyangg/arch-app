@@ -1004,6 +1004,24 @@ enum ArchBackend {
         try await SupabaseClient.shared.upsert("discovery_settings", row)
     }
 
+    /// How many times this account has moved its town since signing up.
+    ///
+    /// Its own table rather than a column, and readable rather than writable: the
+    /// trigger that counts is the only thing that writes it, and there is no
+    /// update policy at all. A number the client could set back to zero would not
+    /// be a limit.
+    ///
+    /// No row means none used. The row is written on the first change, so a fresh
+    /// account has nothing to read and that is not an error.
+    static func placeChangesUsed() async throws -> Int {
+        guard let session = await SupabaseClient.shared.restore() else { return 0 }
+        struct Row: Decodable { let used: Int }
+        let row: Row? = try await SupabaseClient.shared.selectOne(
+            "place_changes", filters: ["account_id": "eq.\(session.userID)"]
+        )
+        return row?.used ?? 0
+    }
+
     /// Immediate and permanent, as the screen says.
     ///
     /// A function rather than a delete, because it has to end every conversation on

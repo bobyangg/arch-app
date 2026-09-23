@@ -34,6 +34,31 @@ final class SettingsStore {
     }
     var isSubscribed = false
 
+    /// How many times this account has already moved its town.
+    ///
+    /// Read from the server, never written from here -- `place_changes` has a read
+    /// policy and no write policy, because a limit the client can reset is not a
+    /// limit. Zero until the first change, when the trigger writes the row.
+    private(set) var placeChangesUsed = 0
+
+    /// What a free account gets after onboarding. Premium has no limit.
+    ///
+    /// Matches `private.arch_free_place_changes()`, which is the one that decides:
+    /// this number only chooses whether the search field is drawn, and the server
+    /// refuses the write either way.
+    static let freePlaceChanges = 1
+
+    /// Whether the town can be picked by name rather than taken from the phone.
+    ///
+    /// **Free at signup and once afterwards, unlimited with Premium.** Onboarding
+    /// used to allow it and Settings used to refuse it, which meant a free account
+    /// could set a place it was not in exactly once and then never correct it --
+    /// and the moment you most need to change it is right after you find out it is
+    /// wrong. "Use my location" stays available whatever this says.
+    var canChangePlace: Bool {
+        isSubscribed || placeChangesUsed < Self.freePlaceChanges
+    }
+
     // Notifications
     /// What iOS has decided, which is not the same thing as what you want.
     /// When this is false the three switches below cannot do anything, so they are
@@ -96,9 +121,31 @@ final class SettingsStore {
         isPaused = row.paused
         messageAlert = row.notifyMessages
 
+        placeChangesUsed = (try? await ArchBackend.placeChangesUsed()) ?? placeChangesUsed
+
         let rows = try await ArchBackend.answers()
         answers = Dictionary(rows.map { ($0.questionId, $0.optionIndex) }, uniquingKeysWith: { $1 })
         answersAnsweredAt = rows.map(\.answeredAt).max()
+    }
+
+    /// Re-read the allowance after the town has just been changed.
+    ///
+    /// `load()` runs at launch and when the app comes back to the foreground, and
+    /// neither happens between picking a town and opening the picker again. Without
+    /// this the search field would still be drawn for a change the server has
+    /// already decided to refuse, and the reader would meet the limit as a failure
+    /// rather than as a sentence explaining it.
+    ///
+    /// From the server rather than by adding one here: the count belongs to the
+    /// trigger, and a client keeping its own tally would be a second answer to a
+    /// question that already has one.
+    func placeDidChange() {
+        guard ArchConfig.isConfigured else { return }
+        Task { @MainActor [weak self] in
+            if let used = try? await ArchBackend.placeChangesUsed() {
+                self?.placeChangesUsed = used
+            }
+        }
     }
 
     /// Written whole rather than field by field. Every one of these is a filter the

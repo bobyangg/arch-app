@@ -192,7 +192,12 @@ struct PlacePickerView: View {
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Choosing somewhere you are not — a city you are moving to, or one you visit — is part of Arch Premium.")
+            // Reached only when the one free change has been spent -- setting a
+            // town by name is free at signup and once afterwards. The sentence
+            // says which of the two it is, because "this costs money" and "this
+            // cost you nothing the first two times" read very differently to
+            // somebody who has just been stopped.
+            Text("You have already changed your town once. Changing it again — a city you are moving to, or one you visit — is part of Arch Premium.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
