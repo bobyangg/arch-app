@@ -334,17 +334,33 @@ enum ArchBackend {
             let heightCm: Int?
             let work: String?
         }
-        // The device fix wins when there is one, and the centre of the picked place
-        // otherwise. Either way it is coarsened before it leaves the phone -- the
-        // CHECK constraint on the column refuses anything finer, so this is belt
-        // and braces.
+        // **The picked place wins, and the device fix was winning.**
+        //
+        // These two are the label and the position of one profile, and only the
+        // label is visible: the chip says a town, the distance filter reads
+        // `coarse_lat`/`coarse_lon`, and no screen anywhere puts them side by
+        // side. So when they disagree nobody can see it, and the reader cannot
+        // correct what they cannot see.
+        //
+        // They disagreed for anybody who tapped "Use my location" and then picked
+        // a town from the list -- which is exactly what somebody does when the
+        // button has just put them somewhere wrong. The name moved and the fix
+        // stayed, and the profile went out reading one city while being matched
+        // two thousand miles away, inside nobody's radius and outside everybody
+        // else's, with nothing on screen to suggest why.
+        //
+        // Preferring the place gives up nothing: a place reverse-geocoded from
+        // the fix carries that fix as its centre, so tapping the button still
+        // writes the same numbers it always did. `coordinate` stays as the
+        // fallback for the one case it was written for -- a fix the geocoder
+        // could not name, where there is a position and no words for it.
         //
         // Both can be absent, now that a place can be one rebuilt from a stored id
         // rather than one just picked. On this path it means the picker was never
         // opened, and a profile with no position at all would be invisible to the
         // distance filter in both directions -- so it is refused rather than
         // written with a zero.
-        guard let centre = (coordinate ?? place.centre)?.coarsened else {
+        guard let centre = (place.centre ?? coordinate)?.coarsened else {
             throw ArchAPIError.conflict
         }
         try await SupabaseClient.shared.insert(
