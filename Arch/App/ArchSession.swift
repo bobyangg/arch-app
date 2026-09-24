@@ -128,6 +128,22 @@ final class ArchSession {
         try? await settings.load()
     }
 
+    /// Start and stop the polling that keeps messages arriving.
+    ///
+    /// Tied to the app being in front rather than to any screen: a message can
+    /// arrive while you are on the roster or in Settings, and the unread count
+    /// on the tab is the whole point of knowing about it there. Stopped on the
+    /// way out, because a timer running in a backgrounded app is a request every
+    /// twelve seconds that nobody is waiting for.
+    func beginLiveUpdates() {
+        guard case .ready = state else { return }
+        daily.beginLiveUpdates()
+    }
+
+    func endLiveUpdates() {
+        daily.endLiveUpdates()
+    }
+
     /// What the removal screen needs. Falls back to the least specific version
     /// rather than failing: a reader who cannot get in deserves an explanation even
     /// when the detail did not load.

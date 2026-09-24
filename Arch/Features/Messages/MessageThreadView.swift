@@ -28,6 +28,19 @@ struct MessageThreadView: View {
     var onAccept: (Conversation) -> Void = { _ in }
     var onDecline: (Conversation) -> Void = { _ in }
     var onRetry: (Message) -> Void = { _ in }
+    /// Their profile, from the photo at the top. Defaulted to nothing so the
+    /// previews and any host that has nowhere to push still compile -- but a
+    /// host that leaves it out gets a photo that does not respond, so both real
+    /// call sites pass one.
+    var onOpenProfile: () -> Void = {}
+    /// A reply. The composer used to clear the field and stop.
+    var onSend: (String) -> Void = { _ in }
+    /// Called with this conversation's id while it is on screen, and nil when
+    /// it leaves. The shell hides the tab bar -- reading a conversation is the
+    /// one place in the app that is not about choosing between four places to be
+    /// -- and points the fast poll at this thread for as long as it is being
+    /// read.
+    var onOpenChanged: (String?) -> Void = { _ in }
 
     @State private var draft = ""
     @State private var action: ConversationAction?
@@ -49,6 +62,12 @@ struct MessageThreadView: View {
         }
         .background(ArchColor.night)
         .toolbar(.hidden, for: .navigationBar)
+        // The shell draws the tab bar, so it is the only thing that can put it
+        // away. Set on the way in and cleared on the way out rather than derived
+        // from a navigation path, because `NavigationPath` will not say what is
+        // on it and the two tabs that can open a thread would each have to guess.
+        .onAppear { onOpenChanged(conversation.id) }
+        .onDisappear { onOpenChanged(nil) }
         .sheet(item: $action) { which in
             sheet(for: which)
         }
@@ -103,13 +122,27 @@ struct MessageThreadView: View {
             .buttonStyle(PressScaleStyle())
             .accessibilityLabel("Back")
 
-            PhotoPlaceholder(toneIndex: conversation.person.avatarToneIndex)
-                .frame(width: 32, height: 32)
-                .clipShape(Circle())
+            // **The photograph, and a way into the profile behind it.** This was
+            // a tone with no url -- the one place in the app where you are
+            // talking to somebody and the only picture of them is a coloured
+            // rectangle. Tapping it opens their profile, which is where you go
+            // when you want to remember who you are talking to.
+            Button(action: onOpenProfile) {
+                HStack(spacing: ArchSpacing.xs) {
+                    PhotoPlaceholder(toneIndex: conversation.person.avatarToneIndex,
+                                     url: conversation.person.mainPhoto?.url,
+                                     data: conversation.person.mainPhoto?.local)
+                        .frame(width: 32, height: 32)
+                        .clipShape(Circle())
 
-            Text(conversation.person.name)
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
+                    Text(conversation.person.name)
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(PressScaleStyle())
+            .accessibilityLabel("\(conversation.person.name), open profile")
 
             Spacer(minLength: 0)
 
@@ -159,6 +192,10 @@ struct MessageThreadView: View {
         }
         .scrollIndicators(.hidden)
         .defaultScrollAnchor(.bottom)
+        // Dragging up through the thread puts the keyboard away as you go. It
+        // covers half the screen, and reaching back through a conversation with
+        // it still up means reading a conversation through a letterbox.
+        .scrollDismissesKeyboard(.interactively)
     }
 
     /// A request is read before it is answered, so the input bar is replaced by the
@@ -236,7 +273,7 @@ struct MessageThreadView: View {
                         .fill(ArchColor.stone)
                 )
 
-            Button { draft = "" } label: {
+            Button { send() } label: {
                 Image(systemName: "arrow.up")
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.onLamp)
@@ -251,6 +288,18 @@ struct MessageThreadView: View {
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.xs)
         .archBar(.bottom)
+    }
+
+    /// Hands the text up and clears the field.
+    ///
+    /// Clearing was all this used to do. The message is drawn by the store as
+    /// soon as it is handed over, so the field emptying and the bubble appearing
+    /// are the same frame.
+    private func send() {
+        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty else { return }
+        draft = ""
+        onSend(body)
     }
 }
 

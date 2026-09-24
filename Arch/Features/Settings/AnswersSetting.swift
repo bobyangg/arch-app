@@ -85,7 +85,7 @@ struct AnswersSetting: View {
     private func questions(_ run: OnboardingStore) -> some View {
         StepRule(total: Questionnaire.count, current: (run.questionIndex ?? 0) + 1)
 
-        OnboardingQuestionnaire(store: run)
+        OnboardingQuestionnaire(store: run, backLeavesQuestions: false)
             .onChange(of: run.questionIndex) { _, index in
                 // The onboarding store leaves the questionnaire by moving to
                 // the next step; here there is no next step, so that is the
@@ -95,11 +95,9 @@ struct AnswersSetting: View {
             }
 
         HStack(spacing: ArchSpacing.l) {
-            if let index = run.questionIndex, index > 0 {
-                ArchTextButton(title: "Back a question") {
-                    withAnimation(ArchMotion.standard) { run.back() }
-                }
-            }
+            // "Back a question" used to be here. It lives inside the
+            // questionnaire now, so onboarding gets it too rather than only this
+            // screen -- and so there is one of it rather than two.
             ArchTextButton(title: "Stop") {
                 // Nothing is written until the last question, so stopping
                 // keeps what you said before, untouched.
