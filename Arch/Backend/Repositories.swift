@@ -917,6 +917,30 @@ enum ArchBackend {
         return created.id
     }
 
+    /// Just the messages in one thread.
+    ///
+    /// Separate from `conversations()`, which fetches every thread, both
+    /// profiles and all the photographs behind them. That is the right shape for
+    /// opening the app and the wrong one for asking "anything new?" every few
+    /// seconds while somebody reads.
+    static func messages(in conversationID: String) async throws -> [Message] {
+        guard let session = await SupabaseClient.shared.restore() else { return [] }
+        let rows: [MessageRow] = try await SupabaseClient.shared.select(
+            "messages",
+            filters: ["conversation_id": "eq.\(conversationID)"],
+            order: "created_at.asc"
+        )
+        return rows.map { row in
+            Message(
+                id: row.id,
+                text: row.body,
+                isOutgoing: row.senderId == session.userID,
+                timestamp: ArchUnits.shortTime(row.createdAt),
+                delivery: .sent
+            )
+        }
+    }
+
     static func send(_ body: String, to conversationID: String) async throws -> MessageRow {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn

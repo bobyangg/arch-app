@@ -55,13 +55,21 @@ struct ArchApp: App {
                 if case .ready = session.state, session.allowsNotifications {
                     await PushNotifications.shared.enable()
                 }
+                // `scenePhase` is already `.active` at launch, so it will not
+                // change and the handler below will not run. Starting here is
+                // what covers the first time the app is opened.
+                session.beginLiveUpdates()
             }
             // Somebody who wrote to you while the app was in your pocket is on
             // screen when you come back to it, rather than after the next cold
             // launch. `reload()` cannot fail loudly, so this is safe to do every
             // time without a network check in front of it.
             .onChange(of: scenePhase) { _, phase in
-                guard phase == .active else { return }
+                guard phase == .active else {
+                    session.endLiveUpdates()
+                    return
+                }
+                session.beginLiveUpdates()
                 Task { await session.reload() }
             }
         }

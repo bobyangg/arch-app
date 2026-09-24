@@ -27,15 +27,31 @@ struct MessagesListView: View {
     /// Bumped by the shell when the tab already showing is tapped again. Every
     /// change means "go back to the root", and the value itself means nothing.
     /// Defaulted so no `#Preview` has to supply one.
+    /// The current state of a conversation, by id.
+    ///
+    /// **A pushed value is a photograph.** `navigationDestination` hands back
+    /// whatever was put on the path, so a thread opened a minute ago is the
+    /// thread as it was a minute ago -- and a reply added to the store did not
+    /// appear until you left the screen and came back. That was the whole of
+    /// "I have to leave the chat to see what I sent".
+    ///
+    /// Looking it up on every render fixes it: the store is observed, so a
+    /// change re-runs this body and the thread is rebuilt from what is there
+    /// now. The pushed copy stays as the fallback, for a conversation that has
+    /// left the store while somebody was reading it.
+    var live: (String) -> Conversation? = { _ in nil }
     /// A reply in an open thread.
     var onSend: (Conversation, String) -> Void = { _, _ in }
     var popToRoot: Int = 0
 
-    /// Reported while a thread is on screen here, so the shell can put the tab
-    /// bar away. Per tab rather than global: every tab stays in the view tree,
-    /// so a thread left open in Daily 5 would otherwise go on hiding the tab bar
-    /// after you had switched away from it.
-    var onThreadOpenChanged: (Bool) -> Void = { _ in }
+    /// The conversation on screen here, or nil when none is.
+    ///
+    /// The shell hears both halves of it: it puts the tab bar away, and it
+    /// points the fast poll at this thread and takes it off again. Per tab
+    /// rather than global, because every tab stays in the view tree -- a thread
+    /// left open in Daily 5 would otherwise go on hiding the tab bar after you
+    /// had switched away from it.
+    var onThreadOpenChanged: (String?) -> Void = { _ in }
 
     @State private var path = NavigationPath()
 
@@ -51,7 +67,8 @@ struct MessagesListView: View {
             .background(ArchColor.night)
             .toolbar(.hidden, for: .navigationBar)
             .archBackSwipe()
-            .navigationDestination(for: Conversation.self) { conversation in
+            .navigationDestination(for: Conversation.self) { pushed in
+                let conversation = live(pushed.id) ?? pushed
                 MessageThreadView(
                     conversation: conversation,
                     isInRoster: holdsSlot(conversation.person),
