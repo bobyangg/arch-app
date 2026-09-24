@@ -27,7 +27,15 @@ struct MessagesListView: View {
     /// Bumped by the shell when the tab already showing is tapped again. Every
     /// change means "go back to the root", and the value itself means nothing.
     /// Defaulted so no `#Preview` has to supply one.
+    /// A reply in an open thread.
+    var onSend: (Conversation, String) -> Void = { _, _ in }
     var popToRoot: Int = 0
+
+    /// Reported while a thread is on screen here, so the shell can put the tab
+    /// bar away. Per tab rather than global: every tab stays in the view tree,
+    /// so a thread left open in Daily 5 would otherwise go on hiding the tab bar
+    /// after you had switched away from it.
+    var onThreadOpenChanged: (Bool) -> Void = { _ in }
 
     @State private var path = NavigationPath()
 
@@ -49,8 +57,17 @@ struct MessagesListView: View {
                     isInRoster: holdsSlot(conversation.person),
                     actions: actions,
                     onAccept: { path = NavigationPath(); onAccept($0) },
-                    onDecline: { path = NavigationPath(); onDecline($0) }
+                    onDecline: { path = NavigationPath(); onDecline($0) },
+                    onOpenProfile: { path.append(conversation.person) },
+                    onSend: { onSend(conversation, $0) },
+                    onOpenChanged: onThreadOpenChanged
                 )
+            }
+            // Read-only: they are already in a conversation with you, so there is
+            // no slot to dismiss them from and nothing to start.
+            .navigationDestination(for: Person.self) { person in
+                ProfileDetailView(person: person, canAct: false,
+                                  onDismiss: {}, onSend: { _, _ in })
             }
             .navigationDestination(for: RequestsRoute.self) { _ in
                 MessageRequestsView(
@@ -161,7 +178,9 @@ struct ConversationRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: ArchSpacing.s) {
-            PhotoPlaceholder(toneIndex: conversation.person.avatarToneIndex)
+            PhotoPlaceholder(toneIndex: conversation.person.avatarToneIndex,
+                             url: conversation.person.mainPhoto?.url,
+                             data: conversation.person.mainPhoto?.local)
                 .frame(width: 52, height: 52)
                 .clipShape(Circle())
 

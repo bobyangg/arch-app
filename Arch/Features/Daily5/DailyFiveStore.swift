@@ -153,16 +153,23 @@ final class DailyFiveStore {
         conversations.filter { $0.state == .request && !$0.openedByMe }
     }
 
-    /// What the Messages list shows: everything open, plus the ones you have
-    /// written and are waiting on.
+    /// What the Messages list shows: conversations, and nothing else.
     ///
-    /// Deliberately not the same as `openConversations`, which stays the count
-    /// the roster hold is computed from — the server works that out from
-    /// `state = 'open'` alone, and the two have to agree or the app and the
-    /// matcher disagree about whether you are full.
-    var threads: [Conversation] {
-        conversations.filter { $0.state == .open || ($0.state == .request && $0.openedByMe) }
-    }
+    /// **A request you sent is not one of them.** It used to sit here waiting,
+    /// which put a thread in your list that the other person had not agreed to
+    /// and could still decline -- something of yours, with nothing you could do
+    /// to it. Writing to somebody spends the slot and then it is their move;
+    /// there is nothing to look at until they answer, and a list of things you
+    /// cannot act on is a list of things to worry about.
+    ///
+    /// It appears the moment they accept, whole, because accepting is what makes
+    /// it a conversation.
+    ///
+    /// The same set as `openConversations`, and kept separate on purpose: that
+    /// one is the number the roster hold is computed from, and the server works
+    /// it out from `state = 'open'` alone. One of these is a screen and the
+    /// other is arithmetic, and they have drifted apart once already.
+    var threads: [Conversation] { openConversations }
 
     /// Your people are still there and still yours — they are just not shown
     /// until you are back under the limit. Nothing is lost by waiting.
@@ -259,6 +266,55 @@ final class DailyFiveStore {
             roster.slots.append(.filled(person))
         }
         persist { try await ArchBackend.restore(person) }
+    }
+
+    /// A reply, in a conversation that is already open.
+    ///
+    /// **`ArchBackend.send` had no callers and the send button was
+    /// `Button { draft = "" }`.** Typing a message and tapping it cleared the
+    /// field and did nothing else: nothing drawn, nothing stored, nothing off
+    /// the phone. The whole database holds one message, and that is the one that
+    /// opened the only conversation in it.
+    ///
+    /// Drawn at once as `.sending` and settled when the server has it, because a
+    /// reply that waits for a round trip before appearing reads as a missed tap
+    /// and gets typed again. A failure stays in the thread as `.failed` rather
+    /// than disappearing -- the thread is the only record that you wrote it.
+    func reply(to conversation: Conversation, text: String) {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty,
+              let index = conversations.firstIndex(where: { $0.id == conversation.id })
+        else { return }
+
+        let localID = "m-local-\(UUID().uuidString)"
+        conversations[index].messages.append(
+            Message(id: localID, text: body, isOutgoing: true,
+                    timestamp: Date().formatted(.dateTime.hour().minute()),
+                    delivery: .sending)
+        )
+        conversations[index].lastActivity = "Just now"
+        let moved = conversations.remove(at: index)
+        conversations.insert(moved, at: 0)
+
+        let id = conversation.id
+        persist { [weak self] in
+            do {
+                _ = try await ArchBackend.send(body, to: id)
+                self?.settle(localID, in: id, as: .sent)
+            } catch {
+                self?.settle(localID, in: id, as: .failed)
+                throw error
+            }
+        }
+    }
+
+    /// Marks a message sent or failed, wherever its thread has moved to by then.
+    @MainActor
+    private func settle(_ messageID: String, in conversationID: String, as delivery: MessageDelivery) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }),
+              let spot = conversations[index].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        conversations[index].messages[spot].delivery = delivery
     }
 
     /// The first message.

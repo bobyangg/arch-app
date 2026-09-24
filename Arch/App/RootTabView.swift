@@ -45,6 +45,11 @@ struct RootTabView: View {
     @State private var youPops = 0
     @State private var messagePops = 0
     @State private var dailyPops = 0
+    /// Whether each tab that can open a conversation currently has one on
+    /// screen. Two flags rather than one, because all four tabs stay in the
+    /// tree -- see `isReadingThread`.
+    @State private var messagesThreadOpen = false
+    @State private var dailyThreadOpen = false
 
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
@@ -62,6 +67,15 @@ struct RootTabView: View {
             if isOffline { OfflineBanner() }
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Gone while you are reading a conversation. A thread is the one
+            // screen in the app that is not about choosing between four places
+            // to be, and four tabs under it are four ways to leave what you are
+            // in the middle of.
+            //
+            // Tracked per tab because every tab stays in the view tree: a thread
+            // left open in Daily 5 is still "open" while you are on You, so one
+            // flag would hide the tab bar on a screen with no thread on it.
+            if !isReadingThread {
             TabBar(
                 selection: Binding(
                     get: { selection },
@@ -83,14 +97,23 @@ struct RootTabView: View {
                 ),
                 unreadCount: store.unreadCount
             )
+            .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         .animation(ArchMotion.standard, value: isOffline)
+        .animation(ArchMotion.standard, value: isReadingThread)
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
     }
 
     /// Blocking writes to two places: the roster and conversations live in the
     /// Daily 5 store, the blocked list lives in Settings.
+    /// Whether the tab showing is showing a conversation.
+    private var isReadingThread: Bool {
+        (selection == .messages && messagesThreadOpen)
+            || (selection == .daily && dailyThreadOpen)
+    }
+
     private var conversationActions: ConversationActions {
         ConversationActions(
             leave: { store.leave($0) },
@@ -134,7 +157,9 @@ struct RootTabView: View {
                     onRestore: { store.restore($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
                     actions: conversationActions,
-                    popToRoot: dailyPops
+                    onReply: { store.reply(to: $0, text: $1) },
+                    popToRoot: dailyPops,
+                    onThreadOpenChanged: { dailyThreadOpen = $0 }
                 )
             }
             tab(.messages) {
@@ -150,7 +175,9 @@ struct RootTabView: View {
                     onOpenDaily: { selection = .daily },
                     actions: conversationActions,
                     holdsSlot: { store.holdsSlot($0) },
-                    popToRoot: messagePops
+                    onSend: { store.reply(to: $0, text: $1) },
+                    popToRoot: messagePops,
+                    onThreadOpenChanged: { messagesThreadOpen = $0 }
                 )
             }
             tab(.you) {

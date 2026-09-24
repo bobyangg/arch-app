@@ -32,7 +32,12 @@ struct DailyFiveView: View {
 
     /// Bumped by the shell when the tab already showing is tapped again. Every
     /// change means "back to the five"; the value itself means nothing.
+    /// A reply in a thread opened from here.
+    var onReply: (Conversation, String) -> Void = { _, _ in }
     var popToRoot: Int = 0
+
+    /// Reported while a thread is on screen here. See `MessagesListView`.
+    var onThreadOpenChanged: (Bool) -> Void = { _ in }
 
     @State private var path: [Route] = []
     @State private var pendingDismissal: Person?
@@ -88,7 +93,10 @@ struct DailyFiveView: View {
                     MessageThreadView(
                         conversation: conversation,
                         isInRoster: roster.people.contains { $0.id == conversation.person.id },
-                        actions: actions
+                        actions: actions,
+                        onOpenProfile: { path.append(.profile(conversation.person)) },
+                        onSend: { onReply(conversation, $0) },
+                        onOpenChanged: onThreadOpenChanged
                     )
                 }
             }
