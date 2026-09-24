@@ -32,12 +32,25 @@ struct DailyFiveView: View {
 
     /// Bumped by the shell when the tab already showing is tapped again. Every
     /// change means "back to the five"; the value itself means nothing.
+    /// The current state of a conversation, by id.
+    ///
+    /// **A pushed value is a photograph.** `navigationDestination` hands back
+    /// whatever was put on the path, so a thread opened a minute ago is the
+    /// thread as it was a minute ago -- and a reply added to the store did not
+    /// appear until you left the screen and came back. That was the whole of
+    /// "I have to leave the chat to see what I sent".
+    ///
+    /// Looking it up on every render fixes it: the store is observed, so a
+    /// change re-runs this body and the thread is rebuilt from what is there
+    /// now. The pushed copy stays as the fallback, for a conversation that has
+    /// left the store while somebody was reading it.
+    var live: (String) -> Conversation? = { _ in nil }
     /// A reply in a thread opened from here.
     var onReply: (Conversation, String) -> Void = { _, _ in }
     var popToRoot: Int = 0
 
-    /// Reported while a thread is on screen here. See `MessagesListView`.
-    var onThreadOpenChanged: (Bool) -> Void = { _ in }
+    /// The conversation on screen here, or nil. See `MessagesListView`.
+    var onThreadOpenChanged: (String?) -> Void = { _ in }
 
     @State private var path: [Route] = []
     @State private var pendingDismissal: Person?
@@ -89,7 +102,8 @@ struct DailyFiveView: View {
                             path = [.thread(conversation)]
                         }
                     )
-                case .thread(let conversation):
+                case .thread(let pushed):
+                    let conversation = live(pushed.id) ?? pushed
                     MessageThreadView(
                         conversation: conversation,
                         isInRoster: roster.people.contains { $0.id == conversation.person.id },

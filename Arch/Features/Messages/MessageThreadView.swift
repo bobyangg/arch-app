@@ -35,10 +35,12 @@ struct MessageThreadView: View {
     var onOpenProfile: () -> Void = {}
     /// A reply. The composer used to clear the field and stop.
     var onSend: (String) -> Void = { _ in }
-    /// Called with true while this thread is on screen, so the shell can put
-    /// the tab bar away. Reading a conversation is the one place in the app that
-    /// is not about choosing between four places to be.
-    var onOpenChanged: (Bool) -> Void = { _ in }
+    /// Called with this conversation's id while it is on screen, and nil when
+    /// it leaves. The shell hides the tab bar -- reading a conversation is the
+    /// one place in the app that is not about choosing between four places to be
+    /// -- and points the fast poll at this thread for as long as it is being
+    /// read.
+    var onOpenChanged: (String?) -> Void = { _ in }
 
     @State private var draft = ""
     @State private var action: ConversationAction?
@@ -64,8 +66,8 @@ struct MessageThreadView: View {
         // away. Set on the way in and cleared on the way out rather than derived
         // from a navigation path, because `NavigationPath` will not say what is
         // on it and the two tabs that can open a thread would each have to guess.
-        .onAppear { onOpenChanged(true) }
-        .onDisappear { onOpenChanged(false) }
+        .onAppear { onOpenChanged(conversation.id) }
+        .onDisappear { onOpenChanged(nil) }
         .sheet(item: $action) { which in
             sheet(for: which)
         }

@@ -108,6 +108,26 @@ struct RootTabView: View {
 
     /// Blocking writes to two places: the roster and conversations live in the
     /// Daily 5 store, the blocked list lives in Settings.
+    /// A thread opened or closed in one of the two tabs that can open one.
+    ///
+    /// Both halves in one place: the tab bar goes away, and the three-second
+    /// poll is pointed at the thread being read and taken off it again. Stopping
+    /// matters as much as starting -- a timer left running on a screen nobody is
+    /// looking at is a request every three seconds, for as long as the app is
+    /// open.
+    private func reading(_ tab: ArchTab, _ conversationID: String?) {
+        switch tab {
+        case .messages: messagesThreadOpen = conversationID != nil
+        case .daily:    dailyThreadOpen = conversationID != nil
+        default:        break
+        }
+        if let conversationID {
+            store.watchThread(conversationID)
+        } else {
+            store.stopWatchingThread()
+        }
+    }
+
     /// Whether the tab showing is showing a conversation.
     private var isReadingThread: Bool {
         (selection == .messages && messagesThreadOpen)
@@ -157,9 +177,10 @@ struct RootTabView: View {
                     onRestore: { store.restore($0) },
                     onSend: { store.startConversation(with: $0, text: $1, quoting: $2) },
                     actions: conversationActions,
+                    live: { store.conversation($0) },
                     onReply: { store.reply(to: $0, text: $1) },
                     popToRoot: dailyPops,
-                    onThreadOpenChanged: { dailyThreadOpen = $0 }
+                    onThreadOpenChanged: { reading(.daily, $0) }
                 )
             }
             tab(.messages) {
@@ -175,9 +196,10 @@ struct RootTabView: View {
                     onOpenDaily: { selection = .daily },
                     actions: conversationActions,
                     holdsSlot: { store.holdsSlot($0) },
+                    live: { store.conversation($0) },
                     onSend: { store.reply(to: $0, text: $1) },
                     popToRoot: messagePops,
-                    onThreadOpenChanged: { messagesThreadOpen = $0 }
+                    onThreadOpenChanged: { reading(.messages, $0) }
                 )
             }
             tab(.you) {

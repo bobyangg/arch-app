@@ -42,6 +42,11 @@ final class DailyFiveStore {
     /// Something a write to the server could not do. Screens read this to say so.
     var lastError: ArchAPIError?
 
+    /// The prefix on a message this phone has written and the server has not
+    /// confirmed. It is how a refresh tells the two apart: everything else in a
+    /// thread came from the server and carries the server's id.
+    static let localPrefix = "m-local-"
+
     /// Dismissed today, and not gone yet.
     ///
     /// They sit under the five until nine tomorrow morning, when the new roster
@@ -171,6 +176,14 @@ final class DailyFiveStore {
     /// other is arithmetic, and they have drifted apart once already.
     var threads: [Conversation] { openConversations }
 
+    /// One conversation as it is now, by id.
+    ///
+    /// What a pushed thread reads through, so the screen shows the store rather
+    /// than the copy it was handed when it was pushed.
+    func conversation(_ id: String) -> Conversation? {
+        conversations.first { $0.id == id }
+    }
+
     /// Your people are still there and still yours — they are just not shown
     /// until you are back under the limit. Nothing is lost by waiting.
     var isRosterHeld: Bool { openConversations.count >= conversationLimit }
@@ -286,7 +299,7 @@ final class DailyFiveStore {
               let index = conversations.firstIndex(where: { $0.id == conversation.id })
         else { return }
 
-        let localID = "m-local-\(UUID().uuidString)"
+        let localID = "\(Self.localPrefix)\(UUID().uuidString)"
         conversations[index].messages.append(
             Message(id: localID, text: body, isOutgoing: true,
                     timestamp: Date().formatted(.dateTime.hour().minute()),
@@ -299,10 +312,13 @@ final class DailyFiveStore {
         let id = conversation.id
         persist { [weak self] in
             do {
-                _ = try await ArchBackend.send(body, to: id)
-                self?.settle(localID, in: id, as: .sent)
+                let row = try await ArchBackend.send(body, to: id)
+                // The server's id replaces the local one, which is what keeps a
+                // refresh from drawing this message twice: the copy that comes
+                // back carries that id, and the merge matches on it.
+                self?.settle(localID, in: id, as: .sent, serverID: row.id)
             } catch {
-                self?.settle(localID, in: id, as: .failed)
+                self?.settle(localID, in: id, as: .failed, serverID: nil)
                 throw error
             }
         }
@@ -310,11 +326,126 @@ final class DailyFiveStore {
 
     /// Marks a message sent or failed, wherever its thread has moved to by then.
     @MainActor
-    private func settle(_ messageID: String, in conversationID: String, as delivery: MessageDelivery) {
+    private func settle(_ messageID: String, in conversationID: String,
+                        as delivery: MessageDelivery, serverID: String?) {
         guard let index = conversations.firstIndex(where: { $0.id == conversationID }),
               let spot = conversations[index].messages.firstIndex(where: { $0.id == messageID })
         else { return }
-        conversations[index].messages[spot].delivery = delivery
+        let old = conversations[index].messages[spot]
+        conversations[index].messages[spot] = Message(
+            id: serverID ?? old.id,
+            text: old.text,
+            isOutgoing: old.isOutgoing,
+            timestamp: old.timestamp,
+            delivery: delivery
+        )
+    }
+
+    // MARK: Live
+
+    /// Polling, on two clocks.
+    ///
+    /// **Nothing here updated itself.** The app loaded once per launch; a reply
+    /// arrived in the database immediately and on the other phone whenever that
+    /// person next reopened Arch. A message you sent did not appear either --
+    /// the thread was handed a copy of the conversation when it was pushed, so
+    /// the store could change underneath it and the screen would not know.
+    ///
+    /// Two intervals rather than one, because the two questions are different
+    /// sizes. A thread being read asks "anything new in *this* one?", which is
+    /// one small query and can afford to be frequent. The list asks about every
+    /// thread, both profiles and the photographs behind them, and can wait.
+    ///
+    /// Deliberately not a websocket. Supabase has realtime and it would mean a
+    /// socket, a subscription protocol and a reconnection policy written against
+    /// a service this app cannot run locally -- and the first thing anybody would
+    /// find out is whether it survives a tunnel. Two timers are boring, and
+    /// boring is what a message that must arrive wants.
+    @ObservationIgnored private var threadWatch: Task<Void, Never>?
+    @ObservationIgnored private var listWatch: Task<Void, Never>?
+
+    /// Seconds between asks. The thread one is what makes a conversation feel
+    /// live; the list one only has to beat somebody noticing.
+    static let threadInterval: Duration = .seconds(3)
+    static let listInterval: Duration = .seconds(12)
+
+    /// While a thread is on screen.
+    func watchThread(_ conversationID: String) {
+        stopWatchingThread()
+        guard ArchConfig.isConfigured else { return }
+        threadWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.threadInterval)
+                guard !Task.isCancelled else { return }
+                await self?.refreshThread(conversationID)
+            }
+        }
+    }
+
+    func stopWatchingThread() {
+        threadWatch?.cancel()
+        threadWatch = nil
+    }
+
+    /// While the app is in front.
+    func beginLiveUpdates() {
+        guard ArchConfig.isConfigured, listWatch == nil else { return }
+        listWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.listInterval)
+                guard !Task.isCancelled else { return }
+                await self?.refreshConversations()
+            }
+        }
+    }
+
+    func endLiveUpdates() {
+        listWatch?.cancel()
+        listWatch = nil
+        stopWatchingThread()
+    }
+
+    /// One thread's messages, from the server.
+    @MainActor
+    func refreshThread(_ conversationID: String) async {
+        guard let fresh = try? await ArchBackend.messages(in: conversationID),
+              let index = conversations.firstIndex(where: { $0.id == conversationID })
+        else { return }
+        conversations[index].messages = Self.merge(
+            server: fresh, keeping: conversations[index].messages
+        )
+    }
+
+    /// Every thread, from the server.
+    @MainActor
+    func refreshConversations() async {
+        guard var fresh = try? await ArchBackend.conversations() else { return }
+
+        for index in fresh.indices {
+            guard let old = conversations.first(where: { $0.id == fresh[index].id }) else { continue }
+            fresh[index].messages = Self.merge(
+                server: fresh[index].messages, keeping: old.messages
+            )
+            fresh[index].unreadCount = old.unreadCount
+        }
+
+        // A conversation this phone has just opened and the server has not
+        // answered about yet still has its placeholder id, and is not in what
+        // came back. Dropping it would take somebody's message off the screen
+        // between sending it and the reply arriving.
+        let known = Set(fresh.map(\.id))
+        conversations = fresh + conversations.filter { !known.contains($0.id) && $0.id.hasPrefix("pending-") }
+    }
+
+    /// Server truth, plus anything this phone has written that is not in it yet.
+    ///
+    /// Matched on id, so a message that has been confirmed appears once: `settle`
+    /// swaps the local id for the server's, and the copy that comes back carries
+    /// the same one. Only the still-sending and the failed survive the merge.
+    private static func merge(server: [Message], keeping local: [Message]) -> [Message] {
+        let known = Set(server.map(\.id))
+        let mine = local.filter { $0.id.hasPrefix(localPrefix) && !known.contains($0.id) }
+        return server + mine
     }
 
     /// The first message.
