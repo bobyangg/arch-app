@@ -624,6 +624,13 @@ struct Message: Identifiable, Hashable {
     let timestamp: String
     /// Defaulted, so every existing fixture stays as it was.
     var delivery: MessageDelivery = .sent
+    /// When it was sent, as against `timestamp`, which is how it is written.
+    ///
+    /// Two things need the instant rather than the words: putting a merged
+    /// thread back in order, and deciding whether the time is worth saying
+    /// again. Nil in the fixtures, which were written as strings and have no
+    /// date behind them -- so both uses fall back rather than assuming one.
+    var sentAt: Date? = nil
 }
 
 /// Where a conversation sits.
