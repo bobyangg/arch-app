@@ -300,10 +300,12 @@ final class DailyFiveStore {
         else { return }
 
         let localID = "\(Self.localPrefix)\(UUID().uuidString)"
+        let now = Date()
         conversations[index].messages.append(
             Message(id: localID, text: body, isOutgoing: true,
-                    timestamp: Date().formatted(.dateTime.hour().minute()),
-                    delivery: .sending)
+                    timestamp: ArchUnits.shortTime(now),
+                    delivery: .sending,
+                    sentAt: now)
         )
         conversations[index].lastActivity = "Just now"
         let moved = conversations.remove(at: index)
@@ -337,7 +339,8 @@ final class DailyFiveStore {
             text: old.text,
             isOutgoing: old.isOutgoing,
             timestamp: old.timestamp,
-            delivery: delivery
+            delivery: delivery,
+            sentAt: old.sentAt
         )
     }
 
@@ -437,15 +440,32 @@ final class DailyFiveStore {
         conversations = fresh + conversations.filter { !known.contains($0.id) && $0.id.hasPrefix("pending-") }
     }
 
-    /// Server truth, plus anything this phone has written that is not in it yet.
+    /// Server truth, plus anything of yours that is not in it yet.
     ///
-    /// Matched on id, so a message that has been confirmed appears once: `settle`
-    /// swaps the local id for the server's, and the copy that comes back carries
-    /// the same one. Only the still-sending and the failed survive the merge.
+    /// **Keyed on who wrote it, not on the shape of its id, and that was the
+    /// bug.** This used to keep only ids still carrying `localPrefix`. But
+    /// `settle` swaps that prefix for the server's id the instant the send
+    /// succeeds -- so a poll that left before the message was inserted and
+    /// landed after it found a message bearing a server id that its own answer
+    /// did not contain, kept nothing, and dropped it. The next tick brought it
+    /// back. On screen: sent, cancelled, resent, about a second apart, and only
+    /// when a poll happened to straddle a send.
+    ///
+    /// An outgoing message the server has not returned is in flight, or failed,
+    /// or was just confirmed against a read that started too early. All three
+    /// have to stay. Incoming messages are never held here, so nothing can
+    /// linger that the server has not vouched for.
     private static func merge(server: [Message], keeping local: [Message]) -> [Message] {
         let known = Set(server.map(\.id))
-        let mine = local.filter { $0.id.hasPrefix(localPrefix) && !known.contains($0.id) }
-        return server + mine
+        let mine = local.filter { $0.isOutgoing && !known.contains($0.id) }
+        guard !mine.isEmpty else { return server }
+
+        // In time order, but only when every message knows its time. The mock
+        // threads carry a written timestamp and no date, and sorting those would
+        // shuffle a hand-written conversation into nonsense.
+        let merged = server + mine
+        guard merged.allSatisfy({ $0.sentAt != nil }) else { return merged }
+        return merged.sorted { ($0.sentAt ?? .distantPast) < ($1.sentAt ?? .distantPast) }
     }
 
     /// The first message.
