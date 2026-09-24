@@ -225,7 +225,8 @@ extension ThreadRow {
                         text: row.body,
                         isOutgoing: row.senderId == me,
                         timestamp: ArchUnits.shortTime(row.createdAt),
-                        delivery: .sent
+                        delivery: .sent,
+                        sentAt: row.createdAt
                     )
                 },
             // Arch has no read receipts, so "unread" is only ever about your own

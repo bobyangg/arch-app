@@ -936,7 +936,8 @@ enum ArchBackend {
                 text: row.body,
                 isOutgoing: row.senderId == session.userID,
                 timestamp: ArchUnits.shortTime(row.createdAt),
-                delivery: .sent
+                delivery: .sent,
+                sentAt: row.createdAt
             )
         }
     }
