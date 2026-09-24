@@ -3,7 +3,7 @@
 <title>Arch Prototype</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&family=Outfit:wght@600&display=swap">
 <style>
 :root{
   /* Candlelight: the light appearance, and the one the tokens default to.
@@ -29,7 +29,9 @@
   --tone4a:#F2DFCD; --tone4b:#E9D2BB;
   --tone5a:#EFE9DE; --tone5b:#E6DED1;
 
-  /* Fraunces for the brand voice, Instrument Sans for chrome. */
+  /* Outfit sets the one word `arch`, Fraunces is the brand voice, Instrument
+     Sans is chrome. */
+  --word: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --serif: "Fraunces", ui-serif, "New York", Georgia, serif;
   --sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", sans-serif;
 
@@ -95,7 +97,8 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
   font-family:var(--serif); font-optical-sizing:auto;
   font-variation-settings:"SOFT" 0,"WONK" 0;
 }
-.display{font-size:40px; line-height:46px; font-weight:600;}
+.display{font-family:var(--word); font-variation-settings:normal;
+        font-size:38px; line-height:46px; font-weight:600;}
 .titleL{font-size:30px; line-height:36px; font-weight:600;}
 .titleM{font-size:24px; line-height:30px; font-weight:600;}
 .prompt{font-size:19px; line-height:26px; font-weight:400;}
@@ -139,8 +142,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
         display:flex; align-items:center; gap:8px; padding:0 20px;
         margin-top:env(safe-area-inset-top,0px); height:52px;}
 .topbar.hidden{height:0; opacity:0;}
-.topbar .word{font-family:var(--serif); font-optical-sizing:auto;
-        font-variation-settings:"SOFT" 0,"WONK" 0; font-size:22px; line-height:26px; font-weight:600;}
+.topbar .word{font-family:var(--word); font-size:21px; line-height:26px; font-weight:600;}
 .topbar svg{display:block;}
 
 .tabbar{position:absolute; bottom:0; left:0; right:0; z-index:5;
@@ -206,6 +208,19 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .rowbody{flex:1; min-width:0;}
 .rowline{display:flex; align-items:baseline; gap:var(--s-xs);}
 .dot{width:8px; height:8px; border-radius:4px; background:var(--lamp); margin-top:5px; flex:none;}
+
+/* The Premium rail. One benefit at a time, snapping, so the plans and the
+   button sit on the first screen instead of a screen and a half down. */
+.rail{display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory;
+      scrollbar-width:none; -webkit-overflow-scrolling:touch; padding:2px 20px;}
+.rail::-webkit-scrollbar{display:none;}
+.bubble{flex:0 0 78%; scroll-snap-align:center; min-height:124px;
+        background:var(--stone); border-radius:var(--r-card); padding:16px;
+        display:flex; flex-direction:column; gap:8px;}
+.rdots{display:flex; gap:6px; justify-content:center; padding:14px 0 20px;}
+.rdots i{width:6px; height:6px; border-radius:3px; background:var(--quiet);
+         transition:width .24s ease-out, background .24s ease-out;}
+.rdots i.on{width:16px; background:var(--lamp);}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
 /* ---- bubbles ---- */
@@ -800,12 +815,16 @@ function archSVG(filled,total,w,dropIndex){
   }
   return `<svg width="${w}" height="${H}" viewBox="0 0 ${w} ${H}" aria-hidden="true">${paths}</svg>`;
 }
-/* The mark: a letter A whose apex has flattened into a bridge deck. Same
-   fractions as ArchMark.swift — piers at .33 splaying to .19, deck bowed .07. */
+/* The mark: a letter A whose apex has flattened into a bridge deck, carried on
+   a span. Same fractions as ArchMark.swift — piers at .33 splaying to .19, the
+   span an arc of .26 about (.5,.52) cut where it meets each pier, deck bowed
+   .07. Without the span it
+   was a bar on two legs, which is the letter pi. */
 function markSVG(size,stroke,color){
   const W=size-stroke, A=.64, f=(x)=>x*W;
   const d=`M${f(.33)},${f(.05)} Q${f(.32)},${f(.40)} ${f(.19)},${f(.64)}`
         +` M${f(.67)},${f(.05)} Q${f(.68)},${f(.40)} ${f(.81)},${f(.64)}`
+        +` M${f(.292)},${f(.364)} A${f(.26)},${f(.26)} 0 0 1 ${f(.708)},${f(.364)}`
         +` M${f(.03)},${f(.07)} Q${f(.5)},${f(-.07)} ${f(.97)},${f(.07)}`;
   return `<svg width="${size}" height="${size*A+stroke}" viewBox="0 0 ${size} ${size*A+stroke}" aria-hidden="true">
     <path d="${d}" fill="none" stroke="${color}" stroke-width="${stroke}"
@@ -877,9 +896,11 @@ function rows(p){
   return out.slice(1); // the lead photo is drawn separately
 }
 
-/* Same fractions as TopBar.swift: a 24pt mark at its wordmark stroke, beside the word. */
+/* Same fractions as TopBar.swift: a 24pt mark at its wordmark stroke, beside the
+   word. Drawn in ink, not terracotta: the accent is what you can press, and a
+   brand mark is not pressable. */
 function topbar(){
-  return `<div class="topbar">${markSVG(24,3.1,"var(--lamp)")}<div class="word">arch</div></div>`;
+  return `<div class="topbar">${markSVG(24,3.1,"var(--limestone)")}<div class="word">arch</div></div>`;
 }
 
 function navbar(title,right){
@@ -1127,18 +1148,25 @@ function thread(id){
         style="background:var(--lamp); color:var(--onLamp); border-radius:18px; width:36px; height:36px">↑</button></div>`;
 }
 
+/* Nobody scrolls to be sold to. The benefits used to run at full length down
+   the page, which put the plans and the only button about a screen and a half
+   down. They are a rail of bubbles now -- every one of the five still here and
+   still in full, because a carousel that drops two of them would be the paywall
+   lying by layout -- and the room that frees puts the price, the button and its
+   footnote on the first screen. */
 function premiumRoot(){
-  let h=`<div class="screen"><div class="pad pb-xxxl">
-    <div class="v gap-s" style="padding-top:16px">
+  let h=`<div class="screen"><div style="padding-bottom:16px">
+    <div class="pad v gap-s" style="padding-top:8px">
       <div class="titleL">Arch Premium</div>
       <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
-    <div class="mt-xxxl">`;
-  BENEFITS.forEach(([t,d],i)=>{
-    h+=`<div class="v gap-xxs" style="padding:16px 0">
-      <div class="subhead">${esc(t)}</div><div class="footnote mortar">${esc(d)}</div></div>`;
-    if(i<BENEFITS.length-1) h+=`<div class="hairline"></div>`;
+    <div class="rail mt-l" id="prail">`;
+  BENEFITS.forEach(([t,d])=>{
+    h+=`<div class="bubble"><div class="subhead">${esc(t)}</div>
+      <div class="footnote mortar">${esc(d)}</div></div>`;
   });
-  h+=`</div><div class="v gap-s mt-xxxl">`;
+  h+=`</div><div class="rdots" id="pdots">${BENEFITS.map((b,i)=>
+      `<i class="${i===0?"on":""}"></i>`).join("")}</div>
+    <div class="pad v gap-s">`;
   PLANS.forEach(([d,total,per,rec],i)=>{
     h+=`<button data-a="plan" data-i="${i}" style="display:block;width:100%">
       <div class="srow" style="background:${S.plan===i?"var(--stoneRaised)":"var(--stone)"};
@@ -1148,13 +1176,32 @@ function premiumRoot(){
         <div style="text-align:right"><div class="subhead">${total}</div>
           ${rec?'<div class="footnote mortar">Recommended</div>':""}</div></div></button>`;
   });
-  h+=`</div>${S.set.sub
-    ?`<button class="btn quiet mt-l">You have Arch Premium</button>`
-    :`<button class="btn primary mt-l" data-a="subscribe">Subscribe for ${PLANS[S.plan][1]}</button>`}
+  h+=`${S.set.sub
+    ?`<button class="btn quiet mt-m">You have Arch Premium</button>`
+    :`<button class="btn primary mt-m" data-a="subscribe">Subscribe for ${PLANS[S.plan][1]}</button>`}
     <div class="footnote mortar center mt-s">Payment is charged to your Apple account.
       Renews until you cancel, which you can do in Settings.</div>
-    <div class="btntext">Restore purchases</div>`;
+    <div class="btntext">Restore purchases</div></div>`;
   return h+`</div></div>`;
+}
+
+/* The dots follow the rail rather than the other way round: the rail is the
+   thing being dragged, and a dot row that led it would be lying about where the
+   scroll actually is. */
+function railDots(){
+  const rail=document.getElementById("prail"), dots=document.getElementById("pdots");
+  if(!rail||!dots) return;
+  const mark=()=>{
+    const cards=rail.children, mid=rail.scrollLeft+rail.clientWidth/2;
+    let best=0, bestD=Infinity;
+    for(let i=0;i<cards.length;i++){
+      const c=cards[i], d=Math.abs(c.offsetLeft+c.offsetWidth/2-mid);
+      if(d<bestD){bestD=d; best=i;}
+    }
+    for(let i=0;i<dots.children.length;i++) dots.children[i].classList.toggle("on", i===best);
+  };
+  rail.addEventListener("scroll", mark, {passive:true});
+  mark();
 }
 
 function youRoot(){
@@ -1610,7 +1657,7 @@ prefersDark.addEventListener("change",()=>{if(S.set.theme==="Match my phone") ap
 function themeSpecimen(){
   return `<div class="card" style="padding:var(--s-m)">
     <div style="display:flex; align-items:center; gap:var(--s-s)">
-      ${markSVG(30,3.4,"var(--lamp)")}<div class="titleM">arch</div></div>
+      ${markSVG(30,3.4,"var(--limestone)")}<div class="titleM" style="font-family:var(--word); font-size:23px">arch</div></div>
     <div class="prompt mortar mt-m">The last thing I read twice</div>
     <div class="callout">A field guide to bridges I found in my grandad's garage.</div>
     <div class="btn primary mt-m" style="height:44px">Send a message</div></div>`;
@@ -1764,7 +1811,7 @@ function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
     return `<div class="screen"><div class="pad v" style="height:100%; padding:48px 20px">
-      <div style="flex:1"></div>${markSVG(84,11,"var(--lamp)")}
+      <div style="flex:1"></div>${markSVG(84,11,"var(--limestone)")}
       <div class="display mt-s">arch</div><div style="flex:1"></div>
       <div class="titleL">Five people a day</div>
       <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
@@ -2126,6 +2173,7 @@ function render(){
   let screen;
   if(!t){
     screen=topbar()+{premium:premiumRoot,daily:dailyRoot,messages:messagesRoot,you:youRoot}[S.tab]();
+    if(S.tab==="premium") queueMicrotask(railDots);
   } else if(t.name==="profile") screen=profile(t.id);
   else if(t.name==="thread") screen=thread(t.id);
   else if(t.name==="requests") screen=requestsRoot();

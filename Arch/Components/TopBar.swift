@@ -22,13 +22,13 @@ struct TopBar: View {
         HStack(spacing: ArchSpacing.xs) {
             ArchMark(lineWidth: stroke)
                 .stroke(
-                    ArchColor.lamp,
+                    ArchColor.limestone,
                     style: StrokeStyle(lineWidth: stroke, lineCap: .round, lineJoin: .round)
                 )
                 .frame(width: markWidth, height: markWidth * ArchMark.aspect)
 
             Text("arch")
-                .font(ArchTypography.font(.frauncesDisplaySemiBold, size: 22))
+                .font(ArchTypography.font(.outfitSemiBold, size: 21))
                 .foregroundStyle(ArchColor.limestone)
 
             Spacer(minLength: 0)
