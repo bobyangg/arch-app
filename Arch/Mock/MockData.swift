@@ -661,10 +661,13 @@ struct Conversation: Identifiable, Hashable {
     /// The photo or prompt the first message quoted, if it quoted one. Pinned to
     /// the top of the thread so neither person has to remember why they started.
     let opening: ProfileItem?
-    let messages: [Message]
+    /// `var` because a reply is appended to it and then settled once the server
+    /// has it. The memberwise initialiser is unchanged by that, so every fixture
+    /// and every call site stays exactly as it was.
+    var messages: [Message]
     var unreadCount: Int
     /// Pre-formatted for the list; a real build would format a Date here.
-    let lastActivity: String
+    var lastActivity: String
 
     var preview: String { messages.last?.text ?? "" }
     var hasEnded: Bool { state == .ended }

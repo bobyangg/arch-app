@@ -15,6 +15,13 @@ struct ProfileDetailView: View {
     let person: Person
     var conversationCount: Int = 0
     var conversationLimit: Int = DailyFiveStore.freeConversations
+    /// False when this is somebody you are already talking to.
+    ///
+    /// Opened from the top of a thread, the profile is something to read: there
+    /// is no slot of yours left to dismiss them from, and "Send a message" would
+    /// offer to start a conversation that is already open and on screen behind
+    /// this one.
+    var canAct: Bool = true
     let onDismiss: () -> Void
     let onSend: (String, ProfileItem?) -> Void
 
@@ -27,12 +34,14 @@ struct ProfileDetailView: View {
         selecting initialSelection: ProfileItem? = nil,
         conversationCount: Int = 0,
         conversationLimit: Int = DailyFiveStore.freeConversations,
+        canAct: Bool = true,
         onDismiss: @escaping () -> Void,
         onSend: @escaping (String, ProfileItem?) -> Void
     ) {
         self.person = person
         self.conversationCount = conversationCount
         self.conversationLimit = conversationLimit
+        self.canAct = canAct
         self.onDismiss = onDismiss
         self.onSend = onSend
         _selected = State(initialValue: initialSelection)
@@ -52,7 +61,11 @@ struct ProfileDetailView: View {
         .background(ArchColor.night)
         .scrollIndicators(.hidden)
         .toolbar(.hidden, for: .navigationBar)
-        .safeAreaInset(edge: .bottom) { actionBar }
+        .safeAreaInset(edge: .bottom) {
+            // Nothing at all when there is nothing to offer, rather than a bar of
+            // disabled buttons explaining themselves.
+            if canAct { actionBar }
+        }
         .sheet(isPresented: $isComposing) {
             MessageComposerSheet(
                 person: person,
