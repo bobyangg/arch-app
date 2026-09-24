@@ -22,13 +22,35 @@ struct DailyFiveView: View {
     /// that never arrived looked identical, and the empty one says "nothing here
     /// needs fixing" — which is a reassuring sentence and, offline, a lie.
     var isOffline: Bool = false
+    /// Dismissed today and not gone until nine. Shown under the open slots,
+    /// where they are out of the way of the decision they are no longer part of.
+    var waiting: [Person] = []
     let onDismiss: (Person) -> Void
+    var onRestore: (Person) -> Void = { _ in }
     let onSend: (Person, String, ProfileItem?) -> Conversation
     var actions = ConversationActions()
 
     /// Bumped by the shell when the tab already showing is tapped again. Every
     /// change means "back to the five"; the value itself means nothing.
+    /// The current state of a conversation, by id.
+    ///
+    /// **A pushed value is a photograph.** `navigationDestination` hands back
+    /// whatever was put on the path, so a thread opened a minute ago is the
+    /// thread as it was a minute ago -- and a reply added to the store did not
+    /// appear until you left the screen and came back. That was the whole of
+    /// "I have to leave the chat to see what I sent".
+    ///
+    /// Looking it up on every render fixes it: the store is observed, so a
+    /// change re-runs this body and the thread is rebuilt from what is there
+    /// now. The pushed copy stays as the fallback, for a conversation that has
+    /// left the store while somebody was reading it.
+    var live: (String) -> Conversation? = { _ in nil }
+    /// A reply in a thread opened from here.
+    var onReply: (Conversation, String) -> Void = { _, _ in }
     var popToRoot: Int = 0
+
+    /// The conversation on screen here, or nil. See `MessagesListView`.
+    var onThreadOpenChanged: (String?) -> Void = { _ in }
 
     @State private var path: [Route] = []
     @State private var pendingDismissal: Person?
@@ -57,6 +79,7 @@ struct DailyFiveView: View {
                         } else {
                             openSlots
                         }
+                        waitingSection
                     }
                 }
                 .padding(.horizontal, ArchSpacing.screenMargin)
@@ -79,11 +102,15 @@ struct DailyFiveView: View {
                             path = [.thread(conversation)]
                         }
                     )
-                case .thread(let conversation):
+                case .thread(let pushed):
+                    let conversation = live(pushed.id) ?? pushed
                     MessageThreadView(
                         conversation: conversation,
                         isInRoster: roster.people.contains { $0.id == conversation.person.id },
-                        actions: actions
+                        actions: actions,
+                        onOpenProfile: { path.append(.profile(conversation.person)) },
+                        onSend: { onReply(conversation, $0) },
+                        onOpenChanged: onThreadOpenChanged
                     )
                 }
             }
@@ -232,6 +259,44 @@ struct DailyFiveView: View {
             ArchMotion.honouring(reduceMotion, ArchMotion.cardCollapse),
             value: roster.people
         )
+    }
+
+    /// The people you dismissed today, until the morning takes them.
+    ///
+    /// Under the open slots rather than above them, because these are decisions
+    /// already made and the slots are the part that is still about to happen.
+    ///
+    /// The heading says what will happen and not what you should do about it.
+    /// Dismissing is meant to be a real decision, and an undo presented as a
+    /// second chance would make it a question again every time you opened the
+    /// tab — so this is stated once, flatly, with no count and no clock.
+    @ViewBuilder
+    private var waitingSection: some View {
+        if !waiting.isEmpty {
+            VStack(alignment: .leading, spacing: ArchSpacing.m) {
+                Text("Leaving in the morning")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+
+                Text("You dismissed these people. Nothing has happened yet — you can still write to them, or put them back.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, ArchSpacing.xxs)
+
+                ForEach(waiting) { person in
+                    WaitingCard(
+                        person: person,
+                        onOpen: { path.append(.profile(person)) },
+                        onRestore: { onRestore(person) }
+                    )
+                    .transition(.opacity)
+                }
+            }
+            .padding(.top, ArchSpacing.sectionGap)
+            .animation(ArchMotion.honouring(reduceMotion, ArchMotion.slotOpens),
+                       value: waiting)
+        }
     }
 
     @ViewBuilder

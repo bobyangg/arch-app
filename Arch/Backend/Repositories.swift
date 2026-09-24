@@ -721,8 +721,8 @@ enum ArchBackend {
     /// **No score comes back.** `pairings.score` exists for tuning the matcher and
     /// is deliberately not selected: Arch shows no percentages and no ranking, and a
     /// number on the wire ends up on a screen eventually.
-    static func roster() async throws -> [Person] {
-        guard let session = await SupabaseClient.shared.restore() else { return [] }
+    static func roster() async throws -> RosterLoad {
+        guard let session = await SupabaseClient.shared.restore() else { return .empty }
         let me = session.userID
 
         let window = ArchClock.nightFilter()
@@ -732,29 +732,47 @@ enum ArchBackend {
             filters: ["night": window],
             order: "night.desc,created_at.asc"
         )
-        guard !rows.isEmpty else { return [] }
+        guard !rows.isEmpty else { return .empty }
 
-        // No second query for dismissals. A dismissed pairing is not hidden here
-        // any more -- it is not returned at all, because `pairings_mine` stops
-        // selecting a pairing either side has dismissed.
+        // A pairing whose dismissal has *landed* is not hidden here -- it is not
+        // returned at all, because `pairings_mine` stops selecting it. That has to
+        // be the server's job: you may read your own dismissals and nobody else's,
+        // which is the rule that keeps you from ever learning who dismissed whom,
+        // so a client asking "has this person dismissed me?" would be asking the
+        // one question it must never be able to answer. Withholding the row
+        // answers it without disclosing it.
         //
-        // That has to be the server's job rather than this function's. You are
-        // allowed to read your own dismissals and nobody else's, which is the rule
-        // that keeps you from ever learning who dismissed whom -- so a client
-        // asking "has this person dismissed me?" would be asking the one question
-        // it must never be able to answer. Withholding the row answers it without
-        // disclosing it.
-        //
+        // What is left here is the half that is yours to know. A dismissal you
+        // made today has not landed yet, so its pairing is still in `rows` -- and
+        // because a landed one would already have been withheld, a dismissal of
+        // yours that you can still see *is* a pending one. No clock on this side.
+        let dismissed: [DismissalRow] = try await SupabaseClient.shared.select(
+            "dismissals",
+            columns: "night,other_account_id",
+            filters: ["account_id": "eq.\(me)", "night": window]
+        )
+        let pending = Set(dismissed.map { "\($0.night)|\($0.otherAccountId)" })
+
         // Newest night first, and each person once: two nights of pairings can
         // name the same person twice, and a roster showing somebody in two slots
         // would spend two of five on one person.
-        var others: [String] = []
+        var keep: [String] = []
+        var waiting: [String] = []
         for row in rows {
             let other = row.other(than: me)
-            guard !others.contains(other) else { continue }
-            others.append(other)
+            guard !keep.contains(other), !waiting.contains(other) else { continue }
+            if pending.contains("\(row.night)|\(other)") {
+                waiting.append(other)
+            } else {
+                keep.append(other)
+            }
         }
-        return try await people(ids: others)
+
+        // One fetch for both lists. Two would be two round trips for one screen.
+        let everyone = try await people(ids: keep + waiting)
+        let byID = Dictionary(uniqueKeysWithValues: everyone.map { ($0.id, $0) })
+        return RosterLoad(people: keep.compactMap { byID[$0] },
+                          waiting: waiting.compactMap { byID[$0] })
     }
 
     /// Profiles for a set of accounts, with everything a card needs.
@@ -795,39 +813,35 @@ enum ArchBackend {
         }
     }
 
-    /// One-sided, and silent. The slot opens for you; their roster does not change.
+    /// Silent, and not immediate: it lands at nine tomorrow morning.
     ///
-    /// Written against the night of the pairing being dismissed, and not against
-    /// tonight. `match_population` frees a slot only when the dismissal and the
-    /// pairing agree on the night, so a dismissal stamped with the wrong one frees
-    /// nothing: the person leaves the screen, the slot stays held, and they are
-    /// back tomorrow. Both nights, if you are holding them on both.
+    /// A server function rather than an insert from here, and the client can no
+    /// longer write `dismissals` at all. The schedule is the feature: an app that
+    /// could choose `effective_at` could apply a dismissal the instant it was
+    /// tapped, and take away the chance to be written to that waiting until nine
+    /// exists to give. The function finds the nights itself, which also saves the
+    /// round trip this used to spend looking them up.
     ///
-    /// `upsert` rather than `insert` because the key is (you, them, night) and
-    /// `start_conversation` writes the same row itself, on both sides, when you
-    /// write to somebody. Two routes to one row is fine; a duplicate-key error
-    /// reported to the reader as a failure, after a message that was sent, is not.
+    /// Until it lands the other person sees nothing -- you are still in their
+    /// five and they can still write to you -- because a dismissal you took back
+    /// has to be indistinguishable from one you never made.
     static func dismiss(_ person: Person) async throws {
-        guard let session = await SupabaseClient.shared.restore() else {
-            throw ArchAPIError.notSignedIn
-        }
-        let me = session.userID
-        let rows: [PairingRow] = try await SupabaseClient.shared.select(
-            "pairings",
-            columns: "id,night,lo_account,hi_account",
-            filters: ["night": ArchClock.nightFilter()]
+        struct Arguments: Encodable { let otherAccount: String }
+        _ = try await SupabaseClient.shared.rpcRaw(
+            "dismiss_person", Arguments(otherAccount: person.id)
         )
-        let nights = rows.filter { $0.other(than: me) == person.id }.map(\.night)
-        guard !nights.isEmpty else { return }
+    }
 
-        struct Dismissal: Encodable {
-            let accountId: String
-            let otherAccountId: String
-            let night: String
-        }
-        try await SupabaseClient.shared.upsert(
-            "dismissals",
-            nights.map { Dismissal(accountId: me, otherAccountId: person.id, night: $0) }
+    /// Taking it back, while it is still yours to take back.
+    ///
+    /// The server refuses one that has already landed, and the row
+    /// `start_conversation` writes lands the moment it is written -- so this
+    /// cannot undo having messaged somebody. A message that has been delivered is
+    /// not a decision you still hold.
+    static func restore(_ person: Person) async throws {
+        struct Arguments: Encodable { let otherAccount: String }
+        _ = try await SupabaseClient.shared.rpcRaw(
+            "restore_person", Arguments(otherAccount: person.id)
         )
     }
 
@@ -901,6 +915,30 @@ enum ArchBackend {
             returning: Created.self
         )
         return created.id
+    }
+
+    /// Just the messages in one thread.
+    ///
+    /// Separate from `conversations()`, which fetches every thread, both
+    /// profiles and all the photographs behind them. That is the right shape for
+    /// opening the app and the wrong one for asking "anything new?" every few
+    /// seconds while somebody reads.
+    static func messages(in conversationID: String) async throws -> [Message] {
+        guard let session = await SupabaseClient.shared.restore() else { return [] }
+        let rows: [MessageRow] = try await SupabaseClient.shared.select(
+            "messages",
+            filters: ["conversation_id": "eq.\(conversationID)"],
+            order: "created_at.asc"
+        )
+        return rows.map { row in
+            Message(
+                id: row.id,
+                text: row.body,
+                isOutgoing: row.senderId == session.userID,
+                timestamp: ArchUnits.shortTime(row.createdAt),
+                delivery: .sent
+            )
+        }
     }
 
     static func send(_ body: String, to conversationID: String) async throws -> MessageRow {
@@ -1037,6 +1075,24 @@ enum ArchBackend {
     static func signOut() async {
         await SupabaseClient.shared.clearSession()
     }
+}
+
+private struct DismissalRow: Decodable {
+    let night: String
+    let otherAccountId: String
+}
+
+/// Tonight's five, and the people you have dismissed who have not gone yet.
+///
+/// Two lists out of one read, because they come from the same pairings and
+/// splitting them at the call site would mean asking for them twice.
+struct RosterLoad {
+    let people: [Person]
+    /// Dismissed today, landing at nine. Still reachable, still restorable, and
+    /// still in the other person's five -- they have not been told anything.
+    let waiting: [Person]
+
+    static let empty = RosterLoad(people: [], waiting: [])
 }
 
 /// The clock the rosters run on.

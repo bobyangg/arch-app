@@ -94,7 +94,9 @@ struct MessageRequestsView: View {
             Button { onOpen(request) } label: {
                 VStack(alignment: .leading, spacing: ArchSpacing.s) {
                     HStack(spacing: ArchSpacing.s) {
-                        PhotoPlaceholder(toneIndex: request.person.avatarToneIndex)
+                        PhotoPlaceholder(toneIndex: request.person.avatarToneIndex,
+                                         url: request.person.mainPhoto?.url,
+                                         data: request.person.mainPhoto?.local)
                             .frame(width: 44, height: 44)
                             .clipShape(Circle())
 

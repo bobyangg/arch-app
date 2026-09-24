@@ -42,6 +42,21 @@ final class DailyFiveStore {
     /// Something a write to the server could not do. Screens read this to say so.
     var lastError: ArchAPIError?
 
+    /// The prefix on a message this phone has written and the server has not
+    /// confirmed. It is how a refresh tells the two apart: everything else in a
+    /// thread came from the server and carries the server's id.
+    static let localPrefix = "m-local-"
+
+    /// Dismissed today, and not gone yet.
+    ///
+    /// They sit under the five until nine tomorrow morning, when the new roster
+    /// is built and they leave in the same move their replacement arrives in.
+    /// Until then you can put them back or write to them, and they have not been
+    /// told anything -- you are still in their five, and they can still write to
+    /// you. That is the point of the wait: a decision made in a second should not
+    /// take somebody else's morning away before they have opened the app.
+    private(set) var waiting: [Person] = []
+
     /// Tonight's roster and every conversation, from the server.
     ///
     /// One call rather than one per screen: the tabs are three views over the same
@@ -49,7 +64,8 @@ final class DailyFiveStore {
     /// message list end up disagreeing about whether somebody is still there.
     func load() async throws {
         guard ArchConfig.isConfigured else { return }
-        let people = try await ArchBackend.roster()
+        let load = try await ArchBackend.roster()
+        let people = load.people
         let threads = try await ArchBackend.conversations()
 
         // The slots the server did not fill are open, not missing. `capacity`
@@ -67,7 +83,9 @@ final class DailyFiveStore {
                                 opening: .yours))
         }
         roster = Roster(slots: Array(slots.prefix(capacity)),
-                        isFirstMorning: people.isEmpty && threads.isEmpty)
+                        isFirstMorning: people.isEmpty && threads.isEmpty
+                            && load.waiting.isEmpty)
+        waiting = load.waiting
         conversations = threads
         lastError = nil
     }
@@ -140,15 +158,30 @@ final class DailyFiveStore {
         conversations.filter { $0.state == .request && !$0.openedByMe }
     }
 
-    /// What the Messages list shows: everything open, plus the ones you have
-    /// written and are waiting on.
+    /// What the Messages list shows: conversations, and nothing else.
     ///
-    /// Deliberately not the same as `openConversations`, which stays the count
-    /// the roster hold is computed from — the server works that out from
-    /// `state = 'open'` alone, and the two have to agree or the app and the
-    /// matcher disagree about whether you are full.
-    var threads: [Conversation] {
-        conversations.filter { $0.state == .open || ($0.state == .request && $0.openedByMe) }
+    /// **A request you sent is not one of them.** It used to sit here waiting,
+    /// which put a thread in your list that the other person had not agreed to
+    /// and could still decline -- something of yours, with nothing you could do
+    /// to it. Writing to somebody spends the slot and then it is their move;
+    /// there is nothing to look at until they answer, and a list of things you
+    /// cannot act on is a list of things to worry about.
+    ///
+    /// It appears the moment they accept, whole, because accepting is what makes
+    /// it a conversation.
+    ///
+    /// The same set as `openConversations`, and kept separate on purpose: that
+    /// one is the number the roster hold is computed from, and the server works
+    /// it out from `state = 'open'` alone. One of these is a screen and the
+    /// other is arithmetic, and they have drifted apart once already.
+    var threads: [Conversation] { openConversations }
+
+    /// One conversation as it is now, by id.
+    ///
+    /// What a pushed thread reads through, so the screen shows the store rather
+    /// than the copy it was handed when it was pushed.
+    func conversation(_ id: String) -> Conversation? {
+        conversations.first { $0.id == id }
     }
 
     /// Your people are still there and still yours — they are just not shown
@@ -206,7 +239,17 @@ final class DailyFiveStore {
     /// Dismissing costs a slot until tomorrow. The person is replaced by an open
     /// slot in place; the screen groups open slots underneath the people.
     ///
-    /// There is no undo, and nothing anywhere records who dismissed whom.
+    /// **It can be taken back until nine tomorrow morning**, which it could not
+    /// before. They move to `waiting` rather than disappearing, and the server
+    /// schedules the dismissal for the next refill instead of applying it. The
+    /// roster is built once a day, so applying it sooner bought nothing and cost
+    /// the other person their chance to write to you.
+    ///
+    /// Nothing anywhere records who dismissed whom, and nothing about this is
+    /// visible to them -- not the dismissal, and not it being taken back.
+    ///
+    /// `opening: .theirs` is the one case that does not wait. It is how a slot
+    /// opens when somebody has written to you, and that has already happened.
     func dismiss(_ person: Person, opening: SlotOpening = .yours) {
         guard let index = roster.slots.firstIndex(where: { $0.id == person.id }) else { return }
         roster.slots[index] = .empty(
@@ -214,7 +257,195 @@ final class DailyFiveStore {
             refillsAt: Self.nextRefill(),
             opening: opening
         )
+        if opening == .yours, !waiting.contains(where: { $0.id == person.id }) {
+            waiting.append(person)
+        }
         persist { try await ArchBackend.dismiss(person) }
+    }
+
+    /// Back into the five, while the dismissal is still yours to take back.
+    ///
+    /// Into the slot they left if it is still open, and otherwise appended --
+    /// `load()` caps at `capacity` and the server counts the same pairing as
+    /// held, so this cannot hand anybody a sixth person.
+    func restore(_ person: Person) {
+        guard let index = waiting.firstIndex(where: { $0.id == person.id }) else { return }
+        waiting.remove(at: index)
+
+        if let slot = roster.slots.firstIndex(where: { $0.id == "slot-\(person.id)" })
+            ?? roster.slots.firstIndex(where: { if case .empty = $0 { return true } else { return false } }) {
+            roster.slots[slot] = .filled(person)
+        } else {
+            roster.slots.append(.filled(person))
+        }
+        persist { try await ArchBackend.restore(person) }
+    }
+
+    /// A reply, in a conversation that is already open.
+    ///
+    /// **`ArchBackend.send` had no callers and the send button was
+    /// `Button { draft = "" }`.** Typing a message and tapping it cleared the
+    /// field and did nothing else: nothing drawn, nothing stored, nothing off
+    /// the phone. The whole database holds one message, and that is the one that
+    /// opened the only conversation in it.
+    ///
+    /// Drawn at once as `.sending` and settled when the server has it, because a
+    /// reply that waits for a round trip before appearing reads as a missed tap
+    /// and gets typed again. A failure stays in the thread as `.failed` rather
+    /// than disappearing -- the thread is the only record that you wrote it.
+    func reply(to conversation: Conversation, text: String) {
+        let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !body.isEmpty,
+              let index = conversations.firstIndex(where: { $0.id == conversation.id })
+        else { return }
+
+        let localID = "\(Self.localPrefix)\(UUID().uuidString)"
+        conversations[index].messages.append(
+            Message(id: localID, text: body, isOutgoing: true,
+                    timestamp: Date().formatted(.dateTime.hour().minute()),
+                    delivery: .sending)
+        )
+        conversations[index].lastActivity = "Just now"
+        let moved = conversations.remove(at: index)
+        conversations.insert(moved, at: 0)
+
+        let id = conversation.id
+        persist { [weak self] in
+            do {
+                let row = try await ArchBackend.send(body, to: id)
+                // The server's id replaces the local one, which is what keeps a
+                // refresh from drawing this message twice: the copy that comes
+                // back carries that id, and the merge matches on it.
+                self?.settle(localID, in: id, as: .sent, serverID: row.id)
+            } catch {
+                self?.settle(localID, in: id, as: .failed, serverID: nil)
+                throw error
+            }
+        }
+    }
+
+    /// Marks a message sent or failed, wherever its thread has moved to by then.
+    @MainActor
+    private func settle(_ messageID: String, in conversationID: String,
+                        as delivery: MessageDelivery, serverID: String?) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }),
+              let spot = conversations[index].messages.firstIndex(where: { $0.id == messageID })
+        else { return }
+        let old = conversations[index].messages[spot]
+        conversations[index].messages[spot] = Message(
+            id: serverID ?? old.id,
+            text: old.text,
+            isOutgoing: old.isOutgoing,
+            timestamp: old.timestamp,
+            delivery: delivery
+        )
+    }
+
+    // MARK: Live
+
+    /// Polling, on two clocks.
+    ///
+    /// **Nothing here updated itself.** The app loaded once per launch; a reply
+    /// arrived in the database immediately and on the other phone whenever that
+    /// person next reopened Arch. A message you sent did not appear either --
+    /// the thread was handed a copy of the conversation when it was pushed, so
+    /// the store could change underneath it and the screen would not know.
+    ///
+    /// Two intervals rather than one, because the two questions are different
+    /// sizes. A thread being read asks "anything new in *this* one?", which is
+    /// one small query and can afford to be frequent. The list asks about every
+    /// thread, both profiles and the photographs behind them, and can wait.
+    ///
+    /// Deliberately not a websocket. Supabase has realtime and it would mean a
+    /// socket, a subscription protocol and a reconnection policy written against
+    /// a service this app cannot run locally -- and the first thing anybody would
+    /// find out is whether it survives a tunnel. Two timers are boring, and
+    /// boring is what a message that must arrive wants.
+    @ObservationIgnored private var threadWatch: Task<Void, Never>?
+    @ObservationIgnored private var listWatch: Task<Void, Never>?
+
+    /// Seconds between asks. The thread one is what makes a conversation feel
+    /// live; the list one only has to beat somebody noticing.
+    static let threadInterval: Duration = .seconds(3)
+    static let listInterval: Duration = .seconds(12)
+
+    /// While a thread is on screen.
+    func watchThread(_ conversationID: String) {
+        stopWatchingThread()
+        guard ArchConfig.isConfigured else { return }
+        threadWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.threadInterval)
+                guard !Task.isCancelled else { return }
+                await self?.refreshThread(conversationID)
+            }
+        }
+    }
+
+    func stopWatchingThread() {
+        threadWatch?.cancel()
+        threadWatch = nil
+    }
+
+    /// While the app is in front.
+    func beginLiveUpdates() {
+        guard ArchConfig.isConfigured, listWatch == nil else { return }
+        listWatch = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: Self.listInterval)
+                guard !Task.isCancelled else { return }
+                await self?.refreshConversations()
+            }
+        }
+    }
+
+    func endLiveUpdates() {
+        listWatch?.cancel()
+        listWatch = nil
+        stopWatchingThread()
+    }
+
+    /// One thread's messages, from the server.
+    @MainActor
+    func refreshThread(_ conversationID: String) async {
+        guard let fresh = try? await ArchBackend.messages(in: conversationID),
+              let index = conversations.firstIndex(where: { $0.id == conversationID })
+        else { return }
+        conversations[index].messages = Self.merge(
+            server: fresh, keeping: conversations[index].messages
+        )
+    }
+
+    /// Every thread, from the server.
+    @MainActor
+    func refreshConversations() async {
+        guard var fresh = try? await ArchBackend.conversations() else { return }
+
+        for index in fresh.indices {
+            guard let old = conversations.first(where: { $0.id == fresh[index].id }) else { continue }
+            fresh[index].messages = Self.merge(
+                server: fresh[index].messages, keeping: old.messages
+            )
+            fresh[index].unreadCount = old.unreadCount
+        }
+
+        // A conversation this phone has just opened and the server has not
+        // answered about yet still has its placeholder id, and is not in what
+        // came back. Dropping it would take somebody's message off the screen
+        // between sending it and the reply arriving.
+        let known = Set(fresh.map(\.id))
+        conversations = fresh + conversations.filter { !known.contains($0.id) && $0.id.hasPrefix("pending-") }
+    }
+
+    /// Server truth, plus anything this phone has written that is not in it yet.
+    ///
+    /// Matched on id, so a message that has been confirmed appears once: `settle`
+    /// swaps the local id for the server's, and the copy that comes back carries
+    /// the same one. Only the still-sending and the failed survive the merge.
+    private static func merge(server: [Message], keeping local: [Message]) -> [Message] {
+        let known = Set(server.map(\.id))
+        let mine = local.filter { $0.id.hasPrefix(localPrefix) && !known.contains($0.id) }
+        return server + mine
     }
 
     /// The first message.
