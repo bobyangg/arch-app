@@ -36,14 +36,57 @@ actor SupabaseClient {
 
     // MARK: Session
 
+    /// **The keychain's own coder, and deliberately not the API's.**
+    ///
+    /// The session used to be written with `encoder` and read with `decoder` --
+    /// the pair built for PostgREST, which convert keys to and from snake case.
+    /// Those two are not inverses. `userID` is written as `user_id`, and
+    /// `user_id` is read back as `userId`, which is not the property's name, so
+    /// every saved session failed to decode, `try?` turned that into nil, and
+    /// every cold launch found nobody signed in.
+    ///
+    /// It looked like a TestFlight quirk and was not. While the app stayed open
+    /// the session lived in memory and everything worked, including refreshing
+    /// it; it was only ever lost between launches. The auth log for one day: 27
+    /// sign-ins with Apple and a single token refresh.
+    ///
+    /// The keychain is not a wire format and has no reason to be snake case.
+    /// Plain `JSONEncoder` and `JSONDecoder`, with no key strategy and the same
+    /// date strategy on both sides, round-trip exactly.
+    ///
+    /// Instance properties like the two above, not statics: this is an actor,
+    /// and a static `JSONEncoder` is shared mutable state it cannot vouch for.
+    private let sessionEncoder = JSONEncoder()
+    private let sessionDecoder = JSONDecoder()
+
     /// Restored at launch. A `nil` return means nobody is signed in — not an error.
     func restore() -> Session? {
         if let current { return current }
         guard let raw = Keychain.get(Session.keychainKey),
-              let data = raw.data(using: .utf8),
-              let saved = try? decoder.decode(Session.self, from: data) else { return nil }
-        current = saved
-        return saved
+              let data = raw.data(using: .utf8) else { return nil }
+
+        if let saved = try? sessionDecoder.decode(Session.self, from: data) {
+            current = saved
+            return saved
+        }
+
+        // Written by a build with the bug. It was always stored correctly -- it
+        // just could not be read -- so it can be rescued rather than thrown away,
+        // and the first launch of this build does not ask anybody to sign in
+        // again. Re-stored in the new shape so this path runs once per phone.
+        if let legacy = try? decoder.decode(LegacySession.self, from: data) {
+            let rescued = Session(accessToken: legacy.accessToken,
+                                  refreshToken: legacy.refreshToken,
+                                  expiresAt: legacy.expiresAt,
+                                  userID: legacy.userId)
+            store(rescued)
+            return rescued
+        }
+
+        // Said, because the last time this failed it failed silently for weeks.
+        print("[session] a saved session is in the keychain and will not decode; "
+              + "the reader will be asked to sign in")
+        return nil
     }
 
     /// **The keychain write is the one that matters, and it used to be a
@@ -59,7 +102,7 @@ actor SupabaseClient {
     /// would be worse. It is recorded instead, and the read-back proves it.
     func store(_ new: Session) {
         current = new
-        guard let data = try? encoder.encode(new),
+        guard let data = try? sessionEncoder.encode(new),
               let raw = String(data: data, encoding: .utf8) else {
             print("[session] could not encode the session; it will not survive a launch")
             return
@@ -535,6 +578,17 @@ struct Session: Codable, Hashable {
     let userID: String
 
     static let keychainKey = "session"
+}
+
+/// A session as the buggy builds wrote it: snake-case keys, read back through
+/// the API decoder, which turns `user_id` into `userId` -- so the property is
+/// named to match what that conversion produces rather than what `Session` calls
+/// it. Only ever decoded, once, on the way to being rewritten as a `Session`.
+private struct LegacySession: Decodable {
+    let accessToken: String
+    let refreshToken: String
+    let expiresAt: Date
+    let userId: String
 }
 
 /// Supabase's token response. `expires_in` is seconds from now, which is not a
