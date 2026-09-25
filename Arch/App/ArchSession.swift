@@ -39,6 +39,16 @@ final class ArchSession {
 
     private(set) var state: State = .starting
 
+    /// Whether there is somebody signed in with a profile.
+    ///
+    /// `State` has an associated value and so is not `Equatable`, and the app
+    /// needs to *notice* this becoming true -- that is the moment to register for
+    /// notifications, whichever way it happened.
+    var isReady: Bool {
+        if case .ready = state { return true }
+        return false
+    }
+
     /// The stores, made once and handed to the tabs.
     ///
     /// Held here rather than made in `ArchApp` so that a reload after a dropped

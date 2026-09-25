@@ -1013,20 +1013,26 @@ enum ArchBackend {
     /// Upserted on the token, not the account: one person can have several phones,
     /// and a token that moves between them should land on the right row rather
     /// than making a second.
+    /// This phone's token, for whoever is signed in on it now.
+    ///
+    /// A server function rather than an upsert, and the upsert was the bug. The
+    /// table is unique on `token`, and an upsert that named no conflict column
+    /// merged on the primary key the client never sends -- so the first upload
+    /// landed and every later one for the same phone was a duplicate-key error
+    /// that nothing reported. On a phone two people signed in to, the token
+    /// stayed with the first: the second got no notifications, and the first
+    /// went on getting theirs on a phone they had left.
+    ///
+    /// Reassigning it means touching a row owned by another account, which row
+    /// security rightly refuses, so it is done by a function that takes the
+    /// token for the caller and never lets the caller say whose it is.
     static func savePushToken(_ token: String, environment: String) async throws {
-        guard let session = await SupabaseClient.shared.restore() else {
-            throw ArchAPIError.notSignedIn
-        }
-        struct TokenRow: Encodable {
-            let accountId: String
+        struct Arguments: Encodable {
             let token: String
             let environment: String
-            let updatedAt: String
         }
-        try await SupabaseClient.shared.upsert(
-            "push_tokens",
-            TokenRow(accountId: session.userID, token: token, environment: environment,
-                     updatedAt: ISO8601DateFormatter().string(from: Date()))
+        _ = try await SupabaseClient.shared.rpcRaw(
+            "register_push_token", Arguments(token: token, environment: environment)
         )
     }
 

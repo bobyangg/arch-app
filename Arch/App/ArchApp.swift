@@ -48,13 +48,9 @@ struct ArchApp: App {
                 // wordmark is covering real work instead of a timer.
                 await session.start()
 
-                // Registering is separate from asking. Onboarding already asked,
-                // and iOS answers from its own record after the first time -- so
-                // this re-registers on every launch, which is what keeps a token
-                // that iOS has rotated from going stale on the server.
-                if case .ready = session.state, session.allowsNotifications {
-                    await PushNotifications.shared.enable()
-                }
+                // Registering for notifications is not done here any more: see
+                // the `isReady` handler below, which covers this launch as well
+                // as every sign-in after it.
                 // `scenePhase` is already `.active` at launch, so it will not
                 // change and the handler below will not run. Starting here is
                 // what covers the first time the app is opened.
@@ -64,6 +60,22 @@ struct ArchApp: App {
             // screen when you come back to it, rather than after the next cold
             // launch. `reload()` cannot fail loudly, so this is safe to do every
             // time without a network check in front of it.
+            // **Every time somebody becomes signed in, however it happened.**
+            // This used to run once, at launch, and only if the session was
+            // already there -- which it never was, because the saved session
+            // could not be read back. And nothing ran it after signing in, or
+            // after onboarding. So no phone ever asked Apple for a token, the
+            // token table was empty, and every notification the server queued
+            // was marked delivered to nobody.
+            //
+            // iOS answers the permission question from its own record after the
+            // first time and shows no second prompt, so this is safe to repeat;
+            // repeating it is also what keeps a token iOS has rotated from going
+            // stale on the server.
+            .onChange(of: session.isReady) { _, ready in
+                guard ready, session.allowsNotifications else { return }
+                Task { await PushNotifications.shared.enable() }
+            }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else {
                     session.endLiveUpdates()
