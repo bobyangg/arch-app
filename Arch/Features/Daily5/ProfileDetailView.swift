@@ -95,7 +95,7 @@ struct ProfileDetailView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressScaleStyle())
-            .accessibilityLabel("Back to your roster")
+            .accessibilityLabel("Back to your matches")
 
             Spacer(minLength: 0)
         }
