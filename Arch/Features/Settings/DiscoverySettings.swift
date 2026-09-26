@@ -32,7 +32,7 @@ struct DistanceSetting: View {
                 .foregroundStyle(ArchColor.mortar)
             }
 
-            SettingNote("Everyone in \(store.rosterName) is inside this. Widening it gives Arch more people to choose from — it does not give you more slots.")
+            SettingNote("Everyone in \(store.rosterName) is inside this. Widening it gives Arch more people to choose from. It does not give you more spots.")
 
             SettingNote("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.")
         }
@@ -66,7 +66,7 @@ struct AgeSetting: View {
                 .foregroundStyle(ArchColor.mortar)
             }
 
-            SettingNote("Arch will not put anyone outside this in \(store.rosterName), and will not put you in theirs.")
+            SettingNote("Arch will not put people outside this in your matches, and will not put you in theirs.")
         }
     }
 }
@@ -92,7 +92,7 @@ struct SeekingSetting: View {
                 }
             }
 
-            SettingNote("Arch will not put anyone outside this in \(store.rosterName), whatever else lines up. It is not shown on your profile, and nobody is told what you picked.")
+            SettingNote("Arch will not put people outside this in your matches, whatever else lines up. It is not shown on your profile, and nobody is told what you picked.")
         }
     }
 }
@@ -111,7 +111,7 @@ struct IntentionSetting: View {
                 }
             }
 
-            SettingNote("This is used to choose \(store.rosterName). It is not shown on your profile, and nobody is told what you picked.")
+            SettingNote("This is used to choose your matches. It is not shown on your profile, and nobody is told what you picked.")
         }
     }
 }
@@ -156,7 +156,7 @@ struct LocationSetting: View {
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            SettingNote("This is the chip under your name, and with your distance it decides who could plausibly meet you. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+            SettingNote("This location is shown under your name. With your distance preference it sets boundaries on who you are able to match with. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
 
             ArchButton(title: "Change", action: { isPicking = true })
 
@@ -165,7 +165,7 @@ struct LocationSetting: View {
                 // are two different situations and one line covering both would be
                 // wrong in whichever one the reader is in.
                 SettingNote(store.canChangePlace
-                    ? "You can change your town by name once. After that it is part of Arch Premium — putting you where your phone says you are stays free either way."
+                    ? "You can change your town by name once. After that it is part of Arch Premium. Putting you where your phone says you are stays free either way."
                     : "You have already changed your town once. Changing it again is part of Arch Premium. Putting you where your phone says you are stays free.")
             }
         }
