@@ -15,6 +15,7 @@ These add the parts Supabase does not do.
 | `review` | Notes on your own profile, from Claude. Premium; the Notes half of the review screen |
 | `subscription` | The app bought or restored Premium: ask Apple, record the answer. Signed in |
 | `app-store-notifications` | Apple, saying a subscription renewed, lapsed or was refunded. **No JWT** -- Apple has no session |
+| `photo-sweep` | Removes photo files no photograph owns. Called hourly by `private.sweep_photos` with the push job's cron secret. Only the Storage API may delete a file; SQL is refused |
 | `_shared/appattest.ts` | Apple's verification steps, in Apple's order |
 | `_shared/devicecheck.ts` | The two bits, over Apple's server-to-server API |
 
