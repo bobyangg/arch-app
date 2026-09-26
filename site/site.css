@@ -1,0 +1,49 @@
+/* The legal pages, in Arch's own palette. Light by default so they print and
+   read anywhere; dark when the reader's system is. No external fonts or scripts:
+   a privacy policy that loads a tracker would be a strange thing to publish. */
+
+:root {
+  --bg: #f6f1eb;
+  --ink: #1d1b19;
+  --quiet: #6b645c;
+  --rule: #e2dad0;
+  --link: #8a5a2b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141312;
+    --ink: #ece6dd;
+    --quiet: #9d958a;
+    --rule: #2a2724;
+    --link: #d9a86c;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+main {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 3rem 1rem 5rem;
+}
+
+h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; }
+h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); }
+h3 { font-size: 1.05rem; margin: 1.5rem 0 .4rem; }
+
+p, li { margin: 0 0 .9rem; }
+ul { padding-left: 1.2rem; }
+
+.meta, .links { color: var(--quiet); font-size: .95rem; }
+.lede { font-size: 1.1rem; }
+
+a { color: var(--link); text-underline-offset: .15em; }
