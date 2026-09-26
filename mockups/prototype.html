@@ -6,28 +6,30 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Instrument+Sans:wght@400..700&family=Outfit:wght@600&display=swap">
 <style>
 :root{
-  /* Candlelight: the light appearance, and the one the tokens default to.
+  /* Sand: the light appearance, and the one the tokens default to.
      Dark overrides the same names below, so nothing downstream knows which
      world it is in — exactly as ArchColor.swift works. */
-  --night:#FAF6F0; --stone:#FFFFFF; --stoneRaised:#F2ECE2;
-  --limestone:#232120; --mortar:#6F675F;
-  --lamp:#C9512F; --ember:#A9661A; --verdigris:#3F7359;
-  --onLamp:#FAF6F0;
-  --hairline:rgba(111,103,95,.10);
-  --quiet:rgba(111,103,95,.28);
-  --quietFill:rgba(111,103,95,.12);
-  --lampWash:rgba(201,81,47,.10); --lampGlow:rgba(201,81,47,.26);
-  --inkGlow:rgba(35,33,32,.18); --frost:rgba(35,33,32,.07);
-  --scrim:rgba(35,33,32,.40);
-  --selected:rgba(35,33,32,.30);
-  --surround:#EDE4D8;
+  --night:#F6F1E8; --stone:#FFFDF9; --stoneRaised:#ECE3D4;
+  --limestone:#1E2621; --mortar:#6A665E;
+  --lamp:#13615E; --ember:#A2622F; --verdigris:#52795F;
+  --onLamp:#F4FBF8;
+  --hairline:rgba(106,102,94,.12);
+  --quiet:rgba(106,102,94,.28);
+  --quietFill:rgba(106,102,94,.12);
+  --lampWash:rgba(19,97,94,.10); --lampGlow:rgba(19,97,94,.24);
+  --inkGlow:rgba(30,38,33,.18); --frost:rgba(30,38,33,.07);
+  --scrim:rgba(30,38,33,.42);
+  --selected:rgba(30,38,33,.30);
+  --surround:#E7DECE;
 
-  --tone0a:#E4E0DA; --tone0b:#DAD5CE;
-  --tone1a:#EDDDCE; --tone1b:#E4D2C0;
-  --tone2a:#DFE3D8; --tone2b:#D4DACC;
-  --tone3a:#E6E2DC; --tone3b:#DCD7D0;
-  --tone4a:#F2DFCD; --tone4b:#E9D2BB;
-  --tone5a:#EFE9DE; --tone5b:#E6DED1;
+  /* Photo tones, warmed to the sand and cooled towards the sea, so a roster of
+     six faces does not read as six swatches of the same beige. */
+  --tone0a:#E2DED3; --tone0b:#D8D3C6;
+  --tone1a:#EEDDC9; --tone1b:#E5D0B8;
+  --tone2a:#D9E2DA; --tone2b:#CBD8CE;
+  --tone3a:#E3E1D8; --tone3b:#D9D6CB;
+  --tone4a:#F1DFC6; --tone4b:#E8D2B3;
+  --tone5a:#DFE6E2; --tone5b:#D2DBD7;
 
   /* Outfit sets the one word `arch`, Fraunces is the brand voice, Instrument
      Sans is chrome. */
@@ -41,28 +43,29 @@
   color-scheme:light;
 }
 
-/* Rich Charcoal. `system` is resolved to one of these two in script, so this is
-   the only place the dark values are written. */
+/* The same shore after dark: a warm near-black, the teal lifted so it still
+   reads as the one thing you can press. `system` is resolved to one of these two
+   in script, so this is the only place the dark values are written. */
 html[data-theme="dark"]{
-  --night:#191715; --stone:#232120; --stoneRaised:#2E2B29;
-  --limestone:#F5EFE6; --mortar:#9A8F86;
-  --lamp:#E5714D; --ember:#F0A243; --verdigris:#7FA98F;
-  --onLamp:#1F1C1A;
-  --hairline:rgba(154,143,134,.10);
-  --quiet:rgba(154,143,134,.28);
-  --quietFill:rgba(154,143,134,.12);
-  --lampWash:rgba(229,113,77,.10); --lampGlow:rgba(229,113,77,.26);
-  --inkGlow:rgba(245,239,230,.18); --frost:rgba(245,239,230,.07);
-  --scrim:rgba(14,13,12,.55);
-  --selected:rgba(245,239,230,.30);
-  --surround:#0E0D0C;
+  --night:#141A18; --stone:#1E2624; --stoneRaised:#28322F;
+  --limestone:#EEF2EC; --mortar:#98A29A;
+  --lamp:#5FAFA6; --ember:#D3904F; --verdigris:#86AD90;
+  --onLamp:#10201E;
+  --hairline:rgba(152,162,154,.12);
+  --quiet:rgba(152,162,154,.28);
+  --quietFill:rgba(152,162,154,.12);
+  --lampWash:rgba(95,175,166,.10); --lampGlow:rgba(95,175,166,.26);
+  --inkGlow:rgba(238,242,236,.18); --frost:rgba(238,242,236,.07);
+  --scrim:rgba(8,14,13,.58);
+  --selected:rgba(238,242,236,.30);
+  --surround:#0A100F;
 
-  --tone0a:#2F3138; --tone0b:#282A30;
-  --tone1a:#3E332A; --tone1b:#362C24;
-  --tone2a:#2C3630; --tone2b:#262F2A;
-  --tone3a:#383A3E; --tone3b:#303236;
-  --tone4a:#46332A; --tone4b:#3D2C24;
-  --tone5a:#4A4640; --tone5b:#413E38;
+  --tone0a:#2E3436; --tone0b:#272D2F;
+  --tone1a:#3C332A; --tone1b:#342C25;
+  --tone2a:#28352F; --tone2b:#222E29;
+  --tone3a:#343A3A; --tone3b:#2D3333;
+  --tone4a:#423228; --tone4b:#392C23;
+  --tone5a:#37413E; --tone5b:#303937;
   color-scheme:dark;
 }
 @keyframes glassIn{from{opacity:0; transform:scale(.985)} to{opacity:1; transform:none}}
@@ -1633,8 +1636,8 @@ function multiOpts(pairs,chosen,act){
 const THEMES=["Match my phone","Light","Dark"];
 const THEME_NOTES={
   "Match my phone":"Follows your device's appearance setting.",
-  "Light":"Candlelight. Paper, warm ink, terracotta.",
-  "Dark":"Rich charcoal. The same palette after dark."};
+  "Light":"Sand. Warm paper, dark ink, a deep teal.",
+  "Dark":"The shore after dark. The same palette, the teal lifted."};
 const prefersDark=window.matchMedia("(prefers-color-scheme: dark)");
 function resolvedTheme(){
   const t=S.set.theme;
