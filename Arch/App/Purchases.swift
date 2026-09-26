@@ -154,10 +154,13 @@ final class Purchases {
 
     // MARK: Confirming
 
+    // `StoreKit.Transaction` in full, everywhere in this file. SwiftUI has a
+    // `Transaction` of its own -- the one that carries an animation -- and with
+    // both imported the bare name is ambiguous. The build said so.
     private func listen() {
         guard updates == nil else { return }
         updates = Task { @MainActor [weak self] in
-            for await result in Transaction.updates {
+            for await result in StoreKit.Transaction.updates {
                 guard case .verified(let transaction) = result else { continue }
                 await self?.confirm(transaction, speaking: false)
             }
@@ -168,7 +171,7 @@ final class Purchases {
     @discardableResult
     private func confirmEntitlements(speaking: Bool) async -> Bool {
         var owned = false
-        for await result in Transaction.currentEntitlements {
+        for await result in StoreKit.Transaction.currentEntitlements {
             guard case .verified(let transaction) = result,
                   Self.catalogue.contains(where: { $0.product == transaction.productID })
             else { continue }
@@ -184,7 +187,7 @@ final class Purchases {
     /// open for StoreKit to hand back; a server that *refused* it -- the purchase
     /// belongs to another Arch account -- finishes it, because no retry will ever
     /// change that answer and an unfinished transaction is redelivered forever.
-    private func confirm(_ transaction: Transaction, speaking: Bool) async {
+    private func confirm(_ transaction: StoreKit.Transaction, speaking: Bool) async {
         do {
             let status = try await ArchBackend.syncSubscription(
                 originalTransactionID: String(transaction.originalID)
