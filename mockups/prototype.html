@@ -836,10 +836,13 @@ function markSVG(size,stroke,color){
 }
 
 /* ============================ tab glyphs ============================ */
-/* Premium's star lights amber, every other tab terracotta: the palette's two
-   accents, split between the thing you can buy and the things you do. */
+/* Every tab lights the same colour. Premium used to light amber -- the seam
+   between the palette's two accents, marking the thing you can buy against the
+   things you do -- but in a bar of four that reads as one tab being broken
+   rather than as a category. Amber keeps its job where the buying happens: the
+   recommended plan on the Premium screen wears it, and nothing else does. */
 function glyph(kind,active){
-  const c=active?(kind==="premium"?"var(--ember)":"var(--lamp)"):"var(--mortar)", sw=active?2.25:1.75;
+  const c=active?"var(--lamp)":"var(--mortar)", sw=active?2.25:1.75;
   if(kind==="daily") return markSVG(26,sw,c);
   if(kind==="premium"){
     /* Same construction as StarGlyph.swift: five points, inner radius .46 of the
@@ -900,10 +903,11 @@ function rows(p){
 }
 
 /* Same fractions as TopBar.swift: a 24pt mark at its wordmark stroke, beside the
-   word. Drawn in ink, not terracotta: the accent is what you can press, and a
-   brand mark is not pressable. */
+   word. In the accent rather than in ink: a deep teal is dark enough to read as
+   a drawing rather than as a button, which is what stopped terracotta being
+   usable here. The word stays ink, so the lock-up still has two weights. */
 function topbar(){
-  return `<div class="topbar">${markSVG(24,3.1,"var(--limestone)")}<div class="word">arch</div></div>`;
+  return `<div class="topbar">${markSVG(24,3.1,"var(--lamp)")}<div class="word">arch</div></div>`;
 }
 
 function navbar(title,right){
@@ -1177,7 +1181,7 @@ function premiumRoot(){
         <div><div class="subhead">${d}</div><div class="footnote mortar">${per}</div></div>
         <div style="flex:1"></div>
         <div style="text-align:right"><div class="subhead">${total}</div>
-          ${rec?'<div class="footnote mortar">Recommended</div>':""}</div></div></button>`;
+          ${rec?'<div class="footnote" style="color:var(--ember)">Recommended</div>':""}</div></div></button>`;
   });
   h+=`${S.set.sub
     ?`<button class="btn quiet mt-m">You have Arch Premium</button>`
@@ -1660,7 +1664,7 @@ prefersDark.addEventListener("change",()=>{if(S.set.theme==="Match my phone") ap
 function themeSpecimen(){
   return `<div class="card" style="padding:var(--s-m)">
     <div style="display:flex; align-items:center; gap:var(--s-s)">
-      ${markSVG(30,3.4,"var(--limestone)")}<div class="titleM" style="font-family:var(--word); font-size:23px">arch</div></div>
+      ${markSVG(30,3.4,"var(--lamp)")}<div class="titleM" style="font-family:var(--word); font-size:23px">arch</div></div>
     <div class="prompt mortar mt-m">The last thing I read twice</div>
     <div class="callout">A field guide to bridges I found in my grandad's garage.</div>
     <div class="btn primary mt-m" style="height:44px">Send a message</div></div>`;
@@ -1814,7 +1818,7 @@ function onboarding(){
   const o=S.onboarding;
   if(o.welcome){
     return `<div class="screen"><div class="pad v" style="height:100%; padding:48px 20px">
-      <div style="flex:1"></div>${markSVG(84,11,"var(--limestone)")}
+      <div style="flex:1"></div>${markSVG(84,11,"var(--lamp)")}
       <div class="display mt-s">arch</div><div style="flex:1"></div>
       <div class="titleL">Five people a day</div>
       <div class="body mortar mt-s">Every morning Arch picks five people it thinks you would
@@ -2192,7 +2196,7 @@ function render(){
     const badge=(k==="messages"&&unread)?`<div class="badge">${unread}</div>`:"";
     return `<button class="tab" data-a="tab" data-k="${k}" aria-selected="${S.tab===k}">
       <div class="glyph">${glyph(k,S.tab===k)}${badge}</div>
-      <div class="lbl"${S.tab===k&&k==="premium"?' style="color:var(--ember)"':""}>${label}</div></button>`;
+      <div class="lbl">${label}</div></button>`;
   }).join("");
   r.innerHTML=offlineBar+screen+(hideTabs?"":`<div class="tabbar">${tabs}</div>`);
   r.className="v"+(t?"":" has-top")+(hideTabs?"":" has-tabs");
