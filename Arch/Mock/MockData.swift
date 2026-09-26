@@ -1396,7 +1396,10 @@ enum MockData {
         PremiumPlan(id: "p12", duration: "Twelve months", total: "$143.88", perMonth: "$11.99 a month", isRecommended: false)
     ]
 
-    static let premiumFootnote = "Payment is charged to your Apple account. Renews until you cancel, which you can do in Settings."
+    /// What Apple requires a subscription to say before it is bought: that it
+    /// renews, at what, and how to stop it. "Settings" alone was ambiguous in an
+    /// app that has its own Settings tab, which cannot cancel anything.
+    static let premiumFootnote = "Payment is charged to your Apple account. It renews automatically at the same price until you cancel, which you can do at any time in your Apple ID settings, at least a day before it renews."
 
     // MARK: Onboarding
 

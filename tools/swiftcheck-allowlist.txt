@@ -121,3 +121,9 @@ CLPlacemark
 # In-memory photograph cache, added when reordering blanked tiles
 NSCache
 Locale
+
+# The legal links under the Premium button, which Apple requires there
+Link
+
+# StoreKit prices are Decimal; the per-month figure divides one
+Decimal

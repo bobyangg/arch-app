@@ -105,6 +105,8 @@ final class ArchSession {
             profile.adopt(person)
             try await daily.load()
             try await settings.load()
+            // The roster is sized by Premium, and Premium has only just been read.
+            daily.setSubscribed(settings.isSubscribed)
             state = .ready
 
         } catch ArchAPIError.notSignedIn {
@@ -136,6 +138,16 @@ final class ArchSession {
         // stores the tabs are reading, not a re-decision about who you are.
         try? await daily.load()
         try? await settings.load()
+        daily.setSubscribed(settings.isSubscribed)
+    }
+
+    /// What the server said about Premium, applied to both places that care.
+    ///
+    /// Called by `Purchases` after the server has confirmed a purchase with
+    /// Apple -- never before, and never on the strength of the phone alone.
+    func applySubscription(_ active: Bool) {
+        settings.isSubscribed = active
+        daily.setSubscribed(active)
     }
 
     /// Start and stop the polling that keeps messages arriving.
