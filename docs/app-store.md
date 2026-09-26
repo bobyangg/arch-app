@@ -95,7 +95,7 @@ Functionality** unless noted.
 | Identifiers | User ID | Account id |
 | Identifiers | Device ID | App Attest / DeviceCheck. Purpose: App Functionality (fraud prevention) |
 | Purchases | Purchase History | Premium subscription status |
-| Usage Data | Product Interaction | Dismissals, blocks, reports, who you wrote to |
+| Usage Data | Product Interaction | Dismissals, blocks, reports, who you wrote to. Purposes: App Functionality **and Analytics** (the pseudonymous introduction record used to evaluate the matcher) |
 | Other Data | Other Data Types | Date of birth, gender, pronouns, height, work |
 
 If profile notes (Claude) are enabled at launch, photos and prompts are also sent to
@@ -159,7 +159,8 @@ is the domain task, and it is on the critical path for review.
   a legal entity. Arch ships from an individual account. Some dating apps pass as
   individuals and some do not; if it is rejected on this, the answer is an
   Organization account, which needs incorporation and a D-U-N-S number.
-- **Guideline 5.1.1(v).** Deleting an account must delete its data. Today photo
-  *files* survive deletion (56 of 72 in storage are orphaned), and the matcher's
-  nightly snapshots are never pruned. Both have to be fixed first. The privacy
-  policy marks the two sentences that depend on it.
+- **Guideline 5.1.1(v).** Deleting an account must delete its data. Photo files
+  now are: an hourly sweep removes any file with no photo row (the first run
+  removed 56). Still open: the matcher's nightly snapshots (`match_people`,
+  `match_edges`, `match_state`) survive account deletion, keyed by account id.
+  The privacy policy marks that sentence.
