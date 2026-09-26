@@ -73,8 +73,19 @@ struct ArchApp: App {
             // repeating it is also what keeps a token iOS has rotated from going
             // stale on the server.
             .onChange(of: session.isReady) { _, ready in
-                guard ready, session.allowsNotifications else { return }
-                Task { await PushNotifications.shared.enable() }
+                guard ready else { return }
+                if session.allowsNotifications {
+                    Task { await PushNotifications.shared.enable() }
+                }
+                // Purchases start here for the same reason notifications do: a
+                // transaction can only be confirmed for somebody signed in, and
+                // this is the moment there is somebody. Anything bought while
+                // nobody was is still waiting in StoreKit, and is confirmed now.
+                Task {
+                    await Purchases.shared.start { active in
+                        session.applySubscription(active)
+                    }
+                }
             }
             .onChange(of: scenePhase) { _, phase in
                 guard phase == .active else {

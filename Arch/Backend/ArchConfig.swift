@@ -39,6 +39,24 @@ enum ArchConfig {
     /// to nowhere, which fail slowly and look like a network problem.
     static var isConfigured: Bool { supabaseURL != nil && anonKey != nil }
 
+    // MARK: Legal pages
+
+    /// The terms the Premium screen links to.
+    ///
+    /// **Apple rejects an auto-renewing subscription without working links to
+    /// terms and a privacy policy, in the app and in the listing.** Until Arch has
+    /// its own, this is Apple's standard licence agreement -- which is not a
+    /// stand-in but the truth: it is the agreement that governs the app for as
+    /// long as App Store Connect has no custom one. Replace it with Arch's own
+    /// terms once they are on the domain; a dating app needs its own rules about
+    /// age and conduct, and those do not belong in Apple's.
+    static let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
+
+    /// The privacy policy. **Nil until the domain exists, and it has to be set
+    /// before submission** -- there is no Apple standard to fall back on, and the
+    /// Premium screen simply leaves the link out while this is nil.
+    static let privacyURL: URL? = nil
+
     /// The values, for code that has already checked `isConfigured`.
     ///
     /// These trap rather than return an optional, on purpose: reaching one of them

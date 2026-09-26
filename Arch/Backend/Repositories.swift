@@ -1013,6 +1013,35 @@ enum ArchBackend {
     /// Upserted on the token, not the account: one person can have several phones,
     /// and a token that moves between them should land on the right row rather
     /// than making a second.
+    /// When this account's Premium ends, or nil if it has never had any.
+    ///
+    /// `subscriptions` is written only by the server, after asking Apple, and
+    /// read here -- so what the app believes is what the matcher believes.
+    static func subscriptionExpiry() async throws -> Date? {
+        guard let session = await SupabaseClient.shared.restore() else { return nil }
+        struct Row: Decodable { let expiresAt: Date }
+        let row: Row? = try await SupabaseClient.shared.selectOne(
+            "subscriptions",
+            columns: "expires_at",
+            filters: ["account_id": "eq.\(session.userID)"]
+        )
+        return row?.expiresAt
+    }
+
+    /// Ask the server to confirm a purchase with Apple and record it.
+    static func syncSubscription(originalTransactionID: String) async throws -> SubscriptionStatus {
+        // `Id`, not `ID`: this is encoded with the snake-case encoder, and the
+        // function reads `original_transaction_id`. Both spellings encode the
+        // same way; only one of them would decode back, and there is no reason
+        // to keep the one that does not.
+        struct Body: Encodable { let originalTransactionId: String }
+        return try await SupabaseClient.shared.callFunction(
+            "subscription",
+            Body(originalTransactionId: originalTransactionID),
+            returning: SubscriptionStatus.self
+        )
+    }
+
     /// This phone's token, for whoever is signed in on it now.
     ///
     /// A server function rather than an upsert, and the upsert was the bug. The
@@ -1087,6 +1116,12 @@ enum ArchBackend {
 private struct DismissalRow: Decodable {
     let night: String
     let otherAccountId: String
+}
+
+/// What the `subscription` function answers, read back from Apple.
+struct SubscriptionStatus: Decodable {
+    let active: Bool
+    let expiresAt: Date?
 }
 
 /// Tonight's five, and the people you have dismissed who have not gone yet.
