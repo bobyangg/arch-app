@@ -213,7 +213,7 @@ struct ProfileReviewView: View {
                         .archText(.subhead)
                         .foregroundStyle(ArchColor.limestone)
                     Spacer(minLength: ArchSpacing.s)
-                    // A word, not a colour. "Change" in terracotta would make the
+                    // A word, not a colour. "Change" in the accent would make the
                     // accent mean "wrong", and it means "act" everywhere else.
                     Text(note.verdict.word)
                         .archText(.footnote)

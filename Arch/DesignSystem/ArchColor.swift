@@ -10,72 +10,82 @@ import UIKit
 /// every token below resolves per trait collection, so light mode is this file and
 /// nothing else.
 ///
-/// The palette is the brand board's four colours — Terracotta, Muted Amber,
-/// Candlelight, Rich Charcoal — and the two worlds they describe. Light is paper in
-/// morning sun; dark is the same room at night, warm rather than blue. Depth comes
-/// from surface lightness (`night` -> `stone` -> `stoneRaised`), never from drop
+/// The palette is sand and sea: a warm ground with a cool accent, and the two
+/// worlds they describe. Light is paper on a beach in the afternoon; dark is the
+/// same shore at night, warm-black rather than blue-black. Depth comes from
+/// surface lightness (`night` -> `stone` -> `stoneRaised`), never from drop
 /// shadows, in both.
+///
+/// The warm-ground-cool-accent arrangement is the point, and it is the opposite
+/// of the terracotta-on-candlelight palette this replaced. Almost everything the
+/// app draws sits next to a photograph of a person, and a warm accent competes
+/// with skin tones a few pixels away; a deep teal does not. The paper stays warm,
+/// so the app does not go clinical, and faces remain the warmest thing on screen.
 enum ArchColor {
 
     // MARK: Surfaces
 
-    /// App background. Candlelight by day; a charcoal a step below the brand's own,
-    /// so a card can sit above it without a border.
-    static let night = Color(light: 0xFAF6F0, dark: 0x191715)
+    /// App background. Warm sand by day; at night a near-black with green in it,
+    /// a step below the card surface so a card can sit above it without a border.
+    static let night = Color(light: 0xF6F1E8, dark: 0x141A18)
 
-    /// Cards, sheets, incoming message bubbles. White by day — the brand board's
-    /// specimen card — and Rich Charcoal exactly by night.
-    static let stone = Color(light: 0xFFFFFF, dark: 0x232120)
+    /// Cards, sheets, incoming message bubbles. A white warmed just off the page
+    /// by day, and the shore's own dark by night.
+    static let stone = Color(light: 0xFFFDF9, dark: 0x1E2624)
 
     /// Elevated surfaces, pressed states, tab bar, outgoing bubbles.
-    static let stoneRaised = Color(light: 0xF2ECE2, dark: 0x2E2B29)
+    static let stoneRaised = Color(light: 0xECE3D4, dark: 0x28322F)
 
     // MARK: Ink
 
-    /// Primary text. Rich Charcoal on paper, warm off-white at night — never pure
-    /// black, never pure white.
-    static let limestone = Color(light: 0x232120, dark: 0xF5EFE6)
+    /// Primary text. A near-black with a little green in it on paper, and a
+    /// paper-white at night — never pure black, never pure white.
+    static let limestone = Color(light: 0x1E2621, dark: 0xEEF2EC)
 
     /// Secondary text, inactive icons, dividers. Warm grey in both worlds, held
     /// above 5:1 against its own background so a caption is never a guess.
-    static let mortar = Color(light: 0x6F675F, dark: 0x9A8F86)
+    static let mortar = Color(light: 0x6A665E, dark: 0x98A29A)
 
     // MARK: Accents
 
-    /// Terracotta. The only colour that invites action: the primary button, the
-    /// active tab, the slider, the mark itself.
+    /// Deep teal. The only colour that invites action: the primary button, every
+    /// active tab, the slider, and the mark itself.
     ///
-    /// The brand's #D95D39 sits at 3.5:1 on paper and 4.2:1 on charcoal — fine for
-    /// a shape, thin for a label sitting on one. So the token deepens it by day and
-    /// lifts it by night, which is the same move a photograph makes when the light
-    /// changes, and leaves the brand value for the places nothing sits on top of.
-    static let lamp = Color(light: 0xC9512F, dark: 0xE5714D)
+    /// Dark by day (8.0:1 on sand) and lifted at night, the same move a photograph
+    /// makes when the light changes. Being this dark is what lets the mark wear it:
+    /// a mid-saturation accent on a brand mark reads as a control that does not
+    /// respond, which is why the mark used to be drawn in ink instead.
+    static let lamp = Color(light: 0x13615E, dark: 0x5FAFA6)
 
-    /// Muted Amber. The second accent, and it has exactly one job: the Premium
-    /// keystone in the tab bar.
+    /// Clay. The second accent, and it has exactly one job: the recommended plan
+    /// on the paywall.
     ///
-    /// It marks the thing you can buy, which is why it stops at the tab. The
-    /// paywall itself still spends `lamp` once, on its button, because subscribing
-    /// is an action and actions are terracotta — an amber sell and an amber button
+    /// It used to light the Premium tab instead, which made one tab in a bar of
+    /// four a different colour — a real distinction (the thing you can buy, against
+    /// the things you do) that read as a broken tab. So it moved to the only place
+    /// the distinction is useful: the plan Arch suggests. The button beside it stays
+    /// `lamp`, because subscribing is an action, and a clay sell with a clay button
     /// would be the accent arguing with itself.
-    static let ember = Color(light: 0xA9661A, dark: 0xF0A243)
+    static let ember = Color(light: 0xA2622F, dark: 0xD3904F)
 
-    /// Oxidised copper. Appears only when two people have connected. If verdigris
-    /// shows up as decoration anywhere, it is wrong.
+    /// Marram green. Appears only when two people have connected. If it shows up
+    /// as decoration anywhere, it is wrong.
     ///
-    /// Warmed towards sage from the old blue-green so it belongs beside terracotta
-    /// rather than arguing with it.
-    static let verdigris = Color(light: 0x3F7359, dark: 0x7FA98F)
+    /// Held a clear step to the green side of `lamp` in hue and lighter in tone,
+    /// because two colours that mean different things must differ in more than
+    /// hue — a teal accent and a teal-green connection colour would be one colour
+    /// to most people, and to all colour-blind readers.
+    static let verdigris = Color(light: 0x52795F, dark: 0x86AD90)
 
     // MARK: Ink on an accent
 
     /// What text and glyphs become when they sit **on** `lamp`.
     ///
-    /// It inverts between the two worlds, and that is on purpose: a deepened
-    /// terracotta by day carries pale ink at 4.5:1, a lifted one by night carries
-    /// dark ink at 5.4:1. Chasing one constant ink across both would fail one of
-    /// them. This is the only token that flips its own polarity.
-    static let onLamp = Color(light: 0xFAF6F0, dark: 0x1F1C1A)
+    /// It inverts between the two worlds, and that is on purpose: the deep teal of
+    /// day carries pale ink at 8:1, the lifted teal of night carries dark ink at
+    /// 7:1. Chasing one constant ink across both would fail one of them. This is
+    /// the only token that flips its own polarity.
+    static let onLamp = Color(light: 0xF4FBF8, dark: 0x10201E)
 
     // MARK: Derived
 
@@ -96,7 +106,7 @@ enum ArchColor {
     static let pressed = mortar.opacity(0.10)
 
     /// Scrim behind full-screen modals.
-    static let scrim = Color(light: 0x232120, dark: 0x0E0D0C).opacity(0.62)
+    static let scrim = Color(light: 0x1E2621, dark: 0x080E0D).opacity(0.62)
 
     /// Outline of the segment the reader is currently on.
     static let lampQuiet = lamp.opacity(0.45)
