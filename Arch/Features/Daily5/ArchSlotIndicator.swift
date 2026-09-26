@@ -90,10 +90,10 @@ struct ArchSlotIndicator: View {
     /// has no shape to read, so here the count is the only way to convey it.
     private var accessibilityLabel: String {
         switch filled {
-        case capacity: return "All \(capacity) of your slots are filled."
-        case 0:        return "All \(capacity) of your slots are open."
-        case 1:        return "1 of your \(capacity) slots is filled."
-        default:       return "\(filled) of your \(capacity) slots are filled."
+        case capacity: return "All \(capacity) of your spots are filled."
+        case 0:        return "All \(capacity) of your spots are open."
+        case 1:        return "1 of your \(capacity) spots is filled."
+        default:       return "\(filled) of your \(capacity) spots are filled."
         }
     }
 }

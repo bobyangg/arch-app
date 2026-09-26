@@ -33,12 +33,6 @@ struct EmailSetting: View {
                             + "your real inbox, and Arch never sees the address behind it.")
             }
 
-            SettingNote("This comes from your Apple ID. Arch never shows it to "
-                        + "anyone and sends nothing to it today — if that changes it "
-                        + "will be account notices and nothing else.")
-
-            SettingNote("To change it, open iOS Settings, tap your name, then Sign "
-                        + "in with Apple, then Arch. It is not Arch's to change.")
         }
     }
 }
@@ -93,7 +87,7 @@ struct DeleteAccountSetting: View {
         SettingsPage(title: "Delete your account") {
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
                 line("Your profile, photos and answers are deleted.")
-                line("The people you are talking to can still read what was said, and cannot reply. They are not told why.")
+                line("The people you are talking to can still read your messages, but cannot reply. They will not be told why.")
                 // **Said the opposite of what happens, and made it true.**
                 // `delete_account` set `status = 'removed'`, which `register`
                 // refuses, so this sentence was accurate and the behaviour it
@@ -104,7 +98,7 @@ struct DeleteAccountSetting: View {
                 line("You cannot undo this. Nothing here comes back, and starting again means building a profile from scratch.")
             }
 
-            SettingNote("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else's roster, but your conversations keep working.")
+            SettingNote("If you want to stop for a while rather than leave, pause your profile instead. When paused, you will receive no new matches and you will not appear in anyone else's match list. Your conversations will keep working.")
 
             ArchButton(title: "Delete my account", kind: .quiet) { isConfirming = true }
         }
@@ -205,7 +199,7 @@ struct SignOutConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("Your profile, your conversations and the people in your roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple brings you straight back to it.")
+            Text("Your profile, your conversations and your matches all stay exactly as they are. Nothing is deleted. Signing back in with Apple brings you straight back to it.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

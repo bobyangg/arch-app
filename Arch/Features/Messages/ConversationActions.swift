@@ -47,7 +47,7 @@ struct ConversationMenuSheet: View {
                 .leave,
                 title: "Leave this conversation",
                 detail: isInRoster
-                    ? "Removes the conversation, and takes \(person.name) out of your roster."
+                    ? "Removes the conversation, and takes \(person.name) out of your matches."
                     : "Removes the conversation."
             )
         }
@@ -125,7 +125,7 @@ struct BlockConfirmSheet: View {
     }
 
     private var detail: String {
-        let roster = isInRoster ? "\(person.name) leaves your roster, and " : ""
+        let roster = isInRoster ? "\(person.name) leaves your matches, and " : ""
         return roster
             + "the conversation is removed. \(person.name) will not appear again and will not see you. "
             + "\(person.name) is not told. You can undo this in Settings."
@@ -270,7 +270,7 @@ struct LeaveConfirmSheet: View {
 
     private var detail: String {
         isInRoster
-            ? "The conversation is removed and \(person.name) leaves your roster. That slot fills with someone new tomorrow. You cannot undo this."
+            ? "The conversation is removed and \(person.name) leaves your matches. That spot fills with someone new tomorrow. You cannot undo this."
             : "The conversation is removed. You cannot undo this."
     }
 }
@@ -301,7 +301,7 @@ struct LeaveConfirmSheet: View {
         .preferredColorScheme(.dark)
 }
 
-#Preview("Leave, no longer in your roster") {
+#Preview("Leave, no longer in your matches") {
     LeaveConfirmSheet(person: MockData.hana, isInRoster: false, onConfirm: {}, onCancel: {})
         .frame(height: 300)
         .preferredColorScheme(.dark)
