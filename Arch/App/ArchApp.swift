@@ -133,7 +133,7 @@ struct UnreachableView: View {
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("Your roster and your conversations are all still there. This is a connection, and nothing here needs fixing.")
+            Text("Your matches and your conversations are all still there. This is a connection, and nothing here needs fixing.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

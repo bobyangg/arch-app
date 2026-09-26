@@ -63,7 +63,7 @@ struct AnswersSetting: View {
             ArchButton(title: "Answer again") { start() }
         }
 
-        SettingNote("Your answers are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and \(store.rosterName) from tomorrow is chosen against the new answers.")
+        SettingNote("The questions you answer help Arch understand what you are looking for and who you might connect with. They are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and your matches from tomorrow are chosen against the new answers.")
     }
 
     /// A store with nothing in it but the questions, started on the first one

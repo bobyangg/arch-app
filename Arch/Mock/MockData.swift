@@ -601,7 +601,7 @@ struct Roster: Hashable {
     var name: String { "your \(word)" }
 
     private var word: String {
-        (5...7).contains(capacity) ? ArchCopy.word(capacity) : "roster"
+        (5...7).contains(capacity) ? ArchCopy.word(capacity) : "matches"
     }
 }
 
@@ -1291,28 +1291,28 @@ enum MockData {
     static let premiumBenefits: [PremiumBenefit] = [
         PremiumBenefit(
             id: "b1",
-            title: "Seven people instead of five",
-            detail: "Two more slots. The same care choosing them — a longer queue is not the point."
+            title: "Seven matches every morning",
+            detail: "Get two extra people to discover each day. Arch still takes the same care finding them."
         ),
         PremiumBenefit(
             id: "b2",
-            title: "Fifteen conversations instead of ten",
-            detail: "More room before Arch holds your roster and asks you to answer someone."
+            title: "Up to fifteen conversations",
+            detail: "Keep more conversations going before Arch asks you to choose who you want to focus on."
         ),
         PremiumBenefit(
             id: "b3",
-            title: "A review of your profile",
-            detail: "Which of your photos and answers people write about, and specific notes on what to change."
+            title: "Get feedback on your profile",
+            detail: "See which photos and answers stand out, plus specific suggestions to help improve your profile."
         ),
         PremiumBenefit(
             id: "b4",
-            title: "Be somewhere you are not yet",
-            detail: "Choose any town for where you are — the city you are moving to, or the one you keep visiting — instead of where your phone says."
+            title: "Choose your location",
+            detail: "Set your location anywhere you want, whether you are there now, relocating soon, or just visit often."
         ),
         PremiumBenefit(
             id: "b5",
-            title: "Answer the questions whenever you like",
-            detail: "Everyone can answer again once a month. Premium drops the wait."
+            title: "Answer questions anytime",
+            detail: "Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."
         )
     ]
 
@@ -1407,5 +1407,5 @@ enum MockData {
     }
 
     static let onboardingHeadline = "Five people a day"
-    static let onboardingBody = "Every morning Arch picks five people it thinks you would actually like. You read them properly, you decide, and then you are done until tomorrow."
+    static let onboardingBody = "Five people. Every morning. No endless swiping. Arch finds the people you might actually want to meet."
 }

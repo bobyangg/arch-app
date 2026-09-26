@@ -45,7 +45,7 @@ private func roundedPolygon(_ points: [CGPoint], radius: CGFloat) -> Path {
 /// *Arch* thing in the drawing.
 ///
 /// It is one shape at every weight rather than two marks. Stroked at 1.75pt it is
-/// the Daily 5 tab glyph; stroked at 12pt it is the chunky terracotta mark on the
+/// the Daily 5 tab glyph; stroked at 12pt it is the chunky teal mark on the
 /// brand board, where the round caps do the work that a filled outline would
 /// otherwise have to. So one shape does five jobs — wordmark, launch animation, tab
 /// icon, app icon, empty-state illustration — and is never redrawn slightly
@@ -206,11 +206,12 @@ struct ArchWordmark: View {
     /// Width of the mark. The word is metered against it rather than given its own
     /// size, so the lock-up holds together at any scale.
     var markWidth: CGFloat = 96
-    /// Ink, not terracotta. The accent has one job -- marking what you can press
-    /// -- and it stops doing that job the moment the brand also wears it. The
-    /// mark keeps the accent only where nothing is pressable beside it: the
-    /// active Daily 5 tab, where terracotta means "this tab", not "this brand".
-    var tint: Color = ArchColor.limestone
+    /// The accent. This was ink while the accent was a mid terracotta, because a
+    /// warm mark that bright sitting beside a button is a mark pretending to be
+    /// pressable. A deep teal is dark enough to read as a drawing rather than a
+    /// control, so the lock-up can carry the brand colour after all. The word
+    /// beside it stays `limestone`, so the lock-up still has two weights in it.
+    var tint: Color = ArchColor.lamp
     var wordColor: Color = ArchColor.limestone
     /// 0...1, for the launch screen. The mark draws itself, then the word arrives.
     var drawn: CGFloat = 1
