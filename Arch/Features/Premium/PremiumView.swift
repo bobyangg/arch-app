@@ -227,9 +227,11 @@ struct PlanRow: View {
                         .archText(.subhead)
                         .foregroundStyle(ArchColor.limestone)
                     if plan.isRecommended {
+                        // The one place the second accent appears. It marks the
+                        // thing you can buy, which is what it has always been for.
                         Text("Recommended")
                             .archText(.footnote)
-                            .foregroundStyle(ArchColor.mortar)
+                            .foregroundStyle(ArchColor.ember)
                     }
                 }
             }
