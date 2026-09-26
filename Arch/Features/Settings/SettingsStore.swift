@@ -315,13 +315,10 @@ final class SettingsStore {
             ]),
             SettingsSection(
                 id: "notifications", title: "Notifications", rows: notifications,
-                // The only setting in the app that had no explanation, because a
-                // toggle row has no detail page to put one on. What it sends is
-                // also the thing worth saying plainly: the name and the words, so
-                // somebody can decide whether to open it without opening it.
-                note: systemNotificationsAllowed
-                    ? "Every message gets one. It shows who wrote to you and what they said, so you can decide whether to open it. Arch sends nothing else — no reminders, and nothing about your five."
-                    : nil
+                // No note. The toggles name what they send, and a paragraph
+                // explaining notifications to somebody who has used a phone is
+                // words for their own sake.
+                note: nil
             ),
             SettingsSection(id: "appearance", title: "Appearance", rows: [
                 .init(id: "x-theme", title: "Light and dark", detail: theme.title, control: .push)

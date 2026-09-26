@@ -249,7 +249,7 @@ struct MessageThreadView: View {
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("You can read it, but not reply. Arch does not say why a conversation ends, the same way it never says who left your roster.")
+            Text("You can read it, but not reply. Arch does not say why a conversation ends, the same way it never says who left your match list.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
