@@ -310,6 +310,29 @@ jobs:
   testflight:
     name: TestFlight
     needs: [checks, signing, build]
+    # **One at a time across every branch, not one per branch.** Without the
+    # reusable-certificate secrets, `tools/makecert.py` revokes the previous
+    # run's distribution certificate and deletes its profile before making its
+    # own. The workflow-level group above only serialises runs on the *same*
+    # ref, so a main run and an alwin_testing run could still overlap -- and
+    # did: main (#155) made its certificate at 22:13:10, alwin_testing (#156)
+    # made one 39 seconds later and revoked it, and main's export at 22:15:33
+    # failed with exit 70 on a certificate that no longer existed. The code it
+    # was exporting had uploaded fine from bob_testing that morning.
+    #
+    # `cancel-in-progress: false` so a running upload is never killed. GitHub
+    # keeps one job waiting behind it; if a third arrives meanwhile, the one that
+    # was waiting is cancelled rather than queued. Rare with two people pushing,
+    # and it fails as "cancelled", not as a revoked certificate.
+    #
+    # Setting DIST_P12 and DIST_P12_PASSWORD (see makecert.py) removes the race
+    # at its root -- the certificate is reused and nothing is revoked -- and
+    # stops Apple emailing about a revocation on every push. This group is worth
+    # keeping after that too: signing is the one step here that changes shared
+    # state at Apple, and two jobs doing it at once is the thing to rule out.
+    concurrency:
+      group: testflight-signing
+      cancel-in-progress: false
     # The testing branches upload too, because a branch you cannot install is not
     # a branch you can test on a phone. Same convention as the trigger above, and
     # deliberately the same shape, so the two cannot drift apart.
