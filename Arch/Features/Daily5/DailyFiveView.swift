@@ -165,7 +165,7 @@ struct DailyFiveView: View {
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("You have \(conversationCount) conversations open. Arch holds the people in your roster until you are back under \(conversationLimit) — leave a conversation you are not going to answer and they come straight back.")
+            Text("You have \(conversationCount) conversations open. Arch holds your matches until you are back under \(conversationLimit). Leave a conversation you are not going to answer and they come straight back.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +190,7 @@ struct DailyFiveView: View {
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("Nobody new will arrive, and you are not in anyone else's roster. Your conversations are not affected.")
+            Text("Nobody new will arrive, and you are not in anyone else's match list. Your conversations are not affected.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -209,18 +209,18 @@ struct DailyFiveView: View {
     private var emptyNotice: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Text(isOffline
-                 ? "Arch could not load your roster"
+                 ? "Arch could not load your matches"
                  : roster.isFirstMorning
                    ? "Your first five arrive in the morning"
-                   : "All \(ArchCopy.word(roster.capacity)) slots are open")
+                   : "All \(ArchCopy.word(roster.capacity)) spots are open")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(isOffline
-                 ? "This is a connection, not your roster. Whoever is in it is still in it."
+                 ? "This is a connection, not your match list. Whoever is in it is still in it."
                  : roster.isFirstMorning
-                   ? "Arch is choosing them overnight. There is nothing to do until then — it is not a queue and there is no way to hurry it."
+                   ? "Arch is always looking for the right people for you. New matches are revealed at \(RefillCopy.batchHour()). If there is nothing yet, Arch is still searching."
                    : "People arrive at \(RefillCopy.batchHour()), wherever you are. Nothing here needs fixing.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
@@ -235,8 +235,8 @@ struct DailyFiveView: View {
         if conversationCount >= warnFrom {
             let left = conversationLimit - conversationCount
             Text(left == 1
-                 ? "One more conversation and your roster will wait until you leave one."
-                 : "\(left) more conversations and your roster will wait until you leave one.")
+                 ? "One more conversation and your matches will wait until you leave one."
+                 : "\(left) more conversations and your matches will wait until you leave one.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

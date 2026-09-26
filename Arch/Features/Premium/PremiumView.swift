@@ -70,7 +70,7 @@ struct PremiumView: View {
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
 
-            Text("More room in your roster, and a clearer view of your own profile.")
+            Text("More room in your match list, and a clearer view of your own profile.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

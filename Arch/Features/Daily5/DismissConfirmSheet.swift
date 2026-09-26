@@ -26,7 +26,7 @@ struct DismissConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("\(person.name) leaves \(rosterName). The slot fills with someone new tomorrow. You cannot undo this.")
+            Text("\(person.name) leaves \(rosterName). The spot fills with someone new tomorrow. You cannot undo this.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
