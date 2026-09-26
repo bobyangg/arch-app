@@ -92,8 +92,11 @@ struct DataSetting: View {
             // so the button sat there setting a flag and doing nothing at all.
             // Building it on the phone needs no provider, and arrives in seconds
             // rather than "never more than 30 days".
-            SettingNote("Built on your phone and handed to you. Nothing is emailed "
-                        + "and nothing is kept — close the share sheet and it is gone.")
+            SettingNote("The file is a folder of plain text and your photos at full "
+                        + "size, readable without Arch and without any special software. "
+                        + "It is built on your phone rather than sent to a server, so "
+                        + "nothing is emailed and no copy is kept. Close the share sheet "
+                        + "and it is gone; build it again whenever you like.")
 
             switch stage {
             case .ready:
