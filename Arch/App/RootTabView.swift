@@ -49,6 +49,12 @@ struct RootTabView: View {
     /// screen. Two flags rather than one, because all four tabs stay in the
     /// tree -- see `isReadingThread`.
     @State private var messagesThreadOpen = false
+    /// Read here so the Premium tab redraws when a price loads or a purchase
+    /// settles. `@Observable`, so reading it in `body` is the subscription.
+    ///
+    /// Computed rather than stored: `shared` belongs to the main actor, and a
+    /// stored default is evaluated in an initialiser that may not.
+    private var purchases: Purchases { Purchases.shared }
     @State private var dailyThreadOpen = false
 
     @State private var ownedDaily = DailyFiveStore()
@@ -158,9 +164,26 @@ struct RootTabView: View {
     private var content: some View {
         ZStack {
             tab(.premium) {
-                PremiumView(isSubscribed: settings.isSubscribed) {
-                    settings.isSubscribed.toggle()
-                    store.setSubscribed(settings.isSubscribed)
+                if ArchConfig.isConfigured {
+                    // Real money. Prices come from Apple in the reader's own
+                    // currency; Premium is granted by the server after it has
+                    // asked Apple, and arrives here through `applySubscription`.
+                    PremiumView(
+                        plans: purchases.plans,
+                        isSubscribed: settings.isSubscribed,
+                        isAvailable: !purchases.plans.isEmpty,
+                        isWorking: purchases.isWorking,
+                        problem: purchases.problem,
+                        onPurchase: { plan in Task { await purchases.purchase(planID: plan.id) } },
+                        onRestore: { Task { await purchases.restore() } }
+                    )
+                } else {
+                    // The design build has no App Store and no account, so the
+                    // one way to see both states of this screen is to flip them.
+                    PremiumView(isSubscribed: settings.isSubscribed, onPurchase: { _ in
+                        settings.isSubscribed.toggle()
+                        store.setSubscribed(settings.isSubscribed)
+                    })
                 }
             }
             tab(.daily) {

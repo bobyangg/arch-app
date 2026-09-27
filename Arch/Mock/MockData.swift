@@ -624,6 +624,13 @@ struct Message: Identifiable, Hashable {
     let timestamp: String
     /// Defaulted, so every existing fixture stays as it was.
     var delivery: MessageDelivery = .sent
+    /// When it was sent, as against `timestamp`, which is how it is written.
+    ///
+    /// Two things need the instant rather than the words: putting a merged
+    /// thread back in order, and deciding whether the time is worth saying
+    /// again. Nil in the fixtures, which were written as strings and have no
+    /// date behind them -- so both uses fall back rather than assuming one.
+    var sentAt: Date? = nil
 }
 
 /// Where a conversation sits.
@@ -1389,7 +1396,10 @@ enum MockData {
         PremiumPlan(id: "p12", duration: "Twelve months", total: "$143.88", perMonth: "$11.99 a month", isRecommended: false)
     ]
 
-    static let premiumFootnote = "Payment is charged to your Apple account. Renews until you cancel, which you can do in Settings."
+    /// What Apple requires a subscription to say before it is bought: that it
+    /// renews, at what, and how to stop it. "Settings" alone was ambiguous in an
+    /// app that has its own Settings tab, which cannot cancel anything.
+    static let premiumFootnote = "Payment is charged to your Apple account. It renews automatically at the same price until you cancel, which you can do at any time in your Apple ID settings, at least a day before it renews."
 
     // MARK: Onboarding
 

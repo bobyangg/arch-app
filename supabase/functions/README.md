@@ -13,6 +13,9 @@ These add the parts Supabase does not do.
 | `register` | Verifies attestation, checks the ban, creates the account |
 | `push` | Drains the notification outbox to Apple. Called by pg_cron, not by the app |
 | `review` | Notes on your own profile, from Claude. Premium; the Notes half of the review screen |
+| `subscription` | The app bought or restored Premium: ask Apple, record the answer. Signed in |
+| `app-store-notifications` | Apple, saying a subscription renewed, lapsed or was refunded. **No JWT** -- Apple has no session |
+| `photo-sweep` | Removes photo files no photograph owns. Called hourly by `private.sweep_photos` with the push job's cron secret. Only the Storage API may delete a file; SQL is refused |
 | `_shared/appattest.ts` | Apple's verification steps, in Apple's order |
 | `_shared/devicecheck.ts` | The two bits, over Apple's server-to-server API |
 
@@ -37,6 +40,37 @@ asks anyway, and fresh reviews are capped at five a day per account.
 after Apple verifies a receipt, and no server does that yet, so with
 `PREMIUM_ENFORCED` unset the check logs that it was skipped and continues — the
 same posture as `ATTEST_ENFORCED`. Set it to `true` once purchases exist.
+
+## Premium
+
+**Apple is asked, not believed.** Neither the app nor a notification is trusted
+for what it says -- only for which transaction to go and ask about. The answer
+comes from Apple's App Store Server API over TLS, in reply to a request signed
+with the In-App Purchase key, so the transport authenticates it and there is no
+certificate chain to verify here and get subtly wrong. A forged notification can
+make the server re-check a real subscription and write down the truth. That is
+all it can do.
+
+`_shared/subscriptions.ts` is the only writer of `subscriptions`, and it decides
+*whose* a purchase is from the `appAccountToken` the app attaches when it buys --
+which Apple keeps on every renewal. A phone cannot restore a subscription onto an
+account Apple says did not pay for it.
+
+To switch it on, in App Store Connect:
+
+1. **Subscriptions** -> one group, three auto-renewable products with exactly
+   these ids: `com.arch.arch.premium.1m`, `com.arch.arch.premium.3m`,
+   `com.arch.arch.premium.12m`. They are in `Purchases.catalogue` in the app.
+2. **Users and Access -> Integrations -> In-App Purchase** -> generate a key. Set
+   the three `APPSTORE_*` secrets below from it.
+3. **App Information -> App Store Server Notifications** -> Version 2, and this
+   URL for both Production and Sandbox:
+   `https://<project>.supabase.co/functions/v1/app-store-notifications`
+4. Once a sandbox purchase has come through, set `PREMIUM_ENFORCED=true`.
+
+None of it can be tested -- not even in the sandbox -- until the **Paid
+Applications agreement** is active. Until then the products do not load and the
+Premium screen says Premium is not available yet, which is the truth.
 
 ## The exchange
 
@@ -63,6 +97,9 @@ functions are written to work without them.
 | `ATTEST_ENFORCED` | `true` to refuse unattested signups. Leave unset at first |
 | `ANTHROPIC_API_KEY` | For `review`. Without it the function answers 503 and the screen says notes are not available |
 | `PREMIUM_ENFORCED` | `true` to refuse reviews to accounts with no live subscription. Leave unset until purchases exist |
+| `APPSTORE_ISSUER_ID` | Users and Access -> Integrations -> In-App Purchase: the issuer id at the top of the page |
+| `APPSTORE_KEY_ID` | That key's id |
+| `APPSTORE_KEY` | The `.p8` file's contents. A server credential: never in the app, never in the repo |
 
 Without the DeviceCheck three, the ban check is skipped and a line is logged
 saying so. That is the right default for a project with no Apple credentials yet —

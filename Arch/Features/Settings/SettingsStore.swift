@@ -123,6 +123,20 @@ final class SettingsStore {
 
         placeChangesUsed = (try? await ArchBackend.placeChangesUsed()) ?? placeChangesUsed
 
+        // From the server, which is the only thing that writes it. This was never
+        // read at all: `isSubscribed` started false every launch and was only
+        // ever changed by the free toggle on the Premium screen.
+        //
+        // A failed read keeps what was there. Not being able to reach the server
+        // is not the same as a subscription lapsing, and treating it as one would
+        // take four slots away from somebody on a train.
+        do {
+            let expiry = try await ArchBackend.subscriptionExpiry()
+            isSubscribed = (expiry ?? .distantPast) > Date()
+        } catch {
+            print("[premium] could not read the subscription: \(error)")
+        }
+
         let rows = try await ArchBackend.answers()
         answers = Dictionary(rows.map { ($0.questionId, $0.optionIndex) }, uniquingKeysWith: { $1 })
         answersAnsweredAt = rows.map(\.answeredAt).max()

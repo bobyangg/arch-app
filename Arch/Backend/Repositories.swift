@@ -936,7 +936,8 @@ enum ArchBackend {
                 text: row.body,
                 isOutgoing: row.senderId == session.userID,
                 timestamp: ArchUnits.shortTime(row.createdAt),
-                delivery: .sent
+                delivery: .sent,
+                sentAt: row.createdAt
             )
         }
     }
@@ -1012,20 +1013,55 @@ enum ArchBackend {
     /// Upserted on the token, not the account: one person can have several phones,
     /// and a token that moves between them should land on the right row rather
     /// than making a second.
+    /// When this account's Premium ends, or nil if it has never had any.
+    ///
+    /// `subscriptions` is written only by the server, after asking Apple, and
+    /// read here -- so what the app believes is what the matcher believes.
+    static func subscriptionExpiry() async throws -> Date? {
+        guard let session = await SupabaseClient.shared.restore() else { return nil }
+        struct Row: Decodable { let expiresAt: Date }
+        let row: Row? = try await SupabaseClient.shared.selectOne(
+            "subscriptions",
+            columns: "expires_at",
+            filters: ["account_id": "eq.\(session.userID)"]
+        )
+        return row?.expiresAt
+    }
+
+    /// Ask the server to confirm a purchase with Apple and record it.
+    static func syncSubscription(originalTransactionID: String) async throws -> SubscriptionStatus {
+        // `Id`, not `ID`: this is encoded with the snake-case encoder, and the
+        // function reads `original_transaction_id`. Both spellings encode the
+        // same way; only one of them would decode back, and there is no reason
+        // to keep the one that does not.
+        struct Body: Encodable { let originalTransactionId: String }
+        return try await SupabaseClient.shared.callFunction(
+            "subscription",
+            Body(originalTransactionId: originalTransactionID),
+            returning: SubscriptionStatus.self
+        )
+    }
+
+    /// This phone's token, for whoever is signed in on it now.
+    ///
+    /// A server function rather than an upsert, and the upsert was the bug. The
+    /// table is unique on `token`, and an upsert that named no conflict column
+    /// merged on the primary key the client never sends -- so the first upload
+    /// landed and every later one for the same phone was a duplicate-key error
+    /// that nothing reported. On a phone two people signed in to, the token
+    /// stayed with the first: the second got no notifications, and the first
+    /// went on getting theirs on a phone they had left.
+    ///
+    /// Reassigning it means touching a row owned by another account, which row
+    /// security rightly refuses, so it is done by a function that takes the
+    /// token for the caller and never lets the caller say whose it is.
     static func savePushToken(_ token: String, environment: String) async throws {
-        guard let session = await SupabaseClient.shared.restore() else {
-            throw ArchAPIError.notSignedIn
-        }
-        struct TokenRow: Encodable {
-            let accountId: String
+        struct Arguments: Encodable {
             let token: String
             let environment: String
-            let updatedAt: String
         }
-        try await SupabaseClient.shared.upsert(
-            "push_tokens",
-            TokenRow(accountId: session.userID, token: token, environment: environment,
-                     updatedAt: ISO8601DateFormatter().string(from: Date()))
+        _ = try await SupabaseClient.shared.rpcRaw(
+            "register_push_token", Arguments(token: token, environment: environment)
         )
     }
 
@@ -1080,6 +1116,12 @@ enum ArchBackend {
 private struct DismissalRow: Decodable {
     let night: String
     let otherAccountId: String
+}
+
+/// What the `subscription` function answers, read back from Apple.
+struct SubscriptionStatus: Decodable {
+    let active: Bool
+    let expiresAt: Date?
 }
 
 /// Tonight's five, and the people you have dismissed who have not gone yet.
