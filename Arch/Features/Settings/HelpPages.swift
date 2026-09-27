@@ -36,39 +36,35 @@ struct HelpPage: View {
     private var how: some View {
         section(
             "Five people, held",
-            "You have five slots, or seven with Premium. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear — if you do nothing, they stay."
+            "You have five spots in your match list, or seven with Arch Premium. Arch is always looking for people you might genuinely connect with and fills those spots with its best matches. Once someone is found, they stay until you choose to dismiss them."
         )
         section(
-            "Dismissing costs you a slot",
-            "If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe."
+            "Dismissing someone opens a spot",
+            "Dismiss someone and their spot opens up for the next match cycle. It is meant to be a serious decision, so Arch asks you to confirm before dismissing. There are no swipes and no endless replacements throughout the day."
         )
         section(
-            "A dismissal lands in the morning",
-            "Until then they wait under your roster, and you can write to them or put them back. Nothing has been sent and nothing has been said — from their side you are simply still there, and they can still write to you."
+            "There is no matching step",
+            "If you are matched with someone, you can message them. They do not need to like you first. If you want to talk, just send them a message."
         )
         section(
-            "There is no match step",
-            "Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them. That is the whole mechanism."
+            "Dismissals are anonymous",
+            "When someone leaves your match list, Arch only tells you that a spot has opened. You will not be told who left or why."
         )
         section(
-            "You are never told who dismissed whom",
-            "When somebody goes, Arch tells you a slot opened — never who left, and never why. Dismissing you and writing to you look identical from your side, on purpose."
+            "New matches appear every morning",
+            "Arch is constantly evaluating potential matches throughout the day. Each morning at \(RefillCopy.batchHour()), your matches are refreshed with the people Arch thinks are the best fit for you. Everyone receives their new matches at the same time, so there is no waiting for a queue or wondering when someone new will appear."
         )
         section(
-            "New people arrive in the morning",
-            "Rosters are chosen overnight and everybody's arrives at the same moment, first thing. You can only be in someone's roster if they are in yours, so nobody ends up in a thousand lists while somebody else is in none."
+            "Someone writing to you is a request",
+            "When someone messages you first, their message appears in Requests and you can choose whether to answer. Once they write, they leave your match list, because they are no longer someone you are considering: they have made the choice to reach out. You can dismiss them if you are not interested."
         )
         section(
-            "Somebody writing to you is a request",
-            "Their message waits in Requests until you answer it. They leave your roster when they write — they have stopped being someone to consider and started being someone to answer — and that slot fills in the morning."
+            "Conversations can end without a reason",
+            "Someone can leave a conversation, block you, or delete their account. From your side, all three look the same: you will still be able to read the conversation, but you will not be able to reply. We keep them looking the same so you are never left wondering exactly what happened."
         )
         section(
-            "Conversations end without a reason",
-            "Somebody can leave a conversation, block you, or delete their account. All three look identical from your side — you can read what was said and you cannot reply — because if they looked different, the difference would tell you which one happened."
-        )
-        section(
-            "The questions do the choosing",
-            "Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score."
+            "The questions help with matching",
+            "The questions you answer help Arch understand what you are looking for and who you might connect with. They are not about finding the perfect person. They simply give Arch more context to make better matches."
         )
     }
 
@@ -82,20 +78,17 @@ struct HelpPage: View {
         // device is what still costs something, and that is what this now says.
         section(
             "Every account is tied to a device",
-            "It is not a guarantee that somebody is who they say. Signing in with Apple ties an account to an Apple ID as well, and an email address ties it to nothing on its own — but both are checked against the device, so starting again after being removed usually costs a new phone rather than thirty seconds. Making throwaway accounts expensive is most of the problem."
+            "An account being verified does not guarantee someone is who they say they are. Signing in with Apple connects your account to an Apple ID, and adding an email connects it to that address. Underneath both, everything is tied to the physical device. So if someone gets removed, starting over is not as simple as signing up again: it usually means getting a new phone. That is by design, as it makes it genuinely inconvenient to create throwaway accounts."
         )
         section(
             "Blocking is silent and complete",
-            "A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told."
+            "Block someone and they are gone for good: removed from your matches, unable to reappear, and unable to see your profile any more. No notification is sent. They will simply never know it happened."
         )
         section(
             "Reporting",
-            "Report anyone from the top of a conversation. Reports go to a person, not a filter, and you do not have to block someone to report them."
+            "Spotted something concerning? Report it right from the conversation. A real person reviews every report, not a bot, and you are free to report someone without blocking them first."
         )
-        section(
-            "Meeting",
-            "Meet somewhere public the first time, tell someone where you are going, and get yourself home. This is dull advice and it is still the advice."
-        )
+        meeting
     }
 
     // MARK: Contact
@@ -104,17 +97,56 @@ struct HelpPage: View {
     private var contact: some View {
         section(
             "Write to a person",
-            "help@arch.app reaches a small team, usually within a day. There is no chatbot in front of it."
+            "Email help@arch.app and you will reach an actual person, usually within a day. No chatbot standing in the way."
         )
         section(
             "Something is broken",
-            "Tell us what you were doing and what happened instead. Screenshots help more than descriptions."
+            "Let us know what you were trying to do and what happened instead. A screenshot tells us more than a description ever could."
         )
         section(
             "Something is wrong with someone",
-            "Report them from the conversation rather than emailing — it comes through with the context attached, which gets it dealt with faster."
+            "If it is about another person, report them directly from your conversation instead of emailing us. That way your report arrives with the full context attached, so we can act on it faster."
         )
         ArchButton(title: "Email help@arch.app", kind: .quiet) {}
+    }
+
+    /// The one part of Safety that is a list rather than a paragraph: these are
+    /// five separate habits, and a reader scanning for them should find five
+    /// lines rather than one block to parse.
+    private var meeting: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+            Text("Meeting")
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+
+            Text("Meeting for the first time? A few habits go a long way:")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+
+            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                habit("Choose a public place: a coffee shop, a restaurant, or somewhere with other people around.")
+                habit("Tell a friend or family member where you are going, who you are meeting, and when you expect to be back.")
+                habit("Arrange your own transport there and back, rather than relying on the other person for a ride.")
+                habit("Keep your phone charged and easy to reach.")
+                habit("Trust your gut. If something feels off, it is okay to leave.")
+            }
+            .padding(.top, ArchSpacing.xxs)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func habit(_ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.xs) {
+            Circle()
+                .fill(ArchColor.mortar)
+                .frame(width: 4, height: 4)
+                .padding(.top, 8)
+            Text(text)
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: Shared
