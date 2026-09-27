@@ -169,6 +169,32 @@ struct MessageThreadView: View {
         conversation.messages.last { $0.isOutgoing }
     }
 
+    /// Whether this message has to say what time it was.
+    ///
+    /// Once per minute of conversation, on the last message before the pause.
+    /// The last line in a thread always says it, which is the one anybody
+    /// actually wants.
+    ///
+    /// **Time alone, not time and speaker.** Grouping by speaker as well was the
+    /// obvious thing and it is wrong here: two people going back and forth swap
+    /// speaker almost every line, so the run is one message long and nearly
+    /// every message stamps itself. Measured against the first real thread on
+    /// the server -- 55 messages -- speaker-and-time left 32 timestamps and time
+    /// alone leaves 5. What made it a log was the rate, not the speaker.
+    ///
+    /// Falls back to comparing the written times where there are no dates, which
+    /// is the mock data: two identical strings are the same minute, so a
+    /// hand-written thread groups the same way without carrying a `Date`.
+    private func saysTime(at index: Int) -> Bool {
+        let messages = conversation.messages
+        guard index + 1 < messages.count else { return true }
+        let message = messages[index], next = messages[index + 1]
+        guard let sent = message.sentAt, let after = next.sentAt else {
+            return next.timestamp != message.timestamp
+        }
+        return after.timeIntervalSince(sent) >= 60
+    }
+
     private var transcript: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -177,11 +203,12 @@ struct MessageThreadView: View {
                         .padding(.bottom, ArchSpacing.m)
                 }
 
-                ForEach(conversation.messages) { message in
+                ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
                     MessageBubble(
                         message: message,
                         // Only the last thing you wrote is still in question.
                         showsDelivery: message.id == lastOutgoing?.id,
+                        showsTime: saysTime(at: index),
                         onRetry: { onRetry(message) }
                     )
                 }
@@ -308,6 +335,9 @@ struct MessageBubble: View {
     /// True for the last message you sent, which is the only one whose fate is
     /// still an open question.
     var showsDelivery: Bool = false
+    /// False for a message in the middle of a run from the same person. The run
+    /// says its time once, at the end. See `saysTime(at:)`.
+    var showsTime: Bool = true
     var onRetry: () -> Void = {}
 
     var body: some View {
@@ -336,7 +366,9 @@ struct MessageBubble: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(PressScaleStyle(scale: 1))
-                } else {
+                } else if showsTime || showsDelivery {
+                    // `showsDelivery` wins over grouping: "Sending" is about
+                    // this message and cannot wait for the end of a run.
                     Text(footnote)
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)

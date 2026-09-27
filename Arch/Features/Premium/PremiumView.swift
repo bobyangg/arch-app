@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 
 /// Arch Premium.
@@ -25,10 +26,22 @@ struct PremiumView: View {
     var benefits: [PremiumBenefit] = MockData.premiumBenefits
     var plans: [PremiumPlan] = MockData.premiumPlans
     var isSubscribed: Bool = false
-    /// Design-only: flips the subscription so the difference is visible.
-    var onSubscribe: () -> Void = {}
+    /// False when the App Store has nothing to sell -- no products in App Store
+    /// Connect, or no active Paid Applications agreement yet. The screen says so
+    /// rather than showing prices nobody can pay.
+    var isAvailable: Bool = true
+    /// A purchase or restore is in the air.
+    var isWorking: Bool = false
+    /// What went wrong with the last thing the reader asked for, in their words.
+    var problem: String? = nil
+    var onPurchase: (PremiumPlan) -> Void = { _ in }
+    /// **This was `{}`.** "Restore purchases" was drawn and did nothing, which on
+    /// a new phone is the difference between keeping what you paid for and
+    /// buying it twice.
+    var onRestore: () -> Void = {}
 
     @State private var selectedPlanID: String?
+    @State private var isManaging = false
     /// Which bubble the rail has settled on. Drives the dots, and nothing else.
     @State private var currentBenefitID: String?
 
@@ -136,6 +149,13 @@ struct PremiumView: View {
 
     private var planList: some View {
         VStack(spacing: ArchSpacing.s) {
+            if !isAvailable {
+                Text("Arch Premium isn't available to buy yet.")
+                    .archText(.body)
+                    .foregroundStyle(ArchColor.mortar)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, ArchSpacing.m)
+            }
             ForEach(plans) { plan in
                 PlanRow(
                     plan: plan,
@@ -148,8 +168,21 @@ struct PremiumView: View {
 
     private var footer: some View {
         VStack(spacing: ArchSpacing.s) {
-            ArchButton(title: subscribeTitle, isEnabled: !isSubscribed, action: onSubscribe)
-                .padding(.top, ArchSpacing.m)
+            ArchButton(title: subscribeTitle, isEnabled: canBuy) {
+                if let plan = selectedPlan { onPurchase(plan) }
+            }
+            .padding(.top, ArchSpacing.m)
+
+            // Said in the reader's own register, and in `limestone` rather than
+            // anything louder: no red anywhere, and a purchase that did not go
+            // through is not an emergency.
+            if let problem {
+                Text(problem)
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.limestone)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             Text(MockData.premiumFootnote)
                 .archText(.footnote)
@@ -157,13 +190,48 @@ struct PremiumView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ArchTextButton(title: "Restore purchases") {}
+            // Somebody who has it is shown how to stop it; somebody who does not
+            // is shown how to get back what they already paid for.
+            if isSubscribed {
+                ArchTextButton(title: "Manage subscription") { isManaging = true }
+            } else {
+                ArchTextButton(title: "Restore purchases", action: onRestore)
+                    .disabled(isWorking)
+            }
+
+            legalLinks
         }
+        .manageSubscriptionsSheet(isPresented: $isManaging)
+    }
+
+    /// Required under the button, not merely somewhere in the app. Apple reviews
+    /// the screen that sells the subscription, and that is where it looks.
+    @ViewBuilder
+    private var legalLinks: some View {
+        HStack(spacing: ArchSpacing.m) {
+            if let terms = ArchConfig.termsURL {
+                Link("Terms of Use", destination: terms)
+            }
+            if let privacy = ArchConfig.privacyURL {
+                Link("Privacy Policy", destination: privacy)
+            }
+        }
+        .archText(.footnote)
+        // `Link` draws in the tint, which `foregroundStyle` does not always
+        // reach. Both, so these are the same quiet grey as the footnote above.
+        .foregroundStyle(ArchColor.mortar)
+        .tint(ArchColor.mortar)
+        .padding(.top, ArchSpacing.xxs)
+    }
+
+    private var canBuy: Bool {
+        !isSubscribed && isAvailable && !isWorking && selectedPlan != nil
     }
 
     private var subscribeTitle: String {
         if isSubscribed { return "You have Arch Premium" }
-        guard let plan = selectedPlan else { return "Subscribe" }
+        if isWorking { return "One moment" }
+        guard isAvailable, let plan = selectedPlan else { return "Subscribe" }
         return "Subscribe for \(plan.total)"
     }
 }
@@ -258,5 +326,15 @@ struct PlanRow: View {
 
 #Preview("Premium, subscribed") {
     PremiumView(isSubscribed: true)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Premium, not for sale yet") {
+    PremiumView(plans: [], isAvailable: false)
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Premium, a purchase that did not go through") {
+    PremiumView(problem: "The purchase didn't go through.")
         .preferredColorScheme(.dark)
 }

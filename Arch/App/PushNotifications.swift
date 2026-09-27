@@ -42,9 +42,20 @@ final class PushNotifications: NSObject, ObservableObject {
     }
 
     /// APNs handed over a token for this install.
+    ///
+    /// A failed upload is not retried here: `enable()` runs every time a session
+    /// becomes ready, iOS hands the token over again each time, and that is the
+    /// retry. But it is said -- this was a `try?`, and the table it writes to was
+    /// empty for the whole life of the app without anything noticing.
     func received(deviceToken: Data) {
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-        Task { try? await ArchBackend.savePushToken(hex, environment: Self.environment) }
+        Task {
+            do {
+                try await ArchBackend.savePushToken(hex, environment: Self.environment)
+            } catch {
+                print("[push] could not register this phone's token: \(error)")
+            }
+        }
     }
 
     /// Which of Apple's two hosts this build's tokens belong to.
