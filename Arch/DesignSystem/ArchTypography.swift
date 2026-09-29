@@ -41,7 +41,7 @@ enum ArchType: CaseIterable {
     /// 12 / medium — vitals chips, tab labels.
     case caption
     /// 11 / semibold — the unread count. Small enough to sit on a 16pt dot,
-    /// heavy enough to read on terracotta.
+    /// heavy enough to read on the accent.
     case badge
 
     var size: CGFloat {

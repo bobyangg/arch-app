@@ -85,9 +85,9 @@ struct MessageComposerSheet: View {
     /// Spending a slot on somebody you want to talk to is what a slot is for — the
     /// line says so plainly rather than warning you off.
     private var cost: String {
-        let base = "Sending takes \(person.name) out of your roster. That slot fills with someone new tomorrow morning."
+        let base = "Sending takes \(person.name) out of your matches. That spot fills with someone new tomorrow morning."
         if conversationCount + 1 >= conversationLimit {
-            return base + " It also takes you to \(conversationLimit) conversations, so your roster will wait until you leave one."
+            return base + " It also takes you to \(conversationLimit) conversations, so your matches will wait until you leave one."
         }
         return base
     }

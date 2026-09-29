@@ -83,13 +83,17 @@ private struct TabBarItem: View {
     let pill: Namespace.ID
     let action: () -> Void
 
-    /// Premium's star lights amber, every other tab terracotta. The palette has
-    /// two accents and this is the seam between them: amber marks the thing you can
-    /// buy, terracotta the things you do. Inactive is `mortar` for all four, so the
-    /// bar still reads as one set at rest.
+    /// Every tab lights the same accent, and inactive is `mortar` for all four,
+    /// so the bar reads as one set both at rest and in use.
+    ///
+    /// Premium's star used to light `ember` instead: the seam between the palette's
+    /// two accents, amber for the thing you can buy against terracotta for the
+    /// things you do. The distinction is real but the bar is the wrong place to
+    /// draw it -- one tab in a different colour reads as a tab that is broken, not
+    /// as a category -- so the second accent moved to the paywall's recommended
+    /// plan, where the thing you can buy actually is.
     private var tint: Color {
-        guard isActive else { return ArchColor.mortar }
-        return tab == .premium ? ArchColor.ember : ArchColor.lamp
+        isActive ? ArchColor.lamp : ArchColor.mortar
     }
     private var weight: CGFloat { isActive ? 2.25 : ArchSpacing.glyphStroke }
 

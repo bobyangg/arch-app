@@ -14,9 +14,9 @@ import SwiftUI
 enum ArchTheme: String, CaseIterable, Identifiable {
     /// Whatever iOS is doing.
     case system
-    /// Candlelight. Paper in morning sun.
+    /// Sand. Warm paper, a cool accent.
     case light
-    /// Rich Charcoal. The same room at night.
+    /// The same shore after dark.
     case dark
 
     /// Where the choice is kept. A display preference belongs to the device rather
@@ -37,8 +37,8 @@ enum ArchTheme: String, CaseIterable, Identifiable {
     var note: String {
         switch self {
         case .system: return "Follows your iPhone's appearance setting."
-        case .light:  return "Candlelight. Paper, warm ink, terracotta."
-        case .dark:   return "Rich charcoal. The same palette after dark."
+        case .light:  return "Sand. Warm paper, dark ink, a deep teal."
+        case .dark:   return "The shore after dark. The same palette, the teal lifted."
         }
     }
 
