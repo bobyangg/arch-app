@@ -58,10 +58,6 @@ struct ArchMark: Shape {
     /// How much of the path is drawn, 0...1. Animating this draws the mark in.
     var trim: CGFloat = 1
 
-    /// Which of the four strokes to draw. The whole mark, unless a launch
-    /// sequence is moving the pieces separately -- see `LaunchView`.
-    var parts: ArchMarkParts = .all
-
     /// Intrinsic proportion of the mark: height as a fraction of width.
     ///
     /// Equal to `baseline`, because the deck's crown sits exactly on the top edge
@@ -134,62 +130,42 @@ struct ArchMark: Shape {
         // Left pier. The control sits inboard of the chord, so the pier leaves the
         // deck almost upright and does its splaying near the ground — a leg taking
         // weight, rather than a compass opening.
-        if parts.contains(.leftPier) {
-            path.move(to: CGPoint(x: x(Self.pierTop), y: springY))
-            path.addQuadCurve(
-                to: CGPoint(x: x(Self.pierFoot), y: footY),
-                control: CGPoint(x: x(Self.pierTop - 0.01), y: y(0.40))
-            )
-        }
+        path.move(to: CGPoint(x: x(Self.pierTop), y: springY))
+        path.addQuadCurve(
+            to: CGPoint(x: x(Self.pierFoot), y: footY),
+            control: CGPoint(x: x(Self.pierTop - 0.01), y: y(0.40))
+        )
 
         // Right pier, mirrored.
-        if parts.contains(.rightPier) {
-            path.move(to: CGPoint(x: x(1 - Self.pierTop), y: springY))
-            path.addQuadCurve(
-                to: CGPoint(x: x(1 - Self.pierFoot), y: footY),
-                control: CGPoint(x: x(1 - Self.pierTop + 0.01), y: y(0.40))
-            )
-        }
+        path.move(to: CGPoint(x: x(1 - Self.pierTop), y: springY))
+        path.addQuadCurve(
+            to: CGPoint(x: x(1 - Self.pierFoot), y: footY),
+            control: CGPoint(x: x(1 - Self.pierTop + 0.01), y: y(0.40))
+        )
 
         // The span, springing from pier to pier. Drawn left to right so that under
         // `trim` it closes across the gap the way an arch is closed, from one side.
-        if parts.contains(.span) {
-            let centre = CGPoint(x: x(0.5), y: y(Self.spanCentre))
-            let radius = width * Self.spanRadius
-            let start = Angle.degrees(180 + Self.spanSpringing)
-            path.move(to: pointOnCircle(centre, radius, start))
-            path.addRelativeArc(
-                center: centre,
-                radius: radius,
-                startAngle: start,
-                delta: .degrees(180 - 2 * Self.spanSpringing)
-            )
-        }
+        let centre = CGPoint(x: x(0.5), y: y(Self.spanCentre))
+        let radius = width * Self.spanRadius
+        let start = Angle.degrees(180 + Self.spanSpringing)
+        path.move(to: pointOnCircle(centre, radius, start))
+        path.addRelativeArc(
+            center: centre,
+            radius: radius,
+            startAngle: start,
+            delta: .degrees(180 - 2 * Self.spanSpringing)
+        )
 
         // The deck, bowed so its crown sits at the top of the frame. A quadratic
         // reaches half way to its control point, so the control goes twice as far.
-        if parts.contains(.deck) {
-            path.move(to: CGPoint(x: x(Self.deckInset), y: y(Self.deckEnd)))
-            path.addQuadCurve(
-                to: CGPoint(x: x(1 - Self.deckInset), y: y(Self.deckEnd)),
-                control: CGPoint(x: x(0.5), y: y(-Self.deckEnd))
-            )
-        }
+        path.move(to: CGPoint(x: x(Self.deckInset), y: y(Self.deckEnd)))
+        path.addQuadCurve(
+            to: CGPoint(x: x(1 - Self.deckInset), y: y(Self.deckEnd)),
+            control: CGPoint(x: x(0.5), y: y(-Self.deckEnd))
+        )
 
         return trim >= 1 ? path : path.trimmedPath(from: 0, to: max(0, trim))
     }
-}
-
-/// The four strokes of the mark, so a launch sequence can move them one at a
-/// time. Everything else draws `.all`.
-struct ArchMarkParts: OptionSet {
-    let rawValue: Int
-    static let leftPier  = ArchMarkParts(rawValue: 1 << 0)
-    static let rightPier = ArchMarkParts(rawValue: 1 << 1)
-    static let deck      = ArchMarkParts(rawValue: 1 << 2)
-    static let span      = ArchMarkParts(rawValue: 1 << 3)
-    static let piers: ArchMarkParts = [.leftPier, .rightPier]
-    static let all: ArchMarkParts = [.leftPier, .rightPier, .span, .deck]
 }
 
 // MARK: - The wordmark
@@ -424,6 +400,45 @@ struct MessageGlyph: Shape {
             radius: corner
         )
         path.closeSubpath()
+        return path
+    }
+}
+
+/// A place: a pin with a point at its centre. The Date planner tab glyph.
+///
+/// Drawn as one teardrop -- the round head and the two straight sides that meet
+/// at the tip are a single closed stroke -- so its weight matches the bubble and
+/// the person beside it rather than reading as two shapes stacked.
+struct PinGlyph: Shape {
+    var lineWidth: CGFloat = ArchSpacing.glyphStroke
+
+    func path(in rect: CGRect) -> Path {
+        let r = rect.insetBy(dx: lineWidth / 2, dy: lineWidth / 2)
+        guard r.width > 0, r.height > 0 else { return Path() }
+
+        let radius = min(r.width, r.height) * 0.36
+        let centre = CGPoint(x: r.midX, y: r.minY + radius)
+        let tip = CGPoint(x: r.midX, y: r.maxY)
+
+        // The two sides leave the head at the points where a line from the tip
+        // just touches the circle: `spread` either side of straight down.
+        let reach = Double(tip.y - centre.y)
+        let spread = acos(min(1, Double(radius) / reach)) * 180 / .pi
+        let start = Angle.degrees(90 + spread)
+
+        var path = Path()
+        path.move(to: pointOnCircle(centre, radius, start))
+        path.addRelativeArc(
+            center: centre,
+            radius: radius,
+            startAngle: start,
+            delta: .degrees(360 - 2 * spread)
+        )
+        path.addLine(to: tip)
+        path.closeSubpath()
+
+        let dot = radius * 0.36
+        path.addEllipse(in: CGRect(x: centre.x - dot, y: centre.y - dot, width: dot * 2, height: dot * 2))
         return path
     }
 }
