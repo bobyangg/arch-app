@@ -15,12 +15,8 @@ which a template can't do. But have them read by someone qualified before launch
 
 1. Replace every `[BRACKETED]` item: date, your name or company, city, contact
    email, mailing address (terms), retention days `[N]`.
-2. `privacy.html` has one comment marked `TRUE-ONLY-AFTER`: the matcher's
-   nightly snapshots (age, gender, approximate position) are kept indefinitely
-   and survive account deletion. Decide a retention period and enforce it, or
-   change the wording. Don't publish a promise the system doesn't keep. (The
-   other one, about photo files outliving deletion, is fixed: an hourly sweep
-   removes them.)
+2. Deletion is now as the privacy policy describes it: photo files are swept hourly, and the matcher's
+   nightly snapshots are deleted with the account and cleared after 90 days (migration 022).
 3. Confirm whether profile notes (Claude) ship at launch. The privacy policy
    names Anthropic as a processor for that feature only.
 
