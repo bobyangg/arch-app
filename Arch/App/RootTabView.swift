@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The app shell: four tabs over one store.
+/// The app shell: five tabs over one store.
 ///
-/// All four tabs stay alive rather than being rebuilt on every switch, so a
+/// All five tabs stay alive rather than being rebuilt on every switch, so a
 /// half-scrolled profile or an open thread is still there when you come back —
 /// which is what a tab bar is supposed to do.
 struct RootTabView: View {
@@ -225,6 +225,14 @@ struct RootTabView: View {
                     onThreadOpenChanged: { reading(.messages, $0) }
                 )
             }
+            tab(.planner) {
+                DatePlannerView(
+                    you: profile.person,
+                    candidates: plannerCandidates,
+                    onSend: { conversation, text in store.reply(to: conversation, text: text) },
+                    onOpenDaily: { selection = .daily }
+                )
+            }
             tab(.you) {
                 YouProfileView(
                     store: profile,
@@ -239,7 +247,23 @@ struct RootTabView: View {
         }
     }
 
-    /// All four stay in the tree; the one you chose is the one you can see.
+    /// Who the Date planner offers: the people you are talking to first, because
+    /// they are who a plan is most likely for, then the rest of your matches.
+    /// Each person once, with their conversation when there is one -- that is
+    /// what decides whether a plan can be sent or only shared.
+    private var plannerCandidates: [PlannerCandidate] {
+        var seen = Set<String>()
+        var out: [PlannerCandidate] = []
+        for conversation in store.threads where seen.insert(conversation.person.id).inserted {
+            out.append(PlannerCandidate(person: conversation.person, conversation: conversation))
+        }
+        for person in store.roster.people where seen.insert(person.id).inserted {
+            out.append(PlannerCandidate(person: person, conversation: nil))
+        }
+        return out
+    }
+
+    /// All five stay in the tree; the one you chose is the one you can see.
     ///
     /// The change is a cross-fade, on the same curve the tab bar's pill moves
     /// on, so the two read as one gesture. The incoming tab is layered on top and

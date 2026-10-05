@@ -4,6 +4,7 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
     case premium
     case daily
     case messages
+    case planner
     case you
 
     var id: Int { rawValue }
@@ -13,6 +14,7 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
         case .premium:  return "Premium"
         case .daily:    return "Daily 5"
         case .messages: return "Messages"
+        case .planner:  return "Date planner"
         case .you:      return "You"
         }
     }
@@ -29,17 +31,19 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
         case .premium:  return "tab.premium"
         case .daily:    return "tab.daily"
         case .messages: return "tab.messages"
+        case .planner:  return "tab.planner"
         case .you:      return "tab.you"
         }
     }
 }
 
-/// Four tabs, no more. The icons are drawn rather than borrowed: SF Symbols would
-/// give Arch the same crown-and-heart vocabulary as every other dating app, and
-/// the Daily 5 tab in particular has to be the mark itself.
+/// Five tabs. The icons are drawn rather than borrowed: SF Symbols would give
+/// Arch the same crown-and-heart vocabulary as every other dating app, and the
+/// Daily 5 tab in particular has to be the mark itself.
 ///
-/// All four are drawn at the same stroke weight with the same caps, so the set
-/// reads as one hand.
+/// All five are drawn at the same stroke weight with the same caps, so the set
+/// reads as one hand. The Date planner sits between Messages and You, because it
+/// is the step after a conversation and before anything about yourself.
 ///
 /// A frosted pill sits behind the active tab and slides to whichever one you
 /// choose. One pill, moved, rather than one lit per tab: the motion is what says
@@ -111,6 +115,11 @@ private struct TabBarItem: View {
                 Text(tab.title)
                     .archText(.caption)
                     .foregroundStyle(tint)
+                    // Five across a phone is about 78pt each, and "Date planner"
+                    // is the one label that comes close to filling it. It may
+                    // shrink a little; it may not wrap or truncate.
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, ArchSpacing.xxs)
@@ -150,6 +159,10 @@ private struct TabBarItem: View {
             MessageGlyph(lineWidth: weight)
                 .stroke(tint, style: style)
                 .frame(width: 24, height: 24)
+        case .planner:
+            PinGlyph(lineWidth: weight)
+                .stroke(tint, style: style)
+                .frame(width: 22, height: 24)
         case .you:
             PersonGlyph(lineWidth: weight)
                 .stroke(tint, style: style)
