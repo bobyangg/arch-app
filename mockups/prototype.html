@@ -1405,10 +1405,15 @@ const planMessage=plan=>["How about this?"].concat(
 
 /* The people in Messages, and nobody from the Daily 5: a date is planned with
    somebody you are talking to. A conversation that has ended, or a request you
-   have not answered, is not somewhere a plan can go. */
+   have not answered, is not somewhere a plan can go.
+
+   Asked by state rather than by "has no state": accepting a request sets it to
+   "open", and the first version of this filter took only conversations with no
+   state at all -- so anybody whose request you accepted never appeared here. */
 function plannerCandidates(){
   const seen=new Set(), out=[];
-  S.convos.filter(c=>!c.state).forEach(c=>{if(!seen.has(c.person.id)){seen.add(c.person.id); out.push({p:c.person,convo:c});}});
+  S.convos.filter(c=>!isRequest(c)&&!hasEnded(c))
+    .forEach(c=>{if(!seen.has(c.person.id)){seen.add(c.person.id); out.push({p:c.person,convo:c});}});
   return out;
 }
 
@@ -1459,9 +1464,11 @@ function plannerRoot(){
   if(plan.fairness) bits.push(plan.fairness);
   h+=`<div class="footnote mortar mt-l">${bits.join(" ")}</div>`;
 
-  h+=P_.sent===cur.p.id
-    ?`<div class="subhead center mt-m" style="padding:12px 0">Sent to ${esc(cur.p.name)}. It is in your conversation.</div>`
-    :`<button class="btn primary mt-m" data-a="planSend">Send to ${esc(cur.p.name)}</button>`;
+  /* "Share this plan" shares only into Messages: it opens the people you are
+     talking to, the one you planned with first, and sends into whichever
+     conversation you pick. Never the system share sheet. */
+  h+=`<button class="btn primary mt-m" data-a="planShare">Share this plan</button>`;
+  if(P_.sent) h+=`<div class="footnote mortar center mt-s">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   return h+`</div></div>`;
 }
 
@@ -2748,11 +2755,24 @@ document.addEventListener("click",e=>{
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,skips:{},sent:null}; render();},
     planSwap:()=>{const k=el.dataset.k, sk={...S.planner.skips}; sk[k]=(sk[k]||0)+1;
       S.planner={...S.planner,skips:sk,sent:null}; render();},
-    planSend:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
+    planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
       if(!cur) return;
+      const ordered=[cur].concat(cands.filter(c=>c.p.id!==cur.p.id));
+      openSheet(`<div class="titleM">Share this plan</div>
+        <div class="body mortar mt-s">Only with people you are talking to. It goes into your conversation.</div>
+        <div class="v gap-xs mt-m">${ordered.map(c=>`<button class="srow" data-a="planShareTo" data-id="${c.p.id}"
+          style="background:var(--stone); border-radius:var(--r-control); width:100%; text-align:left"
+          aria-label="Share with ${esc(c.p.name)}">
+          <div class="face" style="width:44px; height:44px; border-radius:var(--r-control); flex:none; ${tone(c.p.photos[0])}"></div>
+          <div class="v" style="margin-left:12px"><div class="subhead">${esc(c.p.name)}</div>
+          ${c.p.id===cur.p.id?'<div class="footnote mortar">You planned this with them</div>':""}</div></button>`).join("")}</div>
+        <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
+    planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
+        to=cands.find(c=>c.p.id===id);
+      if(!cur||!to) return;
       const plan=planDate(S.you,cur.p,S.planner.time,S.planner.skips);
-      cur.convo.msgs.push(["out",planMessage(plan),"Just now"]); cur.convo.when="Just now";
-      S.planner={...S.planner,sent:cur.p.id}; render();},
+      to.convo.msgs.push(["out",planMessage(plan),"Just now"]); to.convo.when="Just now";
+      S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
     dismiss:()=>dismissSheet(id),

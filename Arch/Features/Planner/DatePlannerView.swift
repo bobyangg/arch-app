@@ -18,8 +18,13 @@ struct PlannerCandidate: Identifiable, Hashable {
 /// Pick one of them, and Arch lays out an afternoon or an evening: three
 /// stops, a reasonable walk apart, chosen from what you both wrote about
 /// yourselves and placed about halfway between you. Any stop can be swapped for
-/// the next-best one without disturbing the others, and the finished plan goes
-/// into your conversation with them.
+/// the next-best one without disturbing the others.
+///
+/// **"Share this plan" shares only into Messages.** It opens a list of the
+/// people you are talking to -- the one you planned with first -- and the plan
+/// goes into whichever conversation you pick. Not the system share sheet: a plan
+/// carries where you will be and when, and the only people it should reach are
+/// people you have chosen to talk to here.
 ///
 /// **It never shows how far away anybody lives.** The first stop says how far it
 /// is from you, and for them it says only whether it is about as far, or a little
@@ -38,7 +43,10 @@ struct DatePlannerView: View {
     /// How many times each stop has been swapped. Reset whenever the person or
     /// the time of day changes, because the rankings underneath have changed too.
     @State private var skips: [DatePlan.Role: Int] = [:]
+    /// Who the plan last went to, by name, for the line under the button.
     @State private var sentTo: String?
+    /// The plan being shared, while the list of people is open.
+    @State private var sharing: String?
 
     private var chosen: PlannerCandidate? {
         candidates.first { $0.id == chosenID } ?? candidates.first
@@ -257,7 +265,6 @@ struct DatePlannerView: View {
 
     @ViewBuilder
     private func footer(_ plan: DatePlan, with candidate: PlannerCandidate) -> some View {
-        let name = candidate.person.name
         let message = DatePlanner.message(for: plan)
 
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -266,19 +273,28 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if sentTo == candidate.id {
-                Text("Sent to \(name). It is in your conversation.")
-                    .archText(.subhead)
-                    .foregroundStyle(ArchColor.limestone)
-                    .frame(maxWidth: .infinity, minHeight: ArchSpacing.minimumTapTarget)
-            } else {
-                ArchButton(title: "Send to \(name)") {
-                    onSend(candidate.conversation, message)
-                    sentTo = candidate.id
-                }
+            ArchButton(title: "Share this plan") { sharing = message }
+
+            if let sentTo {
+                Text("Sent to \(sentTo). It is in your conversation.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(.top, ArchSpacing.l)
+        .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
+            ShareWithSheet(
+                candidates: candidates,
+                plannedWith: candidate.id,
+                onPick: { picked in
+                    if let sharing { onSend(picked.conversation, sharing) }
+                    sentTo = picked.person.name
+                    sharing = nil
+                },
+                onCancel: { sharing = nil }
+            )
+        }
     }
 
     private func summary(_ plan: DatePlan) -> String {
@@ -302,6 +318,83 @@ struct DatePlannerView: View {
             ArchButton(title: "See your matches", kind: .quiet, action: onOpenDaily)
                 .padding(.top, ArchSpacing.s)
         }
+    }
+}
+
+/// Who a plan can be shared with: the people in Messages, and nobody else.
+///
+/// The person you planned with is first and says so; anyone else you are talking
+/// to is below. One tap sends -- the plan is already written, and a second
+/// confirmation would be a step between deciding and doing that adds nothing.
+struct ShareWithSheet: View {
+    let candidates: [PlannerCandidate]
+    let plannedWith: String
+    let onPick: (PlannerCandidate) -> Void
+    let onCancel: () -> Void
+
+    private var ordered: [PlannerCandidate] {
+        candidates.filter { $0.id == plannedWith } + candidates.filter { $0.id != plannedWith }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Share this plan")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+                .padding(.top, ArchSpacing.xl)
+            Text("Only with people you are talking to. It goes into your conversation.")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, ArchSpacing.xs)
+                .padding(.bottom, ArchSpacing.m)
+
+            ScrollView {
+                VStack(spacing: ArchSpacing.xs) {
+                    ForEach(ordered) { candidate in
+                        Button { onPick(candidate) } label: {
+                            HStack(spacing: ArchSpacing.s) {
+                                PhotoPlaceholder(toneIndex: candidate.person.avatarToneIndex,
+                                                 url: candidate.person.mainPhoto?.url,
+                                                 data: candidate.person.mainPhoto?.local)
+                                    .frame(width: 44, height: 44)
+                                    .clipShape(RoundedRectangle(cornerRadius: ArchRadius.control,
+                                                                style: .continuous))
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(candidate.person.name)
+                                        .archText(.subhead)
+                                        .foregroundStyle(ArchColor.limestone)
+                                    if candidate.id == plannedWith {
+                                        Text("You planned this with them")
+                                            .archText(.footnote)
+                                            .foregroundStyle(ArchColor.mortar)
+                                    }
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(ArchSpacing.s)
+                            .background(
+                                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                    .fill(ArchColor.stone)
+                            )
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PressScaleStyle(scale: 0.99))
+                        .accessibilityLabel("Share with \(candidate.person.name)")
+                    }
+                }
+            }
+            .scrollIndicators(.hidden)
+
+            ArchTextButton(title: "Cancel", action: onCancel)
+                .padding(.top, ArchSpacing.xs)
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .archSheetBackground()
     }
 }
 
