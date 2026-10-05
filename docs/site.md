@@ -2,23 +2,26 @@
 
 Kept here rather than in `site/`, because everything in `site/` is uploaded and published -- this file included, if it were there.
 
-Three static pages for the domain: `index.html` is the **Support URL**,
-`privacy.html` the **Privacy Policy URL**, `terms.html` the terms. No scripts, no
-external fonts, no trackers. A privacy policy that loaded one would be a strange
-thing to publish.
+Static pages for archdating.com: `index.html` is the **Support URL**,
+`privacy.html` the **Privacy Policy URL**, `terms.html` the terms, and
+`terms-fr.html` their French version. No scripts, no external fonts, no
+trackers. A privacy policy that loaded one would be a strange thing to publish.
 
-**Drafts, not legal advice.** They were written from what the app and database
-actually do (every processor, every field, what deletion removes and keeps),
-which a template can't do. But have them read by someone qualified before launch.
+**Drafts, not legal advice.** The privacy policy was written from what the app and
+database actually do (every processor, every field, what deletion removes and
+keeps). The terms are the team's draft with its blanks filled in. Have both read
+by someone qualified before launch -- the French translation and the line saying
+the English version prevails especially.
 
-## Before publishing
+## Where things stand
 
-1. Replace every `[BRACKETED]` item: date, your name or company, city, contact
-   email, mailing address (terms), retention days `[N]`.
-2. Deletion is now as the privacy policy describes it: photo files are swept hourly, and the matcher's
+1. No blanks left in any page.
+2. Deletion is as the privacy policy describes it: photo files are swept hourly, and the matcher's
    nightly snapshots are deleted with the account and cleared after 90 days (migration 022).
-3. Confirm whether profile notes (Claude) ship at launch. The privacy policy
-   names Anthropic as a processor for that feature only.
+3. The terms say Arch is not offered in the United States or in Quebec. Keep the App Store
+   availability to match: Canada only. Offering it in the US first needs the state dating-service
+   notices that Schedule B2 promises.
+4. The two terms pages mirror each other section for section. A change to one is a change to both.
 
 ## Hosting
 
@@ -31,7 +34,7 @@ Any static host works. Cloudflare Pages and GitHub Pages are both free:
 
 ## Then, in the app
 
-Set `ArchConfig.privacyURL`, and `ArchConfig.termsURL` once these terms replace
-Apple's standard EULA, in `Arch/Backend/ArchConfig.swift`. The Premium screen
-shows its links from those two values, and Apple rejects an auto-renewing
-subscription without them.
+`ArchConfig.privacyURL` already points at archdating.com. Point
+`ArchConfig.termsURL` at `https://archdating.com/terms.html` once the pages are
+live, in `Arch/Backend/ArchConfig.swift`. The Premium screen shows its links from
+those two values, and Apple rejects an auto-renewing subscription without them.
