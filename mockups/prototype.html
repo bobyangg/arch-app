@@ -422,9 +422,9 @@ const PLACES=[
  ["nj-jersey-city","Jersey City","New Jersey",40.728,-74.078],
  ["nj-hoboken","Hoboken","New Jersey",40.744,-74.032],
  /* Towns, where a neighbourhood is not a thing anybody would name. */
- ["ny-beacon","Beacon","Fraunces",41.505,-73.970],
- ["ny-hudson","Hudson","Fraunces",42.253,-73.791],
- ["ny-new-paltz","New Paltz","Fraunces",41.747,-74.087]
+ ["ny-beacon","Beacon","New York",41.505,-73.970],
+ ["ny-hudson","Hudson","New York",42.253,-73.791],
+ ["ny-new-paltz","New Paltz","New York",41.747,-74.087]
 ].map(([id,name,city,lat,lon])=>({id,name,city,centre:coarse({lat,lon})}));
 
 const placeById=id=>PLACES.find(p=>p.id===id);
@@ -2309,7 +2309,7 @@ function placeSheet(target,query){
   if(!found.length){
     body=`<div class="v gap-xs"><div class="body">Nothing by that name</div>
       <div class="footnote mortar">Try the borough or the town instead &mdash; Arch is only
-        in Fraunces so far.</div></div>`;
+        in New York so far.</div></div>`;
   } else if(searching){
     body=`<div class="v gap-xs">${found.map(row).join("")}</div>`;
   } else {
