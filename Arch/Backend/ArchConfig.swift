@@ -52,10 +52,10 @@ enum ArchConfig {
     /// age and conduct, and those do not belong in Apple's.
     static let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
 
-    /// The privacy policy. **Nil until the domain exists, and it has to be set
-    /// before submission** -- there is no Apple standard to fall back on, and the
-    /// Premium screen simply leaves the link out while this is nil.
-    static let privacyURL: URL? = nil
+    /// The privacy policy, on Arch's own domain. Required beside the subscribe
+    /// button, and there is no Apple standard to fall back on the way there is
+    /// for the terms. The page is `site/privacy.html` in this repository.
+    static let privacyURL = URL(string: "https://archdating.com/privacy.html")
 
     /// The values, for code that has already checked `isConfigured`.
     ///
