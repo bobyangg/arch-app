@@ -22,20 +22,31 @@ struct PlannerCandidate: Identifiable, Hashable {
 ///
 /// **"Share this plan" shares only into Messages.** It opens a list of the
 /// people you are talking to -- the one you planned with first -- and the plan
-/// goes into whichever conversation you pick. Not the system share sheet: a plan
-/// carries where you will be and when, and the only people it should reach are
-/// people you have chosen to talk to here.
+/// goes into whichever conversation you pick, as a card they can say yes to (see
+/// `PlanCard`). Not the system share sheet: a plan carries where you will be and
+/// when, and the only people it should reach are people you have chosen to talk
+/// to here.
 ///
 /// **It never shows how far away anybody lives.** The first stop says how far it
 /// is from you, and for them it says only whether it is about as far, or a little
 /// further, in words. Their side is computed from their neighbourhood's centre,
 /// which is what their profile already shows; a planner that used anything
 /// finer would be the one screen in Arch that could find somebody's street.
+/// Where to point the planner when it is opened from a plan in a thread: on this
+/// person, at this time of day. Identified, so opening it twice on the same
+/// person still counts as a change the planner hears.
+struct PlannerPreset: Equatable {
+    let personID: String
+    let time: DatePlan.TimeOfDay
+    let id = UUID()
+}
+
 struct DatePlannerView: View {
     let you: Person
     let candidates: [PlannerCandidate]
     var venues: [Venue] = VenueLibrary.all
-    var onSend: (Conversation, String) -> Void = { _, _ in }
+    var preset: PlannerPreset? = nil
+    var onSend: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
     var onOpenDaily: () -> Void = {}
 
     @State private var chosenID: String?
@@ -46,7 +57,7 @@ struct DatePlannerView: View {
     /// Who the plan last went to, by name, for the line under the button.
     @State private var sentTo: String?
     /// The plan being shared, while the list of people is open.
-    @State private var sharing: String?
+    @State private var sharing: DatePlan?
 
     private var chosen: PlannerCandidate? {
         candidates.first { $0.id == chosenID } ?? candidates.first
@@ -78,6 +89,14 @@ struct DatePlannerView: View {
             sentTo = nil
         }
         .onChange(of: time) { _, _ in
+            skips = [:]
+            sentTo = nil
+        }
+        // "Change it" on a plan in a thread lands here, on that person.
+        .onChange(of: preset) { _, preset in
+            guard let preset else { return }
+            chosenID = preset.personID
+            time = preset.time
             skips = [:]
             sentTo = nil
         }
@@ -265,7 +284,6 @@ struct DatePlannerView: View {
 
     @ViewBuilder
     private func footer(_ plan: DatePlan, with candidate: PlannerCandidate) -> some View {
-        let message = DatePlanner.message(for: plan)
 
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Text(summary(plan))
@@ -273,7 +291,7 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ArchButton(title: "Share this plan") { sharing = message }
+            ArchButton(title: "Share this plan") { sharing = plan }
 
             if let sentTo {
                 Text("Sent to \(sentTo). It is in your conversation.")
@@ -288,9 +306,14 @@ struct DatePlannerView: View {
                 candidates: candidates,
                 plannedWith: candidate.id,
                 onPick: { picked in
-                    if let sharing { onSend(picked.conversation, sharing) }
+                    if let sharing {
+                        onSend(picked.conversation,
+                               DatePlanner.message(for: sharing),
+                               SharedPlan(sharing, sharedWith: picked.person,
+                                          plannedWith: candidate.person))
+                    }
                     sentTo = picked.person.name
-                    sharing = nil
+                    self.sharing = nil
                 },
                 onCancel: { sharing = nil }
             )

@@ -131,6 +131,9 @@ struct MessageRow: Codable, Hashable, Identifiable {
     var senderId: String
     var body: String
     var createdAt: Date
+    /// `messages.plan`, from `backend/022`. Optional and absent-tolerant: a
+    /// database without the column simply never sends the key.
+    var plan: SharedPlan? = nil
 }
 
 /// What goes up when somebody writes. The id and timestamp are the server's to
@@ -139,6 +142,10 @@ struct NewMessage: Encodable {
     let conversationId: String
     let senderId: String
     let body: String
+    /// Left out of the request entirely when nil -- synthesised `Encodable`
+    /// skips a nil optional -- so an ordinary message is the same insert it
+    /// always was, whether or not `backend/022` has been run.
+    var plan: SharedPlan? = nil
 }
 
 // MARK: - Account
@@ -226,7 +233,8 @@ extension ThreadRow {
                         isOutgoing: row.senderId == me,
                         timestamp: ArchUnits.shortTime(row.createdAt),
                         delivery: .sent,
-                        sentAt: row.createdAt
+                        sentAt: row.createdAt,
+                        plan: row.plan
                     )
                 },
             // Arch has no read receipts, so "unread" is only ever about your own

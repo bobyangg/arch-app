@@ -293,7 +293,9 @@ final class DailyFiveStore {
     /// reply that waits for a round trip before appearing reads as a missed tap
     /// and gets typed again. A failure stays in the thread as `.failed` rather
     /// than disappearing -- the thread is the only record that you wrote it.
-    func reply(to conversation: Conversation, text: String) {
+    /// `plan` rides along when the message shares a Date planner plan, or
+    /// answers one -- see `SharedPlan`.
+    func reply(to conversation: Conversation, text: String, plan: SharedPlan? = nil) {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty,
               let index = conversations.firstIndex(where: { $0.id == conversation.id })
@@ -305,7 +307,8 @@ final class DailyFiveStore {
             Message(id: localID, text: body, isOutgoing: true,
                     timestamp: ArchUnits.shortTime(now),
                     delivery: .sending,
-                    sentAt: now)
+                    sentAt: now,
+                    plan: plan)
         )
         conversations[index].lastActivity = "Just now"
         let moved = conversations.remove(at: index)
@@ -314,7 +317,7 @@ final class DailyFiveStore {
         let id = conversation.id
         persist { [weak self] in
             do {
-                let row = try await ArchBackend.send(body, to: id)
+                let row = try await ArchBackend.send(body, to: id, plan: plan)
                 // The server's id replaces the local one, which is what keeps a
                 // refresh from drawing this message twice: the copy that comes
                 // back carries that id, and the merge matches on it.
@@ -340,7 +343,11 @@ final class DailyFiveStore {
             isOutgoing: old.isOutgoing,
             timestamp: old.timestamp,
             delivery: delivery,
-            sentAt: old.sentAt
+            sentAt: old.sentAt,
+            // Rebuilt rather than copied, so every field has to be carried by
+            // hand -- and a plan dropped here would turn the card back into a
+            // paragraph the moment the server said "sent".
+            plan: old.plan
         )
     }
 
