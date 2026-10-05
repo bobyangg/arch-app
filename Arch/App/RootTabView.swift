@@ -57,6 +57,9 @@ struct RootTabView: View {
     private var purchases: Purchases { Purchases.shared }
     @State private var dailyThreadOpen = false
 
+    /// Set by "Change it" on a plan in a thread; the Date planner hears it.
+    @State private var plannerPreset: PlannerPreset?
+
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
 
@@ -108,6 +111,16 @@ struct RootTabView: View {
         }
         .animation(ArchMotion.standard, value: isOffline)
         .animation(ArchMotion.standard, value: isReadingThread)
+        // What a plan in a thread can do, for whichever tab the thread is in.
+        .environment(\.planActions, PlanActions(
+            send: { conversation, text, plan in
+                store.reply(to: conversation, text: text, plan: plan)
+            },
+            change: { conversation, time in
+                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time)
+                selection = .planner
+            }
+        ))
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
     }
@@ -229,7 +242,10 @@ struct RootTabView: View {
                 DatePlannerView(
                     you: profile.person,
                     candidates: plannerCandidates,
-                    onSend: { conversation, text in store.reply(to: conversation, text: text) },
+                    preset: plannerPreset,
+                    onSend: { conversation, text, plan in
+                        store.reply(to: conversation, text: text, plan: plan)
+                    },
                     onOpenDaily: { selection = .daily }
                 )
             }

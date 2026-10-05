@@ -217,7 +217,7 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .rail{display:flex; gap:12px; overflow-x:auto; scroll-snap-type:x mandatory;
       scrollbar-width:none; -webkit-overflow-scrolling:touch; padding:2px 20px;}
 .rail::-webkit-scrollbar{display:none;}
-.bubble{flex:0 0 78%; scroll-snap-align:center; min-height:124px;
+.rcard{flex:0 0 78%; scroll-snap-align:center; min-height:124px;
         background:var(--stone); border-radius:var(--r-card); padding:16px;
         display:flex; flex-direction:column; gap:8px;}
 .rdots{display:flex; gap:6px; justify-content:center; padding:14px 0 20px;}
@@ -244,6 +244,18 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
              font-size:15px; font-weight:600; color:var(--mortar); background:none;}
 .pwalk{display:flex; align-items:center; gap:12px; padding:4px 0;}
 .pwalk i{display:block; width:2px; height:28px; margin-left:32px; background:var(--quiet); border-radius:1px;}
+
+/* A plan in a thread: wider than a message, on the card surface, because it is
+   a thing you act on rather than something somebody said. */
+.plancard{width:min(320px,86%); padding:16px; border-radius:var(--r-card); background:var(--stone);
+          display:flex; flex-direction:column;}
+.plancard.out{background:var(--stoneRaised);}
+.pcstop{display:flex; gap:12px; align-items:flex-start; text-align:left; width:100%;
+        padding:4px 0; background:none; color:inherit;}
+.pcstop .at{width:58px; flex:none; font-size:13px; line-height:18px;}
+.pcwalk{display:flex; align-items:center; gap:12px; padding:2px 0;}
+.pcwalk i{display:block; width:2px; height:18px; margin-left:26px; background:var(--quiet); border-radius:1px;}
+.plancard .btn{height:40px;}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
 /* ---- bubbles ---- */
@@ -1147,6 +1159,11 @@ function thread(id){
      the whole thread is clutter answering something nobody is still asking. */
   let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
   c.msgs.forEach((m,i)=>{
+    if(m[4]&&m[4].plan){
+      h+=`<div class="msg ${m[0]==="out"?"out":""}">${planCard(c,m,i)}
+        <div class="footnote mortar">${esc(m[2])}</div></div>`;
+      return;
+    }
     /* No read receipts and no "delivered" — what the other person has done with
        your message is between them and their phone. A message that did not leave
        *yours* is not information about them, and leaving it looking sent would be
@@ -1202,7 +1219,7 @@ function premiumRoot(){
       <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
     <div class="rail mt-l" id="prail">`;
   BENEFITS.forEach(([t,d])=>{
-    h+=`<div class="bubble"><div class="subhead">${esc(t)}</div>
+    h+=`<div class="rcard"><div class="subhead">${esc(t)}</div>
       <div class="footnote mortar">${esc(d)}</div></div>`;
   });
   h+=`</div><div class="rdots" id="pdots">${BENEFITS.map((b,i)=>
@@ -1353,13 +1370,13 @@ function planDate(you,them,time,skips){
   const cands=(role,used)=>VENUES.filter(v=>v.roles.includes(role)&&v.times.includes(time)&&!used.has(v.id));
   const pick=(role,pool,score)=>{const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(a[0].id<b[0].id?-1:1)).map(x=>x[0]);
     return r.length?r[(skips[role]||0)%r.length]:null;};
-  const reason=(v,near)=>{
+  const reason=(v,near,who)=>{
     const both=DATE_THEME_ORDER.find(k=>v.themes.includes(k)&&shared.includes(k));
     if(both) return `You both like ${DATE_THEMES[both].phrase}.`;
     const th=DATE_THEME_ORDER.find(k=>v.themes.includes(k)&&k in theirs);
     if(th) return `${them.name} wrote \u201C${theirs[th]}\u201D.`;
     const yo=DATE_THEME_ORDER.find(k=>v.themes.includes(k)&&k in yours);
-    if(yo) return `You wrote \u201C${yours[yo]}\u201D.`;
+    if(yo) return `${who} wrote \u201C${yours[yo]}\u201D.`;
     /* Nothing either of you wrote points here, so say what chose it. */
     /* "Close" only when it is: a walk, not a ride. */
     if(near&&near.id!==v.id) return travelFor(kmBetween(near.c,v.c)).foot
@@ -1384,7 +1401,10 @@ function planDate(you,them,time,skips){
     const leg=prev?travelFor(kmBetween(prev.c,v.c)):null;
     /* Rounded up to the next five minutes: "3:33" reads as computed. */
     clock=Math.ceil((clock+(leg?leg.min:0))/5)*5;
-    stops.push({role,title,v,start:clock,leg,reason:reason(v,role==="main"?null:main)});
+    const near=role==="main"?null:main;
+    /* `reason` is for this screen ("You wrote ..."); `shared` is for a message
+       both people read ("Sam wrote ..."). */
+    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name)});
     clock+=KINDS[v.kind][1]; prev=v;
   });
 
@@ -1400,6 +1420,54 @@ function planDate(you,them,time,skips){
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+KINDS[stops[stops.length-1].v.kind][1]:PLAN_START[time]};
 }
+/* A plan as it travels in a message. The reasons go only to the person it was
+   made for: they quote what that person wrote, and "Share this plan" can send it
+   to anybody in Messages -- sent to somebody else, it would show them another
+   person's interests and that you are planning a date with them. */
+const frozenPlan=(plan,time,keepReasons)=>({time,stops:plan.stops.map(st=>({
+  start:st.start,name:st.v.name,kind:KINDS[st.v.kind][0],hood:st.v.hood,
+  leg:st.leg?travelLabel(st.leg):null,reason:keepReasons?st.shared:null}))});
+
+/* A plan in a thread, as a card. Each stop opens to say why it was chosen. The
+   person it was sent to can say "I'm in" -- an answer tied to this plan, so the
+   card reads the same on both phones -- or "Change it", which opens the planner
+   on the two of you at the same time of day. */
+function planCard(c,m,i){
+  const pl=m[4].plan, out=m[0]==="out";
+  const ans=c.msgs.findIndex(x=>x[4]&&x[4].answering===i);
+  let h=`<div class="plancard ${out?"out":""}"><div class="subhead">${pl.time==="evening"?"A plan for the evening":"A plan for the afternoon"}</div><div class="v mt-s">`;
+  pl.stops.forEach((st,k)=>{
+    if(st.leg) h+=`<div class="pcwalk"><i></i><div class="footnote mortar">${esc(st.leg)}</div></div>`;
+    const key=`${c.id}:${i}:${k}`, open=!!(S.planOpen&&S.planOpen[key]);
+    h+=`<button class="pcstop" data-a="planStop" data-k="${key}" ${st.reason?"":"disabled"}
+        aria-expanded="${open}"><div class="at">${clockAt(st.start)}</div>
+      <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(st.name)}</div>
+        <div class="footnote mortar">${esc(st.kind)} \u00B7 ${esc(st.hood)}</div>
+        ${open&&st.reason?`<div class="footnote" style="margin-top:2px">${esc(st.reason)}</div>`:""}</div></button>`;
+  });
+  h+=`</div>`;
+  if(ans>=0) h+=`<div class="subhead mt-s">${c.msgs[ans][0]==="in"?esc(c.person.name)+" is in.":"You are in."}</div>`;
+  else if(!hasEnded(c)&&!isRequest(c)){
+    h+=out
+      ?`<div class="spread mt-s" style="align-items:center"><div class="footnote mortar">Waiting on ${esc(c.person.name)}.</div>
+          <button class="btntext" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`
+      :`<div style="display:flex; gap:8px" class="mt-s">
+          <button class="btn primary" style="flex:1" data-a="planYes" data-id="${c.id}" data-i="${i}">I\u2019m in</button>
+          <button class="btn quiet" style="flex:1" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`;
+  }
+  return h+`</div>`;
+}
+
+/* Hana's thread ends on a plan she sent, so there is a card to answer. Built at
+   start-up from her side of the planner -- she is "you" and Sam is "them" -- so
+   it is a plan the engine would actually make. */
+function seedHanaPlan(){
+  const c=S.convos.find(x=>x.id==="hana"); if(!c||c.msgs.some(m=>m[4]&&m[4].plan)) return;
+  const plan=planDate(HANA,S.you,"evening",{});
+  c.msgs.push(["in",planMessage(plan),"Yesterday",undefined,{plan:frozenPlan(plan,"evening",true)}]);
+  c.when="Yesterday";
+}
+
 const planMessage=plan=>["How about this?"].concat(
   plan.stops.map(s=>`${clockAt(s.start)} \u00B7 ${s.v.name}, ${s.v.hood}`)).join("\n");
 
@@ -2767,11 +2835,19 @@ document.addEventListener("click",e=>{
           <div class="v" style="margin-left:12px"><div class="subhead">${esc(c.p.name)}</div>
           ${c.p.id===cur.p.id?'<div class="footnote mortar">You planned this with them</div>':""}</div></button>`).join("")}</div>
         <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
+    planStop:()=>{const k=el.dataset.k; S.planOpen=S.planOpen||{}; S.planOpen[k]=!S.planOpen[k]; render();},
+    planYes:()=>{const c=S.convos.find(x=>x.id===id), i=+el.dataset.i; if(!c) return;
+      c.msgs.push(["out","I\u2019m in.","Just now",undefined,{answering:i}]); c.when="Just now"; render();},
+    planChange:()=>{const c=S.convos.find(x=>x.id===id), m=c&&c.msgs[+el.dataset.i]; if(!m) return;
+      S.planner={with:c.person.id,time:m[4].plan.time,skips:{},sent:null};
+      S.stacks.planner=[]; S.tab="planner"; render();},
     planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         to=cands.find(c=>c.p.id===id);
       if(!cur||!to) return;
       const plan=planDate(S.you,cur.p,S.planner.time,S.planner.skips);
-      to.convo.msgs.push(["out",planMessage(plan),"Just now"]); to.convo.when="Just now";
+      to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
+        {plan:frozenPlan(plan,S.planner.time,to.p.id===cur.p.id)}]);
+      to.convo.when="Just now";
       S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
@@ -3277,5 +3353,6 @@ render=function(){
 })();
 
 applyTheme();
+seedHanaPlan();
 render();
 </script>

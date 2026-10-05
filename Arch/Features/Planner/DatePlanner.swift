@@ -193,8 +193,13 @@ struct DatePlan: Hashable {
         let start: Int
         /// How you get here from the stop before. Nil for the first.
         let travel: Travel?
-        /// Why this one, in a sentence.
+        /// Why this one, in a sentence, for the screen you are looking at:
+        /// "You wrote 'Room tone'".
         let reason: String
+        /// The same, for a message both of you will read: "Sam wrote 'Room
+        /// tone'". Only "you" changes; everything else already reads the same
+        /// from either side.
+        let sharedReason: String
 
         var id: String { "\(role.rawValue)-\(venue.id)" }
         var end: Int { start + venue.kind.minutes }
@@ -346,7 +351,10 @@ enum DatePlanner {
                 travel: leg,
                 reason: reason(for: venue, near: role == .main ? nil : main,
                                shared: shared, you: you, yours: yours,
-                               them: them, theirs: theirs)
+                               them: them, theirs: theirs, yourName: "You"),
+                sharedReason: reason(for: venue, near: role == .main ? nil : main,
+                                     shared: shared, you: you, yours: yours,
+                                     them: them, theirs: theirs, yourName: you.name)
             ))
             clock += venue.kind.minutes
             previous = venue
@@ -395,7 +403,8 @@ enum DatePlanner {
         near anchor: Venue?,
         shared: Set<DateTheme>,
         you: Person, yours: [DateTheme: String],
-        them: Person, theirs: [DateTheme: String]
+        them: Person, theirs: [DateTheme: String],
+        yourName: String
     ) -> String {
         let order = DateTheme.allCases
         if let theme = order.first(where: { venue.themes.contains($0) && shared.contains($0) }) {
@@ -407,7 +416,7 @@ enum DatePlanner {
         }
         if let theme = order.first(where: { venue.themes.contains($0) && yours[$0] != nil }),
            let words = yours[theme] {
-            return "You wrote \u{201C}\(words)\u{201D}."
+            return "\(yourName) wrote \u{201C}\(words)\u{201D}."
         }
         // Nothing either of you wrote points here, so say what did choose it:
         // being near the main thing, or, for the main thing itself, the middle.
