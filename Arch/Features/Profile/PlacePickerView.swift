@@ -68,6 +68,7 @@ struct PlacePickerView: View {
     private var isSearching: Bool { !typed.isEmpty }
     private var isWaiting: Bool { !isOffline && searcher.state == .searching }
     private var isUnreachable: Bool { !isOffline && searcher.state == .unreachable }
+    private var isQuebec: Bool { !isOffline && searcher.state == .quebec }
 
     /// **One character is not a failed search, and saying so was the bug.**
     /// `PlaceSearch` does not ask the geocoder below two characters, so the
@@ -98,6 +99,8 @@ struct PlacePickerView: View {
                              "It needs a connection to find a town by name. "
                              + "The list below works without one.")
                         suggestions
+                    } else if isQuebec {
+                        note(PlaceSearch.quebecNote, nil)
                     } else if results.isEmpty {
                         nothingFound
                     } else if isSearching {

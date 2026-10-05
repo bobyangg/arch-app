@@ -37,6 +37,17 @@ final class PlaceSearch {
         /// Distinct from finding nothing, because there is something to say
         /// about it and something to do about it.
         case unreachable
+        /// Everything by that name is in Quebec, where Arch is not offered.
+        /// Distinct from finding nothing: "Nothing by that name" after typing
+        /// Montreal would say the map does not know Montreal.
+        case quebec
+    }
+
+    /// What a search turned up, and whether anything was left out for being in
+    /// Quebec — which is what tells `.quebec` apart from an empty answer.
+    private struct Found {
+        var places: [Place] = []
+        var leftOutQuebec = false
     }
 
     private(set) var results: [Place] = []
@@ -76,8 +87,12 @@ final class PlaceSearch {
             let found = await PlaceSearch.lookUp(needle)
 
             guard !Task.isCancelled else { return }
-            self?.results = found ?? []
-            self?.state = found == nil ? .unreachable : .found
+            self?.results = found?.places ?? []
+            if let found {
+                self?.state = found.places.isEmpty && found.leftOutQuebec ? .quebec : .found
+            } else {
+                self?.state = .unreachable
+            }
         }
     }
 
@@ -98,15 +113,19 @@ final class PlaceSearch {
     /// whether a town exists at all, but Apple rate limits it per app and is
     /// explicit that it is not for per-keystroke use — so it is the second
     /// opinion on an empty answer and never the first.
-    private static func lookUp(_ needle: String) async -> [Place]? {
+    private static func lookUp(_ needle: String) async -> Found? {
         let mapped = await mapSearch(needle)
-        if let mapped, !mapped.isEmpty { return mapped }
-        if let geocoded = await geocode(needle), !geocoded.isEmpty { return geocoded }
-        // nil when the map search itself failed, [] when it simply found nothing.
+        if let mapped, !mapped.places.isEmpty { return mapped }
+        let geocoded = await geocode(needle)
+        if let geocoded, !geocoded.places.isEmpty { return geocoded }
+        if mapped?.leftOutQuebec == true || geocoded?.leftOutQuebec == true {
+            return Found(leftOutQuebec: true)
+        }
+        // nil when the map search itself failed, empty when it simply found nothing.
         return mapped
     }
 
-    private static func mapSearch(_ needle: String) async -> [Place]? {
+    private static func mapSearch(_ needle: String) async -> Found? {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = needle
         // Addresses and places, not businesses. Nobody lives in a coffee shop,
@@ -123,7 +142,7 @@ final class PlaceSearch {
     }
 
     /// The plain geocoder, for a town the map search did not think to offer.
-    private static func geocode(_ needle: String) async -> [Place]? {
+    private static func geocode(_ needle: String) async -> Found? {
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         guard let marks = try? await geocoder.geocodeAddressString(needle) else {
@@ -133,17 +152,21 @@ final class PlaceSearch {
     }
 
     /// Placemarks to rows: to the words Arch keeps, in either country, once each.
-    private static func reduce(_ marks: [CLPlacemark]) -> [Place] {
+    private static func reduce(_ marks: [CLPlacemark]) -> Found {
         var seen = Set<String>()
-        var places: [Place] = []
+        var found = Found()
         for mark in marks {
+            if mark.isInQuebec {
+                found.leftOutQuebec = true
+                continue
+            }
             guard let place = Place(mark) else { continue }
             // Ten addresses on one street all reduce to the same neighbourhood,
             // and the same row ten times is not a list.
             guard seen.insert(place.id).inserted else { continue }
-            places.append(place)
+            found.places.append(place)
         }
-        return places
+        return found
     }
 
     /// The words for a point, for when somebody taps "Use my location".
@@ -160,14 +183,52 @@ final class PlaceSearch {
     /// permission, being granted it, and then finding nothing — twice, because
     /// tapping again did exactly the same thing. Apple's own documentation says
     /// to keep a strong reference for the life of the request; this is that.
-    static func place(at coordinate: Coordinate) async -> Place? {
+    static func place(at coordinate: Coordinate) async -> Spot {
         let point = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         guard let marks = try? await geocoder.reverseGeocodeLocation(point) else {
-            return nil
+            return .unnamed
         }
-        return marks.lazy.compactMap { Place($0) }.first
+        if marks.contains(where: \.isInQuebec) { return .quebec }
+        return marks.lazy.compactMap { Place($0) }.first.map(Spot.named) ?? .unnamed
+    }
+
+    /// What "Use my location" found.
+    enum Spot {
+        case named(Place)
+        /// A position the geocoder could not put a name to. The position is
+        /// still right, and still worth keeping.
+        case unnamed
+        /// In Quebec, where Arch is not offered. Neither the name nor the
+        /// position is kept.
+        case quebec
+    }
+
+    /// Said wherever a Quebec address is turned away, so the screens agree.
+    static let quebecNote = "Arch isn't available in Quebec yet."
+}
+
+extension CLPlacemark {
+
+    /// **Arch is not offered to residents of Quebec**, and the terms say so.
+    /// The App Store sells by country, not province, so the address is where it
+    /// can be held: no place in Quebec can be chosen, by name or by location.
+    ///
+    /// The province's name first, in either language and either spelling. The
+    /// postcode second, for a placemark whose province is missing or spelled
+    /// some other way: in Canada, G, H and J are Quebec's and nobody else's.
+    var isInQuebec: Bool {
+        guard isoCountryCode == "CA" else { return false }
+        if let area = administrativeArea?
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil),
+           area == "qc" || area == "quebec" {
+            return true
+        }
+        guard let first = postalCode?.trimmingCharacters(in: .whitespaces).uppercased().first else {
+            return false
+        }
+        return first == "G" || first == "H" || first == "J"
     }
 }
 
@@ -182,6 +243,7 @@ extension Place {
     init?(_ placemark: CLPlacemark) {
         guard let country = placemark.isoCountryCode,
               country == "US" || country == "CA" else { return nil }
+        guard !placemark.isInQuebec else { return nil }
 
         // `subAdministrativeArea` is the county, and it is the only thing an
         // unincorporated address has. Better than nothing, which is the

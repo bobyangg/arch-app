@@ -218,11 +218,14 @@ struct LocationSetting: View {
             case .fix(let point):
                 locationPermission = .granted
                 Task { @MainActor in
-                    if let found = await PlaceSearch.place(at: point) {
+                    switch await PlaceSearch.place(at: point) {
+                    case .named(let found):
                         choose(found)
-                    } else {
+                    case .unnamed:
                         locationNote = "Arch found where you are but could not "
                             + "name it. Try again in a moment."
+                    case .quebec:
+                        locationNote = PlaceSearch.quebecNote
                     }
                 }
             case .refused:
