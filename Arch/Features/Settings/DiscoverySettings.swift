@@ -224,8 +224,8 @@ struct LocationSetting: View {
                     case .unnamed:
                         locationNote = "Arch found where you are but could not "
                             + "name it. Try again in a moment."
-                    case .quebec:
-                        locationNote = PlaceSearch.quebecNote
+                    case .closed(let note):
+                        locationNote = note
                     }
                 }
             case .refused:

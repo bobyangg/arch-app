@@ -158,10 +158,11 @@ struct OnboardingAbout: View {
                                     locationNote = "Arch found where you are but "
                                         + "could not name it. Search for your town "
                                         + "— it is exact either way."
-                                case .quebec:
-                                    // Not kept, not even the position: a fix in
-                                    // Quebec is the one thing this must not hold.
-                                    locationNote = PlaceSearch.quebecNote
+                                case .closed(let note):
+                                    // Not kept, not even the position: a fix
+                                    // somewhere Arch is not offered is the one
+                                    // thing this must not hold.
+                                    locationNote = note
                                 }
                             }
                         case .refused:

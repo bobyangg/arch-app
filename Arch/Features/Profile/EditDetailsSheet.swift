@@ -160,8 +160,8 @@ struct EditDetailsSheet: View {
                                     locationNote = "Arch found where you are but "
                                         + "could not name it. Search for your town "
                                         + "— it is exact either way."
-                                case .quebec:
-                                    locationNote = PlaceSearch.quebecNote
+                                case .closed(let note):
+                                    locationNote = note
                                 }
                             }
                         case .refused:

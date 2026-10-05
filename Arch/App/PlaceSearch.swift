@@ -2,7 +2,8 @@ import CoreLocation
 import MapKit
 import Observation
 
-/// Finding anywhere in the United States or Canada, without shipping a gazetteer.
+/// Finding anywhere Arch is offered -- Canada, outside Quebec -- without shipping
+/// a gazetteer.
 ///
 /// **The bundled list stopped being the answer the moment Arch left one metro.**
 /// Thirty-two hand-written neighbourhoods work when the product is New York. For
@@ -37,17 +38,18 @@ final class PlaceSearch {
         /// Distinct from finding nothing, because there is something to say
         /// about it and something to do about it.
         case unreachable
-        /// Everything by that name is in Quebec, where Arch is not offered.
-        /// Distinct from finding nothing: "Nothing by that name" after typing
-        /// Montreal would say the map does not know Montreal.
-        case quebec
+        /// Everything by that name is somewhere Arch is not offered, and the
+        /// note says where. Distinct from finding nothing: "Nothing by that
+        /// name" after typing Montreal or Seattle would say the map does not
+        /// know them.
+        case closed(String)
     }
 
-    /// What a search turned up, and whether anything was left out for being in
-    /// Quebec — which is what tells `.quebec` apart from an empty answer.
+    /// What a search turned up, and why anything was left out — which is what
+    /// tells `.closed` apart from an empty answer.
     private struct Found {
         var places: [Place] = []
-        var leftOutQuebec = false
+        var leftOut: String?
     }
 
     private(set) var results: [Place] = []
@@ -58,12 +60,12 @@ final class PlaceSearch {
     /// slow request for "bro" overwrites a fast one for "brooklyn".
     private var lookup: Task<Void, Never>?
 
-    /// Biases results towards North America. It is a hint, not a fence — Apple
-    /// will still answer with Bristol — so the country check in
-    /// `Place.init(_ placemark:)` is what actually holds the line.
-    private static let northAmerica = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 48, longitude: -97),
-        span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 110)
+    /// Biases results towards the populated south of Canada. It is a hint, not
+    /// a fence — Apple will still answer with Bristol, or Portland — so the
+    /// country check in `Place.init(_ placemark:)` is what actually holds the line.
+    private static let canada = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 52, longitude: -96),
+        span: MKCoordinateSpan(latitudeDelta: 24, longitudeDelta: 95)
     )
 
     /// Call on every keystroke. Debounced, so it is not a request per character.
@@ -89,7 +91,11 @@ final class PlaceSearch {
             guard !Task.isCancelled else { return }
             self?.results = found?.places ?? []
             if let found {
-                self?.state = found.places.isEmpty && found.leftOutQuebec ? .quebec : .found
+                if found.places.isEmpty, let note = found.leftOut {
+                    self?.state = .closed(note)
+                } else {
+                    self?.state = .found
+                }
             } else {
                 self?.state = .unreachable
             }
@@ -118,8 +124,8 @@ final class PlaceSearch {
         if let mapped, !mapped.places.isEmpty { return mapped }
         let geocoded = await geocode(needle)
         if let geocoded, !geocoded.places.isEmpty { return geocoded }
-        if mapped?.leftOutQuebec == true || geocoded?.leftOutQuebec == true {
-            return Found(leftOutQuebec: true)
+        if let note = mapped?.leftOut ?? geocoded?.leftOut {
+            return Found(leftOut: note)
         }
         // nil when the map search itself failed, empty when it simply found nothing.
         return mapped
@@ -131,7 +137,7 @@ final class PlaceSearch {
         // Addresses and places, not businesses. Nobody lives in a coffee shop,
         // and a list of them under "where you live" reads as a mistake.
         request.resultTypes = [.address]
-        request.region = northAmerica
+        request.region = canada
 
         do {
             let response = try await MKLocalSearch(request: request).start()
@@ -156,8 +162,8 @@ final class PlaceSearch {
         var seen = Set<String>()
         var found = Found()
         for mark in marks {
-            if mark.isInQuebec {
-                found.leftOutQuebec = true
+            if let note = mark.closedNote {
+                found.leftOut = found.leftOut ?? note
                 continue
             }
             guard let place = Place(mark) else { continue }
@@ -190,7 +196,7 @@ final class PlaceSearch {
         guard let marks = try? await geocoder.reverseGeocodeLocation(point) else {
             return .unnamed
         }
-        if marks.contains(where: \.isInQuebec) { return .quebec }
+        if let note = marks.lazy.compactMap(\.closedNote).first { return .closed(note) }
         return marks.lazy.compactMap { Place($0) }.first.map(Spot.named) ?? .unnamed
     }
 
@@ -200,20 +206,30 @@ final class PlaceSearch {
         /// A position the geocoder could not put a name to. The position is
         /// still right, and still worth keeping.
         case unnamed
-        /// In Quebec, where Arch is not offered. Neither the name nor the
-        /// position is kept.
-        case quebec
+        /// Somewhere Arch is not offered, and the note that says so. Neither
+        /// the name nor the position is kept.
+        case closed(String)
     }
-
-    /// Said wherever a Quebec address is turned away, so the screens agree.
-    static let quebecNote = "Arch isn't available in Quebec yet."
 }
 
 extension CLPlacemark {
 
-    /// **Arch is not offered to residents of Quebec**, and the terms say so.
-    /// The App Store sells by country, not province, so the address is where it
-    /// can be held: no place in Quebec can be chosen, by name or by location.
+    /// Why a place cannot be chosen, or nil when it can — or when it is
+    /// outside both countries, which is simply not a place Arch knows.
+    ///
+    /// **The terms say Arch is not offered in the United States or to residents
+    /// of Quebec**, and the App Store's country setting cannot hold the second
+    /// half of that. The address can, so both are held here, with a sentence
+    /// that says which rather than a search that comes back empty.
+    var closedNote: String? {
+        switch isoCountryCode {
+        case "US": return "Arch isn't available in the United States yet."
+        case "CA": return isInQuebec ? "Arch isn't available in Quebec yet." : nil
+        default: return nil
+        }
+    }
+
+    /// Quebec, where Arch is not offered.
     ///
     /// The province's name first, in either language and either spelling. The
     /// postcode second, for a placemark whose province is missing or spelled
@@ -236,14 +252,12 @@ extension Place {
 
     /// A geocoder's answer, reduced to the two words Arch keeps.
     ///
-    /// Fails rather than guesses in two cases: outside the United States and
-    /// Canada, and when the placemark has no town in it at all — a point in the
-    /// middle of Lake Superior has a country and nothing else, and "Ontario,
-    /// Ontario" is not a place somebody lives.
+    /// Fails rather than guesses in two cases: anywhere Arch is not offered
+    /// (outside Canada, or in Quebec), and when the placemark has no town in it
+    /// at all — a point in the middle of Lake Superior has a country and nothing
+    /// else, and "Ontario, Ontario" is not a place somebody lives.
     init?(_ placemark: CLPlacemark) {
-        guard let country = placemark.isoCountryCode,
-              country == "US" || country == "CA" else { return nil }
-        guard !placemark.isInQuebec else { return nil }
+        guard placemark.isoCountryCode == "CA", !placemark.isInQuebec else { return nil }
 
         // `subAdministrativeArea` is the county, and it is the only thing an
         // unincorporated address has. Better than nothing, which is the

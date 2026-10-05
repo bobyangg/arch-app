@@ -41,21 +41,29 @@ enum ArchConfig {
 
     // MARK: Legal pages
 
-    /// The terms the Premium screen links to.
+    /// Arch's terms, which onboarding asks everybody to accept and the Premium
+    /// screen links to.
     ///
     /// **Apple rejects an auto-renewing subscription without working links to
-    /// terms and a privacy policy, in the app and in the listing.** Until Arch has
-    /// its own, this is Apple's standard licence agreement -- which is not a
-    /// stand-in but the truth: it is the agreement that governs the app for as
-    /// long as App Store Connect has no custom one. Replace it with Arch's own
-    /// terms once they are on the domain; a dating app needs its own rules about
-    /// age and conduct, and those do not belong in Apple's.
-    static let termsURL = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")
+    /// terms and a privacy policy, in the app and in the listing.** These used to
+    /// be Apple's standard licence agreement, which still governs the app itself
+    /// -- Schedule C of the terms says so -- but a dating app needs its own rules
+    /// about age and conduct, and those are here. The pages are `site/` in this
+    /// repository; the host serves them without the `.html`.
+    static let termsURL = URL(string: "https://archdating.com/terms")
+
+    /// The same terms in French. Linked from onboarding beside the English.
+    static let termsFrenchURL = URL(string: "https://archdating.com/terms-fr")
+
+    /// The version on the page at `termsURL`, recorded when somebody accepts.
+    /// **Change it with the page**, or acceptances of new terms are filed under
+    /// the old ones.
+    static let termsVersion = "1.0"
 
     /// The privacy policy, on Arch's own domain. Required beside the subscribe
     /// button, and there is no Apple standard to fall back on the way there is
     /// for the terms. The page is `site/privacy.html` in this repository.
-    static let privacyURL = URL(string: "https://archdating.com/privacy.html")
+    static let privacyURL = URL(string: "https://archdating.com/privacy")
 
     /// The values, for code that has already checked `isConfigured`.
     ///
