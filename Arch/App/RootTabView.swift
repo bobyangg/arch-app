@@ -247,20 +247,18 @@ struct RootTabView: View {
         }
     }
 
-    /// Who the Date planner offers: the people you are talking to first, because
-    /// they are who a plan is most likely for, then the rest of your matches.
-    /// Each person once, with their conversation when there is one -- that is
-    /// what decides whether a plan can be sent or only shared.
+    /// Who the Date planner offers: the people in Messages, and nobody from the
+    /// Daily 5. A date is planned with somebody you are talking to; the roster
+    /// is where you decide whether to start. `threads` is the same list the
+    /// Messages tab draws, so the two can never disagree about who is in it.
+    /// Each person once, in case a list ever holds two threads with one person.
     private var plannerCandidates: [PlannerCandidate] {
         var seen = Set<String>()
-        var out: [PlannerCandidate] = []
-        for conversation in store.threads where seen.insert(conversation.person.id).inserted {
-            out.append(PlannerCandidate(person: conversation.person, conversation: conversation))
+        return store.threads.compactMap { conversation in
+            seen.insert(conversation.person.id).inserted
+                ? PlannerCandidate(person: conversation.person, conversation: conversation)
+                : nil
         }
-        for person in store.roster.people where seen.insert(person.id).inserted {
-            out.append(PlannerCandidate(person: person, conversation: nil))
-        }
-        return out
     }
 
     /// All five stay in the tree; the one you chose is the one you can see.

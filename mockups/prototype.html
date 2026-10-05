@@ -1403,13 +1403,12 @@ function planDate(you,them,time,skips){
 const planMessage=plan=>["How about this?"].concat(
   plan.stops.map(s=>`${clockAt(s.start)} \u00B7 ${s.v.name}, ${s.v.hood}`)).join("\n");
 
-/* The people you are talking to first, because a plan is most likely for them,
-   then the rest of your matches. A conversation that has ended, or a request you
+/* The people in Messages, and nobody from the Daily 5: a date is planned with
+   somebody you are talking to. A conversation that has ended, or a request you
    have not answered, is not somewhere a plan can go. */
 function plannerCandidates(){
   const seen=new Set(), out=[];
   S.convos.filter(c=>!c.state).forEach(c=>{if(!seen.has(c.person.id)){seen.add(c.person.id); out.push({p:c.person,convo:c});}});
-  S.slots.forEach(sl=>{const p=sl.person; if(p&&!seen.has(p.id)){seen.add(p.id); out.push({p,convo:null});}});
   return out;
 }
 
@@ -1421,7 +1420,7 @@ function plannerRoot(){
       <div class="body mortar">Somewhere you would both actually like, about halfway between you.</div></div>`;
   if(!cands.length){
     return h+`<div class="v gap-s mt-xl"><div class="titleM">Nobody to plan with yet</div>
-      <div class="body mortar">Plans are for your matches. When Arch has found some, you can plan a date with any of them here.</div>
+      <div class="body mortar">Plans are for people you are talking to. Write to one of your matches, and you can plan a date with them here.</div>
       <button class="btn quiet mt-s" data-a="tab" data-k="daily">See your matches</button></div></div></div>`;
   }
   const cur=cands.find(c=>c.p.id===P_.with)||cands[0];
@@ -1460,16 +1459,9 @@ function plannerRoot(){
   if(plan.fairness) bits.push(plan.fairness);
   h+=`<div class="footnote mortar mt-l">${bits.join(" ")}</div>`;
 
-  if(cur.convo){
-    h+=P_.sent===cur.p.id
-      ?`<div class="subhead center mt-m" style="padding:12px 0">Sent to ${esc(cur.p.name)}. It is in your conversation.</div>`
-      :`<button class="btn primary mt-m" data-a="planSend">Send to ${esc(cur.p.name)}</button>`;
-  } else {
-    /* Not sent, shared: writing to somebody in your matches is what takes them
-       out of your matches, and a planner is no place to decide that for you. */
-    h+=`<button class="btn quiet mt-m" data-a="planShare">${P_.sent===cur.p.id?"Copied":"Share this plan"}</button>
-      <div class="footnote mortar mt-s">You have not written to ${esc(cur.p.name)} yet, so Arch will not send this for you.</div>`;
-  }
+  h+=P_.sent===cur.p.id
+    ?`<div class="subhead center mt-m" style="padding:12px 0">Sent to ${esc(cur.p.name)}. It is in your conversation.</div>`
+    :`<button class="btn primary mt-m" data-a="planSend">Send to ${esc(cur.p.name)}</button>`;
   return h+`</div></div>`;
 }
 
@@ -2757,14 +2749,9 @@ document.addEventListener("click",e=>{
     planSwap:()=>{const k=el.dataset.k, sk={...S.planner.skips}; sk[k]=(sk[k]||0)+1;
       S.planner={...S.planner,skips:sk,sent:null}; render();},
     planSend:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
-      if(!cur||!cur.convo) return;
+      if(!cur) return;
       const plan=planDate(S.you,cur.p,S.planner.time,S.planner.skips);
       cur.convo.msgs.push(["out",planMessage(plan),"Just now"]); cur.convo.when="Just now";
-      S.planner={...S.planner,sent:cur.p.id}; render();},
-    planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
-      if(!cur) return;
-      const text=planMessage(planDate(S.you,cur.p,S.planner.time,S.planner.skips));
-      try{navigator.clipboard&&navigator.clipboard.writeText(text);}catch(e){}
       S.planner={...S.planner,sent:cur.p.id}; render();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
