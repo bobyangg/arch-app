@@ -32,9 +32,12 @@ Any static host works. Cloudflare Pages and GitHub Pages are both free:
 - **GitHub Pages:** it serves from `/docs` or the root, not `/site`, so either
   move these files or publish them from a small separate repo.
 
-## Then, in the app
+## In the app
 
-`ArchConfig.privacyURL` already points at archdating.com. Point
-`ArchConfig.termsURL` at `https://archdating.com/terms.html` once the pages are
-live, in `Arch/Backend/ArchConfig.swift`. The Premium screen shows its links from
-those two values, and Apple rejects an auto-renewing subscription without them.
+`ArchConfig.termsURL`, `termsFrenchURL` and `privacyURL` point at the live pages
+(the host drops `.html`, so the app links without it). Onboarding asks everybody to
+accept the terms, and records the version in `terms_acceptances` (migration 023).
+**When the terms change, change `ArchConfig.termsVersion` with them**, or new
+acceptances are filed under the old version.
+
+When you upload a changed `site/` folder, drag the whole folder in again.
