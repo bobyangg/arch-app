@@ -1,4 +1,6 @@
-# The public pages
+# The public pages (`site/`)
+
+Kept here rather than in `site/`, because everything in `site/` is uploaded and published -- this file included, if it were there.
 
 Three static pages for the domain: `index.html` is the **Support URL**,
 `privacy.html` the **Privacy Policy URL**, `terms.html` the terms. No scripts, no
