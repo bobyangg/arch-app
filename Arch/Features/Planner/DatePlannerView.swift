@@ -1,20 +1,25 @@
 import SwiftUI
 
-/// Somebody to plan with: a person, and your conversation with them if there is
-/// one. The conversation decides how a plan leaves the screen -- see `footer`.
+/// Somebody to plan with: a person, and your conversation with them -- which is
+/// where the plan goes when you send it.
 struct PlannerCandidate: Identifiable, Hashable {
     let person: Person
-    let conversation: Conversation?
+    let conversation: Conversation
     var id: String { person.id }
 }
 
 /// The Date planner tab.
 ///
-/// Pick one of your matches, and Arch lays out an afternoon or an evening: three
+/// **Only people you are talking to.** A date is planned with somebody you have
+/// written to, not somebody Arch has only suggested; the Daily 5 is where you
+/// decide whether to talk, and the planner is for after that. It also means
+/// every plan has somewhere to go: it is sent into your conversation.
+///
+/// Pick one of them, and Arch lays out an afternoon or an evening: three
 /// stops, a reasonable walk apart, chosen from what you both wrote about
 /// yourselves and placed about halfway between you. Any stop can be swapped for
 /// the next-best one without disturbing the others, and the finished plan goes
-/// to them as a message.
+/// into your conversation with them.
 ///
 /// **It never shows how far away anybody lives.** The first stop says how far it
 /// is from you, and for them it says only whether it is about as far, or a little
@@ -261,34 +266,16 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if let conversation = candidate.conversation {
-                if sentTo == candidate.id {
-                    Text("Sent to \(name). It is in your conversation.")
-                        .archText(.subhead)
-                        .foregroundStyle(ArchColor.limestone)
-                        .frame(maxWidth: .infinity, minHeight: ArchSpacing.minimumTapTarget)
-                } else {
-                    ArchButton(title: "Send to \(name)") {
-                        onSend(conversation, message)
-                        sentTo = candidate.id
-                    }
-                }
+            if sentTo == candidate.id {
+                Text("Sent to \(name). It is in your conversation.")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                    .frame(maxWidth: .infinity, minHeight: ArchSpacing.minimumTapTarget)
             } else {
-                // **Not sent, shared.** Writing to somebody in your matches is the
-                // thing that takes them out of your matches, and a planner is no
-                // place to make that decision on your behalf. So for somebody you
-                // have not written to yet, the plan is yours to copy and take
-                // wherever you like.
-                ShareLink(item: message) {
-                    Text("Share this plan")
-                        .archText(.subhead)
-                        .frame(maxWidth: .infinity)
+                ArchButton(title: "Send to \(name)") {
+                    onSend(candidate.conversation, message)
+                    sentTo = candidate.id
                 }
-                .buttonStyle(ArchButtonStyle(kind: .quiet))
-                Text("You have not written to \(name) yet, so Arch will not send this for you.")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .padding(.top, ArchSpacing.l)
@@ -308,7 +295,7 @@ struct DatePlannerView: View {
             Text("Nobody to plan with yet")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
-            Text("Plans are for your matches. When Arch has found some, you can plan a date with any of them here.")
+            Text("Plans are for people you are talking to. Write to one of your matches, and you can plan a date with them here.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -321,7 +308,7 @@ struct DatePlannerView: View {
 #Preview("Date planner") {
     DatePlannerView(
         you: MockData.you,
-        candidates: MockData.people.map { PlannerCandidate(person: $0, conversation: nil) }
+        candidates: MockData.conversations.map { PlannerCandidate(person: $0.person, conversation: $0) }
     )
     .preferredColorScheme(.dark)
 }
