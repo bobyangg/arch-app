@@ -488,7 +488,10 @@ final class DailyFiveStore {
         text: String,
         quoting item: ProfileItem?
     ) -> Conversation {
-        if let existing = conversations.first(where: { $0.person.id == person.id }) {
+        // A live conversation with them is the one to continue. An ended one is
+        // not: it belongs to an earlier introduction, and returning it is what
+        // turned "write to them" into a thread that said "ended" (`backend/028`).
+        if let existing = conversations.first(where: { $0.person.id == person.id && !$0.hasEnded }) {
             return existing
         }
         // **Shown at once and sent immediately after, and the sending is what
@@ -565,6 +568,14 @@ final class DailyFiveStore {
 
     /// Blocking does everything leaving does, and stops them reaching you again.
     func block(_ person: Person) {
+        // **Read before the list is emptied.** This looked the thread up after
+        // `removeAll`, found nothing, and so never ended it -- a blocked person
+        // could go on writing. The server now ends it too, when the block lands
+        // (`backend/028`), so a build with this bug is covered; this keeps the
+        // app honest about what it asked for.
+        let threads = conversations
+            .filter { $0.person.id == person.id && !$0.hasEnded && !$0.id.hasPrefix("pending-") }
+            .map(\.id)
         conversations.removeAll { $0.person.id == person.id }
         dismiss(person)
         persist {
@@ -572,8 +583,8 @@ final class DailyFiveStore {
             // The conversation ends too, and lands on the same state
             // leaving does -- if blocking looked different from here the
             // other person could tell the two apart.
-            if let thread = self.conversations.first(where: { $0.person.id == person.id }) {
-                try await ArchBackend.end(thread.id)
+            for id in threads {
+                try await ArchBackend.end(id)
             }
         }
     }
