@@ -43,6 +43,7 @@ struct MessageThreadView: View {
     var onOpenChanged: (String?) -> Void = { _ in }
 
     @State private var draft = ""
+    @Environment(\.planActions) private var planActions
     @State private var action: ConversationAction?
     @Environment(\.dismiss) private var dismiss
 
@@ -195,6 +196,15 @@ struct MessageThreadView: View {
         return after.timeIntervalSince(sent) >= 60
     }
 
+    /// Whether anybody has said yes to the plan in a message: true if they did,
+    /// false if you did, nil if nobody has. The answer is a message of its own
+    /// that names the plan it answers, so both phones read the same thing.
+    private func answer(to message: Message) -> Bool? {
+        conversation.messages
+            .first { $0.plan?.answering == message.id }
+            .map { !$0.isOutgoing }
+    }
+
     private var transcript: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -204,13 +214,30 @@ struct MessageThreadView: View {
                 }
 
                 ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
-                    MessageBubble(
-                        message: message,
-                        // Only the last thing you wrote is still in question.
-                        showsDelivery: message.id == lastOutgoing?.id,
-                        showsTime: saysTime(at: index),
-                        onRetry: { onRetry(message) }
-                    )
+                    if let plan = message.plan, plan.isPlan {
+                        PlanCard(
+                            message: message,
+                            plan: plan,
+                            theirName: conversation.person.name,
+                            answeredByThem: answer(to: message),
+                            canAct: conversation.state == .open,
+                            onYes: {
+                                planActions.send(conversation, "I\u{2019}m in.",
+                                                 SharedPlan(answering: message.id))
+                            },
+                            onChange: {
+                                planActions.change(conversation, plan.timeOfDay ?? .afternoon)
+                            }
+                        )
+                    } else {
+                        MessageBubble(
+                            message: message,
+                            // Only the last thing you wrote is still in question.
+                            showsDelivery: message.id == lastOutgoing?.id,
+                            showsTime: saysTime(at: index),
+                            onRetry: { onRetry(message) }
+                        )
+                    }
                 }
             }
             .padding(.horizontal, ArchSpacing.screenMargin)

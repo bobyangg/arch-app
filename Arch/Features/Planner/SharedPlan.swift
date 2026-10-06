@@ -1,0 +1,219 @@
+import SwiftUI
+
+/// A plan as it travels in a message, or an answer to one.
+///
+/// Stored in `messages.plan` beside the message's words, which stay readable on
+/// their own -- see `backend/024`. A plan is what the planner laid out, frozen:
+/// names, times and the way between, never a coordinate.
+struct SharedPlan: Codable, Hashable {
+
+    struct Stop: Codable, Hashable {
+        /// Minutes after midnight.
+        let start: Int
+        let name: String
+        let kind: String
+        let neighbourhood: String
+        /// How you get here from the stop before. Nil for the first.
+        let travel: String?
+        /// Why this one, in words both people can read. Nil when the plan was
+        /// shared with somebody other than the person it was made with -- see
+        /// `init(_:sharedWith:plannedWith:)`.
+        let reason: String?
+    }
+
+    /// "afternoon" or "evening", on a plan.
+    var time: String?
+    var stops: [Stop]?
+    /// On an answer: the id of the message whose plan it answers.
+    var answering: String?
+
+    var isPlan: Bool { !(stops ?? []).isEmpty }
+    var timeOfDay: DatePlan.TimeOfDay? { time.flatMap(DatePlan.TimeOfDay.init(rawValue:)) }
+
+    /// A plan, frozen for sending.
+    ///
+    /// **The reasons go only to the person it was made for.** They quote what
+    /// that person wrote -- "Yusuf wrote 'Walking at night'" -- and "Share this
+    /// plan" can send it to anybody in Messages. Sent to Nadia, that would show
+    /// her Yusuf's interests and that you are planning a date with him. So to
+    /// anybody else the stops go and the reasons stay behind.
+    init(_ plan: DatePlan, sharedWith recipient: Person, plannedWith: Person) {
+        let keepReasons = recipient.id == plannedWith.id
+        self.time = plan.time.rawValue
+        self.stops = plan.stops.map { stop in
+            Stop(start: stop.start,
+                 name: stop.venue.name,
+                 kind: stop.venue.kind.label,
+                 neighbourhood: stop.venue.neighbourhood,
+                 travel: stop.travel?.label,
+                 reason: keepReasons ? stop.sharedReason : nil)
+        }
+        self.answering = nil
+    }
+
+    /// "I'm in", to the plan in a given message.
+    init(answering messageID: String) {
+        self.time = nil
+        self.stops = nil
+        self.answering = messageID
+    }
+
+    /// For fixtures, written by hand.
+    init(time: DatePlan.TimeOfDay, stops: [Stop]) {
+        self.time = time.rawValue
+        self.stops = stops
+        self.answering = nil
+    }
+}
+
+/// What a thread can do with a plan, handed down from the app shell through the
+/// environment rather than through every view between them -- a thread is built
+/// in two places, and neither has any other business knowing about plans.
+struct PlanActions {
+    /// Send words and a plan (or an answer to one) into a conversation.
+    var send: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
+    /// Open the Date planner on this person, at this time of day.
+    var change: (Conversation, DatePlan.TimeOfDay) -> Void = { _, _ in }
+}
+
+private struct PlanActionsKey: EnvironmentKey {
+    static let defaultValue = PlanActions()
+}
+
+extension EnvironmentValues {
+    var planActions: PlanActions {
+        get { self[PlanActionsKey.self] }
+        set { self[PlanActionsKey.self] = newValue }
+    }
+}
+
+/// A plan in a conversation.
+///
+/// Wider than a message and on the card surface, because it is a thing you can
+/// act on rather than something somebody said. Each stop opens to say why it was
+/// chosen. Underneath, the one thing still open about it: whether the other
+/// person is in.
+///
+/// - The person it was sent to sees **I'm in** and **Change it**. Saying yes
+///   sends "I'm in." back, tied to this plan, and the card says so on both
+///   phones. Changing it opens the planner on the two of you, at the same time
+///   of day.
+/// - The person who sent it sees who it is waiting on, and **Change it**.
+struct PlanCard: View {
+    let message: Message
+    let plan: SharedPlan
+    let theirName: String
+    /// Who has said yes, if anybody has: true for them, false for you.
+    let answeredByThem: Bool?
+    /// False once the conversation can no longer be written in.
+    let canAct: Bool
+    let onYes: () -> Void
+    let onChange: () -> Void
+
+    @State private var open: Set<Int> = []
+
+    private var title: String {
+        plan.timeOfDay == .evening ? "A plan for the evening" : "A plan for the afternoon"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text(title)
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array((plan.stops ?? []).enumerated()), id: \.offset) { index, stop in
+                    if let travel = stop.travel {
+                        HStack(spacing: ArchSpacing.s) {
+                            Rectangle()
+                                .fill(ArchColor.quietBorder)
+                                .frame(width: 2, height: 18)
+                                .padding(.leading, 26)
+                            Text(travel)
+                                .archText(.footnote)
+                                .foregroundStyle(ArchColor.mortar)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    stopRow(index, stop)
+                }
+            }
+
+            status
+        }
+        .padding(ArchSpacing.m)
+        .frame(maxWidth: 320, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .fill(message.isOutgoing ? ArchColor.stoneRaised : ArchColor.stone)
+        )
+        .frame(maxWidth: .infinity, alignment: message.isOutgoing ? .trailing : .leading)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("thread.plan")
+    }
+
+    private func stopRow(_ index: Int, _ stop: SharedPlan.Stop) -> some View {
+        let isOpen = open.contains(index)
+        return Button {
+            guard stop.reason != nil else { return }
+            withAnimation(ArchMotion.standard) {
+                if isOpen { open.remove(index) } else { open.insert(index) }
+            }
+        } label: {
+            HStack(alignment: .top, spacing: ArchSpacing.s) {
+                Text(DatePlanner.clockTime(stop.start))
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.limestone)
+                    .frame(width: 58, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stop.name)
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("\(stop.kind) \u{00B7} \(stop.neighbourhood)")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                    if isOpen, let reason = stop.reason {
+                        Text(reason)
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.limestone)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 2)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, ArchSpacing.xxs)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint(stop.reason == nil ? "" : (isOpen ? "Hides why" : "Says why it was chosen"))
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        if let byThem = answeredByThem {
+            Text(byThem ? "\(theirName) is in." : "You are in.")
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+                .padding(.top, ArchSpacing.xxs)
+        } else if canAct {
+            if message.isOutgoing {
+                HStack {
+                    Text("Waiting on \(theirName).")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                    Spacer(minLength: ArchSpacing.s)
+                    ArchTextButton(title: "Change it", action: onChange)
+                }
+            } else {
+                HStack(spacing: ArchSpacing.xs) {
+                    ArchButton(title: "I\u{2019}m in", action: onYes)
+                    ArchButton(title: "Change it", kind: .quiet, action: onChange)
+                }
+                .padding(.top, ArchSpacing.xxs)
+            }
+        }
+    }
+}

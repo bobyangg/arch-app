@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// The app shell: four tabs over one store.
+/// The app shell: five tabs over one store.
 ///
-/// All four tabs stay alive rather than being rebuilt on every switch, so a
+/// All five tabs stay alive rather than being rebuilt on every switch, so a
 /// half-scrolled profile or an open thread is still there when you come back —
 /// which is what a tab bar is supposed to do.
 struct RootTabView: View {
@@ -57,6 +57,9 @@ struct RootTabView: View {
     private var purchases: Purchases { Purchases.shared }
     @State private var dailyThreadOpen = false
 
+    /// Set by "Change it" on a plan in a thread; the Date planner hears it.
+    @State private var plannerPreset: PlannerPreset?
+
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
 
@@ -108,6 +111,16 @@ struct RootTabView: View {
         }
         .animation(ArchMotion.standard, value: isOffline)
         .animation(ArchMotion.standard, value: isReadingThread)
+        // What a plan in a thread can do, for whichever tab the thread is in.
+        .environment(\.planActions, PlanActions(
+            send: { conversation, text, plan in
+                store.reply(to: conversation, text: text, plan: plan)
+            },
+            change: { conversation, time in
+                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time)
+                selection = .planner
+            }
+        ))
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
     }
@@ -225,6 +238,17 @@ struct RootTabView: View {
                     onThreadOpenChanged: { reading(.messages, $0) }
                 )
             }
+            tab(.planner) {
+                DatePlannerView(
+                    you: profile.person,
+                    candidates: plannerCandidates,
+                    preset: plannerPreset,
+                    onSend: { conversation, text, plan in
+                        store.reply(to: conversation, text: text, plan: plan)
+                    },
+                    onOpenDaily: { selection = .daily }
+                )
+            }
             tab(.you) {
                 YouProfileView(
                     store: profile,
@@ -239,7 +263,21 @@ struct RootTabView: View {
         }
     }
 
-    /// All four stay in the tree; the one you chose is the one you can see.
+    /// Who the Date planner offers: the people in Messages, and nobody from the
+    /// Daily 5. A date is planned with somebody you are talking to; the roster
+    /// is where you decide whether to start. `threads` is the same list the
+    /// Messages tab draws, so the two can never disagree about who is in it.
+    /// Each person once, in case a list ever holds two threads with one person.
+    private var plannerCandidates: [PlannerCandidate] {
+        var seen = Set<String>()
+        return store.threads.compactMap { conversation in
+            seen.insert(conversation.person.id).inserted
+                ? PlannerCandidate(person: conversation.person, conversation: conversation)
+                : nil
+        }
+    }
+
+    /// All five stay in the tree; the one you chose is the one you can see.
     ///
     /// The change is a cross-fade, on the same curve the tab bar's pill moves
     /// on, so the two read as one gesture. The incoming tab is layered on top and

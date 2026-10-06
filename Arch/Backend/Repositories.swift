@@ -937,12 +937,14 @@ enum ArchBackend {
                 isOutgoing: row.senderId == session.userID,
                 timestamp: ArchUnits.shortTime(row.createdAt),
                 delivery: .sent,
-                sentAt: row.createdAt
+                sentAt: row.createdAt,
+                plan: row.plan
             )
         }
     }
 
-    static func send(_ body: String, to conversationID: String) async throws -> MessageRow {
+    static func send(_ body: String, to conversationID: String,
+                     plan: SharedPlan? = nil) async throws -> MessageRow {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
@@ -950,7 +952,8 @@ enum ArchBackend {
             "messages",
             NewMessage(conversationId: conversationID,
                        senderId: session.userID,
-                       body: body),
+                       body: body,
+                       plan: plan),
             returning: MessageRow.self
         )
     }
