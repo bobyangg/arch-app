@@ -40,10 +40,21 @@ h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .5rem; }
 h2 { font-size: 1.25rem; margin: 2.5rem 0 .75rem; padding-top: 1.25rem; border-top: 1px solid var(--rule); }
 h3 { font-size: 1.05rem; margin: 1.5rem 0 .4rem; }
 
-p, li { margin: 0 0 .9rem; }
+p, li { margin: 0 0 .9rem; overflow-wrap: anywhere; }
 ul { padding-left: 1.2rem; }
 
 .meta, .links { color: var(--quiet); font-size: .95rem; }
 .lede { font-size: 1.1rem; }
 
 a { color: var(--link); text-underline-offset: .15em; }
+
+/* The terms are long: a contents list, and the operator block set apart. */
+.toc { margin: 2rem 0; padding: 1rem 1.25rem; border: 1px solid var(--rule); border-radius: 12px; }
+.toc h2 { margin: 0 0 .5rem; padding: 0; border: 0; font-size: 1rem; }
+.toc ol { margin: 0; padding-left: 1.2rem; columns: 2; column-gap: 2rem; font-size: .95rem; }
+.toc li { margin: 0 0 .3rem; break-inside: avoid; }
+@media (max-width: 560px) { .toc ol { columns: 1; } }
+.meta-row { margin: 0 0 .35rem; font-size: .95rem; }
+
+/* A blank still to fill. Loud on purpose: it must never be published. */
+mark { background: #ffe58a; color: #1d1b19; padding: 0 .2em; border-radius: 3px; }

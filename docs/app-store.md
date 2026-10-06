@@ -52,7 +52,7 @@ Apple's.
 > confirmation, and it renews at the same price unless cancelled at least 24 hours
 > before the end of the period. Manage or cancel it in your Apple ID settings.
 >
-> Terms: [DOMAIN]/terms.html · Privacy: [DOMAIN]/privacy.html
+> Terms: archdating.com/terms.html · Privacy: archdating.com/privacy.html
 >
 > Arch is for adults 18 and over.
 
@@ -63,8 +63,8 @@ dating,date,singles,relationship,meet,slow dating,no swipe,serious,partner,love,
 ```
 
 **URLs**
-- Support URL: `https://[DOMAIN]/`
-- Privacy Policy URL: `https://[DOMAIN]/privacy.html`
+- Support URL: `https://archdating.com/`
+- Privacy Policy URL: `https://archdating.com/privacy.html`
 - Marketing URL: optional; the same as support is fine.
 
 **Category:** Lifestyle (primary). Social Networking (secondary) is also defensible.
