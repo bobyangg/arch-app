@@ -1379,7 +1379,17 @@ const VENUES=[
   VN("wide-bowl","Wide Bowl Noodles","food","Williamsburg",40.7135,-73.9620,["food"],["afternoon","evening"],["closer"]),
   VN("tin-roof","Tin Roof Dumplings","food","Sunset Park",40.6450,-74.0110,["food"],["afternoon","evening"],["closer"]),
   VN("platform-diner","Platform Diner","food","Bushwick",40.6990,-73.9230,["food","buildings","night"],["afternoon","evening"],["closer"]),
-  VN("slope-wine","Long Pour","bar","Park Slope",40.6725,-73.9775,["food","words"],["evening"],["closer"])];
+  VN("slope-wine","Long Pour","bar","Park Slope",40.6725,-73.9775,["food","words"],["evening"],["closer"]),
+  /* Added so a Swap has somewhere to go: under "keep it walkable", Domino Park
+     had one café and one restaurant in reach, and the stops either side of it
+     could not be swapped at all. */
+  VN("slack-water","Slack Water Coffee","coffee","Williamsburg",40.7122,-73.9662,["food"],["afternoon","evening"],["opener"]),
+  VN("little-ladle","Little Ladle","food","Williamsburg",40.7171,-73.9601,["food"],["afternoon","evening"],["closer"]),
+  VN("ferry-light","Ferry Light Pizza","food","Williamsburg",40.7103,-73.9638,["food","night"],["afternoon","evening"],["closer"]),
+  VN("night-kettle","Night Kettle","coffee","Fort Greene",40.6872,-73.9748,["food","night"],["evening"],["opener"]),
+  VN("gatehouse-kitchen","Gatehouse Kitchen","food","Prospect Heights",40.6738,-73.9612,["food"],["afternoon","evening"],["closer"]),
+  VN("meadow-edge","Meadow Edge","food","Park Slope",40.6668,-73.9752,["food"],["afternoon","evening"],["closer"]),
+  VN("quiet-hours","Quiet Hours Tea","coffee","Clinton Hill",40.6893,-73.9658,["food","words"],["afternoon","evening"],["opener"])];
 
 const ROLES=[["opener","To start"],["main","The main thing"],["closer","To finish"]];
 
@@ -1463,7 +1473,8 @@ function planDate(you,them,time,skips,day){
   const hasCompany=m=>{const o=onFootFrom(m,"opener"), c=onFootFrom(m,"closer");
     return o.length&&c.length&&(o.length>1||c.length>1||o[0].id!==c[0].id);};
   const mains=cands("main",new Set()), reachable=fit.walkable?mains.filter(hasCompany):mains;
-  const main=pick("main",reachable.length?reachable:mains,v=>liking(v)-between(v));
+  const mainPool=reachable.length?reachable:mains;
+  const main=pick("main",mainPool,v=>liking(v)-between(v));
   /* Near the main thing. */
   const nearMain=v=>main?liking(v)-1.5*kmBetween(main.c,v.c):liking(v)-between(v);
   /* Not a second walk beside a walk -- a rule, not a penalty, giving way only if
@@ -1475,8 +1486,14 @@ function planDate(you,them,time,skips,day){
   const inReach=pool=>{if(!fit.walkable||!main) return pool;
     const near=pool.filter(v=>travelFor(kmBetween(main.c,v.c)).foot); return near.length?near:pool;};
   const used=new Set(main?[main.id]:[]);
-  const opener=pick("opener",besideMain(inReach(cands("opener",used))),nearMain); if(opener) used.add(opener.id);
-  const closer=pick("closer",besideMain(inReach(cands("closer",used))),nearMain);
+  const openerPool=besideMain(inReach(cands("opener",used)));
+  const opener=pick("opener",openerPool,nearMain); if(opener) used.add(opener.id);
+  const closerPool=besideMain(inReach(cands("closer",used)));
+  const closer=pick("closer",closerPool,nearMain);
+  /* Whether Swap has anywhere else to go. Under "keep it walkable" and "I
+     don't drink", next to some main things, a stop is often the only place
+     that fits -- and a Swap that lands on the same place looks broken. */
+  const choices={opener:openerPool.length,main:mainPool.length,closer:closerPool.length};
 
   const stops=[]; let clock=PLAN_START[time], prev=null;
   [["opener",opener],["main",main],["closer",closer]].forEach(([role,v])=>{
@@ -1488,7 +1505,8 @@ function planDate(you,them,time,skips,day){
     const near=role==="main"?null:main;
     /* `reason` is for this screen ("You wrote ..."); `shared` is for a message
        both people read ("Sam wrote ..."). */
-    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name)});
+    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name),
+      canSwap:choices[role]>1});
     clock+=KINDS[v.kind][1]; prev=v;
   });
 
@@ -1672,9 +1690,12 @@ function plannerRoot(){
         <div class="caption mortar">${s.title}</div>
         <div class="subhead">${esc(s.v.name)}</div>
         <div class="footnote mortar">${KINDS[s.v.kind][0]} \u00B7 ${esc(s.v.hood)}</div>
-        <div class="footnote" style="margin-top:4px">${esc(s.reason)}</div></div>
-      <button class="swap" data-a="planSwap" data-k="${s.role}"
-        aria-label="Swap ${esc(s.v.name)}">Swap</button></div>`;
+        <div class="footnote" style="margin-top:4px">${esc(s.reason)}</div>
+        ${s.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${s.role==="main"
+          ?"The only place that fits what you both said."
+          :"The only place near the main thing that fits. Swap the main thing to move the whole date."}</div>`}</div>
+      ${s.canSwap?`<button class="swap" data-a="planSwap" data-k="${s.role}"
+        aria-label="Swap ${esc(s.v.name)}">Swap</button>`:""}</div>`;
   });
   h+=`</div>`;
 

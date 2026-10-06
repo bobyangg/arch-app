@@ -394,18 +394,32 @@ struct DatePlannerView: View {
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, ArchSpacing.xxs)
+                if !stop.canSwap {
+                    Text(stop.role == .main
+                         ? "The only place that fits what you both said."
+                         : "The only place near the main thing that fits. Swap the main thing to move the whole date.")
+                        .archText(.caption)
+                        .foregroundStyle(ArchColor.mortar)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer(minLength: 0)
 
-            ArchTextButton(title: "Swap") { skips[stop.role, default: 0] += 1 }
-                .accessibilityLabel("Swap \(stop.venue.name)")
+            // Only where there is somewhere else to go. A Swap that lands on
+            // the same place looks like a button that does not work.
+            if stop.canSwap {
+                ArchTextButton(title: "Swap") { skips[stop.role, default: 0] += 1 }
+                    .accessibilityLabel("Swap \(stop.venue.name)")
+            }
         }
         .padding(ArchSpacing.m)
         .background(
             RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
                 .fill(ArchColor.stone)
         )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planner.stop")
     }
 
     /// Getting between two stops, drawn as the gap it is.

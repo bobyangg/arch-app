@@ -94,6 +94,27 @@ enum VenueLibrary {
               [.food, .buildings, .night], [.afternoon, .evening], [.closer]),
         venue("slope-wine", "Long Pour", .bar, "Park Slope", 40.6725, -73.9775,
               [.food, .words], [.evening], [.closer]),
+
+        // MARK: Invented -- so a Swap has somewhere to go
+        //
+        // Added where a main thing had one place beside it: under "keep it
+        // walkable", Domino Park had a single café and a single restaurant in
+        // reach, and the stops either side of it could not be swapped at all.
+
+        venue("slack-water", "Slack Water Coffee", .coffee, "Williamsburg", 40.7122, -73.9662,
+              [.food], [.afternoon, .evening], [.opener]),
+        venue("little-ladle", "Little Ladle", .food, "Williamsburg", 40.7171, -73.9601,
+              [.food], [.afternoon, .evening], [.closer]),
+        venue("ferry-light", "Ferry Light Pizza", .food, "Williamsburg", 40.7103, -73.9638,
+              [.food, .night], [.afternoon, .evening], [.closer]),
+        venue("night-kettle", "Night Kettle", .coffee, "Fort Greene", 40.6872, -73.9748,
+              [.food, .night], [.evening], [.opener]),
+        venue("gatehouse-kitchen", "Gatehouse Kitchen", .food, "Prospect Heights", 40.6738, -73.9612,
+              [.food], [.afternoon, .evening], [.closer]),
+        venue("meadow-edge", "Meadow Edge", .food, "Park Slope", 40.6668, -73.9752,
+              [.food], [.afternoon, .evening], [.closer]),
+        venue("quiet-hours", "Quiet Hours Tea", .coffee, "Clinton Hill", 40.6893, -73.9658,
+              [.food, .words], [.afternoon, .evening], [.opener]),
     ]
 
     // `Calendar`'s numbering.

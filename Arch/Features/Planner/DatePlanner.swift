@@ -225,6 +225,11 @@ struct DatePlan: Hashable {
         /// tone'". Only "you" changes; everything else already reads the same
         /// from either side.
         let sharedReason: String
+        /// Whether Swap has anywhere else to go. False when this is the only
+        /// place that can play this part -- under "keep it walkable" and "I
+        /// don't drink", next to some main things, that is often -- and then
+        /// the screen offers no Swap rather than one that changes nothing.
+        let canSwap: Bool
 
         var id: String { "\(role.rawValue)-\(venue.id)" }
         var end: Int { start + venue.kind.minutes }
@@ -376,7 +381,8 @@ enum DatePlanner {
         // The anchor.
         let mains = candidates(.main, besides: [])
         let reachable = fit.walkable ? mains.filter(hasCompany) : mains
-        let main = pick(.main, from: reachable.isEmpty ? mains : reachable) { liking($0) - between($0) }
+        let mainPool = reachable.isEmpty ? mains : reachable
+        let main = pick(.main, from: mainPool) { liking($0) - between($0) }
 
         /// For the stops either side: near the main thing. With no main thing,
         /// halfway stands in for it.
@@ -405,9 +411,13 @@ enum DatePlanner {
         }
 
         var used = Set(main.map { [$0.id] } ?? [])
-        let opener = pick(.opener, from: besideMain(inReach(candidates(.opener, besides: used))), by: nearMain)
+        let openerPool = besideMain(inReach(candidates(.opener, besides: used)))
+        let opener = pick(.opener, from: openerPool, by: nearMain)
         if let opener { used.insert(opener.id) }
-        let closer = pick(.closer, from: besideMain(inReach(candidates(.closer, besides: used))), by: nearMain)
+        let closerPool = besideMain(inReach(candidates(.closer, besides: used)))
+        let closer = pick(.closer, from: closerPool, by: nearMain)
+        let choices: [DatePlan.Role: Int] = [.opener: openerPool.count, .main: mainPool.count,
+                                             .closer: closerPool.count]
 
         var stops: [DatePlan.Stop] = []
         var clock = time.start
@@ -428,7 +438,8 @@ enum DatePlanner {
                                them: them, theirs: theirs, yourName: "You"),
                 sharedReason: reason(for: venue, near: role == .main ? nil : main,
                                      shared: shared, you: you, yours: yours,
-                                     them: them, theirs: theirs, yourName: you.name)
+                                     them: them, theirs: theirs, yourName: you.name),
+                canSwap: (choices[role] ?? 0) > 1
             ))
             clock += venue.kind.minutes
             previous = venue
