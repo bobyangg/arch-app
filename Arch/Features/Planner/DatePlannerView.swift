@@ -205,6 +205,9 @@ struct DatePlannerView: View {
                         .buttonStyle(PressScaleStyle())
                         .accessibilityLabel(candidate.person.name)
                         .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
+                        // By id: a name is also on their row in Messages and
+                        // their card in the Daily 5.
+                        .accessibilityIdentifier("planner.with.\(candidate.id)")
                     }
                 }
                 .padding(.vertical, ArchSpacing.xxs)

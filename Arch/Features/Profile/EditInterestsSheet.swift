@@ -39,6 +39,7 @@ struct EditInterestsSheet: View {
             ArchButton(title: "Save", isEnabled: hasSomething) {
                 onSave(drafts)
             }
+            .accessibilityIdentifier("interests.save")
             ArchTextButton(title: "Cancel") { dismiss() }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
