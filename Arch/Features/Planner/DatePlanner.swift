@@ -165,6 +165,13 @@ struct Venue: Identifiable, Hashable {
     let themes: Set<DateTheme>
     let times: Set<DatePlan.TimeOfDay>
     let roles: Set<DatePlan.Role>
+    /// Days of the week it is shut, as `Calendar` numbers them: 1 is Sunday.
+    var closedOn: Set<Int> = []
+
+    func isOpen(on day: PlanDay?) -> Bool {
+        guard let day else { return true }
+        return !closedOn.contains(day.weekday)
+    }
 }
 
 /// A plan for one date.
@@ -218,12 +225,19 @@ struct DatePlan: Hashable {
         /// tone'". Only "you" changes; everything else already reads the same
         /// from either side.
         let sharedReason: String
+        /// Whether Swap has anywhere else to go. False when this is the only
+        /// place that can play this part -- under "keep it walkable" and "I
+        /// don't drink", next to some main things, that is often -- and then
+        /// the screen offers no Swap rather than one that changes nothing.
+        let canSwap: Bool
 
         var id: String { "\(role.rawValue)-\(venue.id)" }
         var end: Int { start + venue.kind.minutes }
     }
 
     let time: TimeOfDay
+    /// Which day. Nil only for a plan made without one.
+    let day: PlanDay?
     /// What both of you are into.
     let shared: [DateTheme]
     /// Interests written the same way by both of you. Rare, and worth saying
@@ -271,10 +285,15 @@ enum DatePlanner {
 
     /// `skips` says, per role, how many times its stop has been swapped: the
     /// stop is the next-best place along the ranking, wrapping round.
+    ///
+    /// `day` takes out anywhere shut that day. A plan that sent two people to
+    /// a museum on the day it is closed would be the planner being wrong about
+    /// the one thing it is for.
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
+        day: PlanDay? = nil,
         venues: [Venue],
         skips: [DatePlan.Role: Int] = [:]
     ) -> DatePlan {
@@ -325,7 +344,7 @@ enum DatePlanner {
 
         func candidates(_ role: DatePlan.Role, besides used: Set<String>) -> [Venue] {
             venues.filter {
-                $0.roles.contains(role) && $0.times.contains(time)
+                $0.roles.contains(role) && $0.times.contains(time) && $0.isOpen(on: day)
                     && !used.contains($0.id) && fit.allows($0)
             }
         }
@@ -362,7 +381,8 @@ enum DatePlanner {
         // The anchor.
         let mains = candidates(.main, besides: [])
         let reachable = fit.walkable ? mains.filter(hasCompany) : mains
-        let main = pick(.main, from: reachable.isEmpty ? mains : reachable) { liking($0) - between($0) }
+        let mainPool = reachable.isEmpty ? mains : reachable
+        let main = pick(.main, from: mainPool) { liking($0) - between($0) }
 
         /// For the stops either side: near the main thing. With no main thing,
         /// halfway stands in for it.
@@ -391,9 +411,13 @@ enum DatePlanner {
         }
 
         var used = Set(main.map { [$0.id] } ?? [])
-        let opener = pick(.opener, from: besideMain(inReach(candidates(.opener, besides: used))), by: nearMain)
+        let openerPool = besideMain(inReach(candidates(.opener, besides: used)))
+        let opener = pick(.opener, from: openerPool, by: nearMain)
         if let opener { used.insert(opener.id) }
-        let closer = pick(.closer, from: besideMain(inReach(candidates(.closer, besides: used))), by: nearMain)
+        let closerPool = besideMain(inReach(candidates(.closer, besides: used)))
+        let closer = pick(.closer, from: closerPool, by: nearMain)
+        let choices: [DatePlan.Role: Int] = [.opener: openerPool.count, .main: mainPool.count,
+                                             .closer: closerPool.count]
 
         var stops: [DatePlan.Stop] = []
         var clock = time.start
@@ -414,7 +438,8 @@ enum DatePlanner {
                                them: them, theirs: theirs, yourName: "You"),
                 sharedReason: reason(for: venue, near: role == .main ? nil : main,
                                      shared: shared, you: you, yours: yours,
-                                     them: them, theirs: theirs, yourName: you.name)
+                                     them: them, theirs: theirs, yourName: you.name),
+                canSwap: (choices[role] ?? 0) > 1
             ))
             clock += venue.kind.minutes
             previous = venue
@@ -433,6 +458,7 @@ enum DatePlanner {
 
         return DatePlan(
             time: time,
+            day: day,
             shared: DateTheme.allCases.filter { shared.contains($0) },
             sameWords: sameWordsShown,
             halfway: middle.flatMap(nearestNeighbourhood),
@@ -442,10 +468,12 @@ enum DatePlanner {
         )
     }
 
-    /// The message a plan becomes when you send it.
+    /// The message a plan becomes when you send it. The day goes in the first
+    /// line, because the first line is what a notification shows.
     static func message(for plan: DatePlan) -> String {
         let lines = plan.stops.map { "\(clockTime($0.start)) · \($0.venue.name), \($0.venue.neighbourhood)" }
-        return (["How about this?"] + lines).joined(separator: "\n")
+        let opening = plan.day.map { "How about \($0.long)?" } ?? "How about this?"
+        return ([opening] + lines).joined(separator: "\n")
     }
 
     /// "2:00 pm". Written by hand rather than through a `DateFormatter`, because
