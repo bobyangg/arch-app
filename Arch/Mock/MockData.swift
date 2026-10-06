@@ -631,6 +631,9 @@ struct Message: Identifiable, Hashable {
     /// again. Nil in the fixtures, which were written as strings and have no
     /// date behind them -- so both uses fall back rather than assuming one.
     var sentAt: Date? = nil
+    /// A Date planner plan this message carries, or the answer to one. Nil for
+    /// every ordinary message.
+    var plan: SharedPlan? = nil
 }
 
 /// Where a conversation sits.
@@ -1278,7 +1281,24 @@ enum MockData {
             opening: .prompt(hana.prompts[0]),
             messages: [
                 Message(id: "m12", text: "Thursday still good?", isOutgoing: false, timestamp: "Last week"),
-                Message(id: "m13", text: "Thursday is good. I will find somewhere with chairs outside.", isOutgoing: true, timestamp: "Last week")
+                Message(id: "m13", text: "Thursday is good. I will find somewhere with chairs outside.", isOutgoing: true, timestamp: "Last week"),
+                Message(
+                    id: "m14",
+                    text: "How about this?\n6:30 pm \u{00B7} Short Fuse Coffee, Williamsburg\n7:30 pm \u{00B7} Domino Park, Williamsburg\n8:40 pm \u{00B7} Wide Bowl Noodles, Williamsburg",
+                    isOutgoing: false,
+                    timestamp: "Yesterday",
+                    plan: SharedPlan(time: .evening, stops: [
+                        .init(start: 18 * 60 + 30, name: "Short Fuse Coffee", kind: "Coffee",
+                              neighbourhood: "Williamsburg", travel: nil,
+                              reason: "A short walk from Domino Park."),
+                        .init(start: 19 * 60 + 30, name: "Domino Park", kind: "A walk",
+                              neighbourhood: "Williamsburg", travel: "12 min walk",
+                              reason: "You both like being outside."),
+                        .init(start: 20 * 60 + 40, name: "Wide Bowl Noodles", kind: "Something to eat",
+                              neighbourhood: "Williamsburg", travel: "8 min walk",
+                              reason: "A short walk from Domino Park.")
+                    ])
+                )
             ],
             unreadCount: 0,
             lastActivity: "Last week"

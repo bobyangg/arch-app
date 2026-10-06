@@ -26,7 +26,7 @@ import XCTest
 final class ArchSmokeTests: XCTestCase {
 
     /// Every tab, by the identifier `ArchTab` gives it.
-    private let tabs = ["tab.premium", "tab.daily", "tab.messages", "tab.you"]
+    private let tabs = ["tab.premium", "tab.daily", "tab.messages", "tab.planner", "tab.you"]
 
     override func setUp() {
         super.setUp()
@@ -66,7 +66,7 @@ final class ArchSmokeTests: XCTestCase {
 
     // MARK: The shell
 
-    func testItOpensOnTheRosterWithFourTabs() {
+    func testItOpensOnTheRosterWithFiveTabs() {
         let app = launch()
 
         for tab in tabs {
@@ -166,7 +166,7 @@ final class ArchSmokeTests: XCTestCase {
     /// phone. The build had compiled and launched in the simulator, and nothing
     /// in the simulator had ever scrolled it.
     ///
-    /// Measured, not counted. All four tabs stay in the tree and XCUITest sees
+    /// Measured, not counted. All five tabs stay in the tree and XCUITest sees
     /// all four lock-ups whatever their accessibility says, and it will not call
     /// a plain strip over a scroll view "hittable" either. What it does report
     /// faithfully is a frame: the bar on the tab in front is the one that moves,
@@ -320,6 +320,34 @@ final class ArchSmokeTests: XCTestCase {
             "Tapping a refused photo opened nothing."
         )
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the rejection screen.")
+    }
+
+    // MARK: The Date planner
+
+    /// The planner lays out a date for the first person in its row.
+    ///
+    /// `MockData` has people you are talking to and people in your matches, so
+    /// the planner always has somebody. No stop on screen means the engine found
+    /// nowhere to go, or the tab drew nothing -- either way the tab bar would
+    /// still look fine in a screenshot. Addressed by the Swap buttons, which
+    /// every stop has and nothing else on the screen does.
+    func testTheDatePlannerLaysOutADate() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected)
+
+        let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
+        XCTAssertTrue(
+            swaps.firstMatch.waitForExistence(timeout: 5),
+            "The Date planner drew no stops."
+        )
+        XCTAssertEqual(swaps.count, 3, "A plan is three stops; found \(swaps.count).")
+
+        // Swapping a stop has to leave a plan behind, not an empty screen.
+        swaps.firstMatch.tap()
+        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'")).count, 3,
+                       "Swapping a stop lost the plan.")
+        XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
     }
 
     // MARK: App Review
