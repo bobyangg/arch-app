@@ -85,6 +85,21 @@ insert into conversations (lo_account, hi_account, state, opened_by, last_messag
 insert into messages (conversation_id, sender_id, body)
  select id,'00000000-0000-4000-8000-0000000000a1','hello' from conversations limit 1;
 
+-- Date planner answers (backend/025). Unlike the questionnaire, these are read by
+-- the people you are *talking to* -- and by nobody else. D is in B's five tonight
+-- but has never written: that is the Daily 5, and it must not be enough.
+insert into auth.users (id, aud, role, email, created_at, updated_at) values
+ ('00000000-0000-4000-8000-0000000000d4','authenticated','authenticated','d@rlstest.invalid',now(),now());
+insert into accounts (id, apple_user_id) values ('00000000-0000-4000-8000-0000000000d4','apple-test-d');
+insert into pairings (night, lo_account, hi_account, score) values
+ ((now() at time zone 'America/New_York')::date,
+  least('00000000-0000-4000-8000-0000000000b2'::uuid,'00000000-0000-4000-8000-0000000000d4'::uuid), greatest('00000000-0000-4000-8000-0000000000b2'::uuid,'00000000-0000-4000-8000-0000000000d4'::uuid), 9.0);
+insert into date_preferences (account_id, style, time_of_day, drinks, budget, distance) values
+ ('00000000-0000-4000-8000-0000000000a1','talk','evening','no','low','walkable'),
+ ('00000000-0000-4000-8000-0000000000b2','doing','either','yes','any','ride'),
+ ('00000000-0000-4000-8000-0000000000c3','outside','afternoon','sometimes','middle','walkable'),
+ ('00000000-0000-4000-8000-0000000000d4','night_out','evening','yes','any','ride');
+
 
 -- ------------------------------------------------------- now behave like a client
 
@@ -108,6 +123,10 @@ insert into rls_results select 11,'B cannot see C photos (stranger)',0,count(*) 
 insert into rls_results select 12,'B can read A prompts while paired',1,count(*) from profile_prompts;
 insert into rls_results select 13,'B can see A in profiles view',1,count(*) from visible_profiles where account_id='00000000-0000-4000-8000-0000000000a1';
 insert into rls_results select 14,'B cannot see C in profiles view',0,count(*) from visible_profiles where account_id='00000000-0000-4000-8000-0000000000c3';
+insert into rls_results select 19,'B can read A date preferences (talking)',1,count(*) from date_preferences where account_id='00000000-0000-4000-8000-0000000000a1';
+insert into rls_results select 20,'B cannot read D date preferences (Daily 5 only)',0,count(*) from date_preferences where account_id='00000000-0000-4000-8000-0000000000d4';
+insert into rls_results select 21,'B cannot read C date preferences (stranger)',0,count(*) from date_preferences where account_id='00000000-0000-4000-8000-0000000000c3';
+insert into rls_results select 22,'B can read own date preferences',1,count(*) from date_preferences where account_id='00000000-0000-4000-8000-0000000000b2';
 
 
 -- ------------------------------------------------- writes that must be refused
@@ -147,6 +166,18 @@ begin
     insert into rls_results values (18,'B cannot add a photo to A profile',0,1);
   exception when others then
     insert into rls_results values (18,'B cannot add a photo to A profile',0,0);
+  end;
+
+  -- B can *see* A's row, because they are talking. Seeing it must not be the
+  -- same as being able to change it: the update has to touch nothing. Counted
+  -- rather than caught, because RLS refuses an update by matching no rows, not
+  -- by raising.
+  declare
+    changed int;
+  begin
+    update date_preferences set drinks = 'yes' where account_id = '00000000-0000-4000-8000-0000000000a1';
+    get diagnostics changed = row_count;
+    insert into rls_results values (23,'B cannot change A date preferences',0,changed);
   end;
 end;
 $$;
