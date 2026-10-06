@@ -44,6 +44,9 @@ struct PlannerPreset: Equatable {
 struct DatePlannerView: View {
     let you: Person
     let candidates: [PlannerCandidate]
+    /// Where the design build plans: `VenueLibrary`, which is Brooklyn and has
+    /// no network to need. The real build plans from Apple Maps instead, around
+    /// each person, and only falls back to this in previews.
     var venues: [Venue] = VenueLibrary.all
     var preset: PlannerPreset? = nil
     var onSend: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
@@ -58,6 +61,17 @@ struct DatePlannerView: View {
     @State private var sentTo: String?
     /// The plan being shared, while the list of people is open.
     @State private var sharing: DatePlan?
+    /// What Apple Maps found, per person. Kept while the tab is alive, so going
+    /// back to somebody does not search again.
+    @State private var nearby: [String: VenueSearch.Nearby] = [:]
+    /// The people for whom Apple Maps could not be reached.
+    @State private var unreachable: Set<String> = []
+    /// Bumped by "Try again", which is what makes the search run again.
+    @State private var attempt = 0
+
+    /// A real build plans from Apple Maps. A design build has no backend, may
+    /// have no network, and runs the UI tests -- it keeps the bundled venues.
+    private var isLive: Bool { ArchConfig.isConfigured }
 
     private var chosen: PlannerCandidate? {
         candidates.first { $0.id == chosenID } ?? candidates.first
@@ -69,13 +83,24 @@ struct DatePlannerView: View {
                 masthead
 
                 if let chosen {
-                    let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
-                                                venues: venues, skips: skips)
                     picker
-                    shared(plan, with: chosen.person)
-                    timeToggle
-                    itinerary(plan)
-                    footer(plan, with: chosen)
+                    if isLive && nearby[chosen.id] == nil {
+                        looking(for: chosen)
+                    } else {
+                        let found = nearby[chosen.id]
+                        let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
+                                                    venues: found?.venues ?? venues, skips: skips,
+                                                    theirCentre: found?.theirCentre,
+                                                    halfwayName: found?.halfway)
+                        if plan.stops.isEmpty {
+                            nowhereNearby
+                        } else {
+                            shared(plan, with: chosen.person)
+                            timeToggle
+                            itinerary(plan)
+                            footer(plan, with: chosen)
+                        }
+                    }
                 } else {
                     emptyState
                 }
@@ -84,6 +109,7 @@ struct DatePlannerView: View {
             .padding(.bottom, ArchSpacing.sectionGap)
         }
         .background(ArchColor.night)
+        .task(id: "\(chosen?.id ?? "")#\(attempt)") { await findPlaces() }
         .onChange(of: chosenID) { _, _ in
             skips = [:]
             sentTo = nil
@@ -99,6 +125,23 @@ struct DatePlannerView: View {
             time = preset.time
             skips = [:]
             sentTo = nil
+        }
+    }
+
+    /// Asks Apple Maps about the person on screen, once.
+    ///
+    /// The person is read before the wait and checked after it: switching to
+    /// somebody else cancels this, and a cancelled search must not mark the
+    /// person it was for as unreachable.
+    private func findPlaces() async {
+        guard isLive, let candidate = chosen, nearby[candidate.id] == nil else { return }
+        unreachable.remove(candidate.id)
+        let found = await VenueSearch.nearby(you: you, them: candidate.person)
+        guard !Task.isCancelled else { return }
+        if let found {
+            nearby[candidate.id] = found
+        } else {
+            unreachable.insert(candidate.id)
         }
     }
 
@@ -326,7 +369,45 @@ struct DatePlannerView: View {
             parts.append(String(format: "The first stop is %.1f km from you.", km))
         }
         if let fairness = plan.fairness { parts.append(fairness) }
+        // Apple Maps does not give an app opening hours, so the plan cannot
+        // know them. Better said than discovered at a locked door.
+        if isLive { parts.append("Places are from Apple Maps; check they are open before you go.") }
         return parts.joined(separator: " ")
+    }
+
+    /// While Apple Maps is asked, and if it could not be.
+    @ViewBuilder
+    private func looking(for candidate: PlannerCandidate) -> some View {
+        if unreachable.contains(candidate.id) {
+            VStack(alignment: .leading, spacing: ArchSpacing.s) {
+                Text("Arch could not reach Apple Maps just now.")
+                    .archText(.body)
+                    .foregroundStyle(ArchColor.limestone)
+                Text("It is where the places in a plan come from, so planning needs a connection.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+                ArchButton(title: "Try again", kind: .quiet) { attempt += 1 }
+                    .padding(.top, ArchSpacing.xs)
+            }
+        } else {
+            Text("Finding places near you both\u{2026}")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+        }
+    }
+
+    /// Apple Maps answered, and there was nowhere to put a plan.
+    private var nowhereNearby: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text("Nowhere to plan around yet")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+            Text("Apple Maps found no caf\u{00E9}s, parks or restaurants near the point halfway between you.")
+                .archText(.body)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private var emptyState: some View {

@@ -102,6 +102,9 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
 struct Venue: Identifiable, Hashable {
     enum Kind: String, Hashable {
         case coffee, walk, park, museum, library, studio, listening, food, bar, shop
+        /// A concert hall or a club with a stage. Only from Apple Maps, which
+        /// files them separately from bars.
+        case music
 
         var label: String {
             switch self {
@@ -115,6 +118,7 @@ struct Venue: Identifiable, Hashable {
             case .food:      return "Something to eat"
             case .bar:       return "Drinks"
             case .shop:      return "Shop"
+            case .music:     return "Live music"
             }
         }
 
@@ -135,6 +139,7 @@ struct Venue: Identifiable, Hashable {
             case .food:      return 75
             case .bar:       return 60
             case .shop:      return 40
+            case .music:     return 90
             }
         }
     }
@@ -250,12 +255,19 @@ enum DatePlanner {
 
     /// `skips` says, per role, how many times its stop has been swapped: the
     /// stop is the next-best place along the ranking, wrapping round.
+    ///
+    /// `theirCentre` and `halfwayName` come from Apple Maps when the venues do
+    /// (see `VenueSearch`): a profile from the server names a neighbourhood but
+    /// carries no position, so its centre has to be looked up, and the halfway
+    /// point has to be named by something that knows more than New York.
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
         venues: [Venue],
-        skips: [DatePlan.Role: Int] = [:]
+        skips: [DatePlan.Role: Int] = [:],
+        theirCentre: Coordinate? = nil,
+        halfwayName: String? = nil
     ) -> DatePlan {
         let yours = DateTheme.themes(of: you)
         let theirs = DateTheme.themes(of: them)
@@ -270,17 +282,8 @@ enum DatePlanner {
         // planner that used a more exact position than the profile shows would
         // be the one screen that could tell you where somebody lives.
         let yourPoint = you.matchPoint
-        let theirPoint = them.place?.centre
-        let middle: Coordinate? = {
-            switch (yourPoint, theirPoint) {
-            case let (a?, b?):
-                return Coordinate(latitude: (a.latitude + b.latitude) / 2,
-                                  longitude: (a.longitude + b.longitude) / 2)
-            case let (a?, nil): return a
-            case let (nil, b?): return b
-            default:            return nil
-            }
-        }()
+        let theirPoint = theirCentre ?? them.place?.centre
+        let middle = Self.middle(yourPoint, theirPoint)
 
         func liking(_ venue: Venue) -> Double {
             3.0 * Double(venue.themes.intersection(shared).count)
@@ -375,11 +378,23 @@ enum DatePlanner {
             time: time,
             shared: DateTheme.allCases.filter { shared.contains($0) },
             sameWords: sameWordsShown,
-            halfway: middle.flatMap(nearestNeighbourhood),
+            halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
             fromYou: fromYou,
             fairness: fairness,
             stops: stops
         )
+    }
+
+    /// Halfway between two points, or whichever one there is.
+    static func middle(_ a: Coordinate?, _ b: Coordinate?) -> Coordinate? {
+        switch (a, b) {
+        case let (a?, b?):
+            return Coordinate(latitude: (a.latitude + b.latitude) / 2,
+                              longitude: (a.longitude + b.longitude) / 2)
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        default:            return nil
+        }
     }
 
     /// The message a plan becomes when you send it.
@@ -445,9 +460,16 @@ enum DatePlanner {
         return DatePlan.Travel(minutes: Int((riding / 5).rounded(.up)) * 5, onFoot: false)
     }
 
+    /// The nearest of the bundled neighbourhoods, if one is actually near.
+    ///
+    /// **Within five kilometres, or nothing.** The bundled list is New York, so
+    /// without a limit a halfway point in Toronto was "About halfway: Bay Ridge",
+    /// five hundred kilometres off. The real build names the point with Apple
+    /// Maps instead and only falls back to this.
     private static func nearestNeighbourhood(to point: Coordinate) -> String? {
         PlaceLibrary.all
             .compactMap { place in place.centre.map { (place.name, km(point, $0)) } }
+            .filter { $0.1 <= 5 }
             .min { $0.1 < $1.1 }?
             .0
     }
