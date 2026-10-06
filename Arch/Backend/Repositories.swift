@@ -1058,6 +1058,13 @@ enum ArchBackend {
     /// Reassigning it means touching a row owned by another account, which row
     /// security rightly refuses, so it is done by a function that takes the
     /// token for the caller and never lets the caller say whose it is.
+    /// That this account accepted this version of the terms. The server stamps
+    /// the time and keeps the first one, so calling it twice is harmless.
+    static func acceptTerms(version: String) async throws {
+        struct Arguments: Encodable { let version: String }
+        _ = try await SupabaseClient.shared.rpcRaw("accept_terms", Arguments(version: version))
+    }
+
     static func savePushToken(_ token: String, environment: String) async throws {
         struct Arguments: Encodable {
             let token: String

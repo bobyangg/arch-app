@@ -50,14 +50,17 @@ async function apiToken(): Promise<string> {
     ["sign"],
   );
 
+  // Trimmed, because these arrive by pasting into a dashboard, and a newline
+  // carried in on the end of an issuer id is an unauthorised request that
+  // looks, from here, exactly like the wrong issuer id.
   const now = Math.floor(Date.now() / 1000);
-  const head = encodeJSON({ alg: "ES256", kid: Deno.env.get("APPSTORE_KEY_ID")!, typ: "JWT" });
+  const head = encodeJSON({ alg: "ES256", kid: Deno.env.get("APPSTORE_KEY_ID")!.trim(), typ: "JWT" });
   const body = encodeJSON({
-    iss: Deno.env.get("APPSTORE_ISSUER_ID")!,
+    iss: Deno.env.get("APPSTORE_ISSUER_ID")!.trim(),
     iat: now,
     exp: now + 600,
     aud: "appstoreconnect-v1",
-    bid: Deno.env.get("APP_BUNDLE_ID")!,
+    bid: Deno.env.get("APP_BUNDLE_ID")!.trim(),
   });
 
   // WebCrypto answers ECDSA in IEEE P1363 form, r then s, which is exactly what
@@ -106,17 +109,47 @@ export interface SubscriptionFacts {
  */
 export async function subscriptionFacts(originalTransactionId: string): Promise<SubscriptionFacts | null> {
   const token = await apiToken();
-  for (const host of [PRODUCTION, SANDBOX]) {
+  // **Both environments are asked before anything is concluded.** This used to
+  // stop at the first refusal, so a 401 from production -- which is where it
+  // asks first -- hid whatever the sandbox would have said, and the sandbox is
+  // where every TestFlight purchase lives. One answer from each also says which
+  // problem it is: both refusing is the credentials, production alone refusing
+  // is production.
+  const answers: string[] = [];
+  let refused = false;
+  for (const [label, host] of [["production", PRODUCTION], ["sandbox", SANDBOX]]) {
     const response = await fetch(`${host}/inApps/v1/subscriptions/${encodeURIComponent(originalTransactionId)}`, {
       headers: { "Authorization": `Bearer ${token}` },
     });
-    if (response.status === 404) continue;
-    if (!response.ok) {
-      throw new Error(`App Store Server API answered ${response.status}: ${await response.text()}`);
-    }
-    return read(await response.json(), originalTransactionId);
+    if (response.ok) return read(await response.json(), originalTransactionId);
+    answers.push(`${label} ${response.status} ${(await response.text()).slice(0, 200)}`.trim());
+    if (response.status !== 404) refused = true;
   }
+  if (refused) throw new Error(`App Store Server API refused: ${answers.join("; ")}. ${credentialShape()}`);
   return null;
+}
+
+/**
+ * What the credentials look like, without what they are.
+ *
+ * Apple answers a bad token with a bare 401 and no reason, and the three values
+ * behind it were pasted into a dashboard by hand. This says which one is the
+ * wrong *shape* -- an issuer id that is not a UUID is usually the team id, a key
+ * id that is not ten characters is usually the wrong field -- and never prints a
+ * secret. The bundle id is printed whole: it is in every copy of the app.
+ */
+function credentialShape(): string {
+  const issuer = Deno.env.get("APPSTORE_ISSUER_ID") ?? "";
+  const keyId = Deno.env.get("APPSTORE_KEY_ID") ?? "";
+  const pem = Deno.env.get("APPSTORE_KEY") ?? "";
+  const bundle = (Deno.env.get("APP_BUNDLE_ID") ?? "").trim();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return [
+    `issuer id ${uuid.test(issuer.trim()) ? "is" : "is NOT"} shaped like a UUID`,
+    `key id ${/^[A-Z0-9]{10}$/.test(keyId.trim()) ? "is" : "is NOT"} ten capitals and digits`,
+    `key ${pem.includes("BEGIN PRIVATE KEY") ? "has" : "is MISSING"} its BEGIN line`,
+    `bundle id is "${bundle}"`,
+  ].join("; ");
 }
 
 function read(answer: Record<string, unknown>, wanted: string): SubscriptionFacts | null {

@@ -225,6 +225,14 @@ jobs:
           set -o pipefail
           udid=$(python3 tools/simrun.py --device)
           echo "Testing on $udid"
+          # The status bar Apple uses in its own screenshots, because one of these
+          # tests photographs the Premium screen for App Review. Booted first:
+          # the override needs a running simulator, and simrun shut this one down.
+          xcrun simctl boot "$udid" 2>/dev/null || true
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl status_bar "$udid" override --time 9:41 \
+            --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 \
+            || echo "status bar override unavailable; the screenshot keeps the real one"
           xcodebuild test \
             -project Arch.xcodeproj \
             -scheme Arch \
@@ -232,8 +240,28 @@ jobs:
             -sdk iphonesimulator \
             -destination "id=$udid" \
             -derivedDataPath build \
+            -resultBundlePath TestResults.xcresult \
             CODE_SIGNING_ALLOWED=NO \
             | tee test.log
+
+      # The Premium screen for App Store Connect's subscription review screenshot.
+      # `testPremiumScreenForAppReview` checks the three prices are on screen and
+      # then attaches the picture; this takes it out of the results bundle, which
+      # cannot be opened without a Mac, and keeps it as a plain PNG.
+      - name: Keep the App Review screenshot
+        if: always()
+        continue-on-error: true
+        run: python3 tools/reviewshot.py TestResults.xcresult premium-for-app-review.png
+
+      - name: Upload the App Review screenshot
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: premium-for-app-review
+          retention-days: 30
+          path: premium-for-app-review.png
+          if-no-files-found: ignore
 
       # A test target that executes *zero* tests exits zero, and the step goes
       # green -- the same silent success as a check that tests nothing, which this

@@ -25,6 +25,9 @@ final class OnboardingStore {
         /// four photographs, all of which then has to be deleted. Asked here,
         /// there is nothing to delete.
         case birthday
+        /// Straight after the birthday, because the terms are for adults, and
+        /// before the name, because everything from there on is what they cover.
+        case terms
         case identity
         case about
         case seeking
@@ -70,6 +73,10 @@ final class OnboardingStore {
         didSet { clampDay() }
     }
     var birthDay: Int?
+
+    /// The box on the terms step. Nothing goes past that step until it is
+    /// ticked, and ticking it is what `OnboardingFlowView` records.
+    var acceptedTerms = false
 
     /// **The two hardest filters in the app, and they used to be set by a line
     /// of code.** `createDiscovery` gave everybody 25 miles and 26 to 36 —
@@ -164,6 +171,8 @@ final class OnboardingStore {
             // were -- a year picked one row off is far likelier than a child,
             // and a screen that locked would punish a scroll.
             return birthday?.isOldEnough() == true
+        case .terms:
+            return acceptedTerms
         case .identity:
             return !name.isBlank
         case .about:
