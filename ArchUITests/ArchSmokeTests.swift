@@ -426,7 +426,9 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["tab.planner"].tap()
         answerDatePreferences(app)
 
-        app.buttons["Hana"].tap()
+        // By identifier: "Hana" is also the label of her row in Messages, and
+        // the first run of this test failed on exactly that ambiguity.
+        app.buttons["planner.with.hana"].tap()
         let bothWrote = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'You both wrote'"))
         XCTAssertEqual(bothWrote.count, 0, "Nothing you wrote matches Hana's words yet.")
 
@@ -443,7 +445,7 @@ final class ArchSmokeTests: XCTestCase {
         field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
         field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 45))
         field.typeText("Street trees")
-        app.buttons["Save"].tap()
+        app.buttons["interests.save"].tap()
 
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(bothWrote.firstMatch.waitForExistence(timeout: 5),
