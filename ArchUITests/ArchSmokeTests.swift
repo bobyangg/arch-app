@@ -341,23 +341,27 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertTrue(app.buttons["tab.planner"].isSelected)
         answerDatePreferences(app)
 
-        let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
+        // Counted by their cards, not their Swap buttons: a stop that is the
+        // only place that fits has no Swap, because one would change nothing.
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
         XCTAssertTrue(
-            swaps.firstMatch.waitForExistence(timeout: 5),
+            stops.firstMatch.waitForExistence(timeout: 5),
             "The Date planner drew no stops."
         )
-        XCTAssertEqual(swaps.count, 3, "A plan is three stops; found \(swaps.count).")
+        XCTAssertEqual(stops.count, 3, "A plan is three stops; found \(stops.count).")
 
         // A week of days, and picking one still leaves a whole plan.
         XCTAssertTrue(app.buttons["planner.day.6"].exists, "The planner should offer seven days.")
         app.buttons["planner.day.6"].tap()
         XCTAssertTrue(app.buttons["planner.day.6"].isSelected, "Tapping a day did not pick it.")
-        XCTAssertEqual(swaps.count, 3, "Picking a day lost the plan.")
+        XCTAssertEqual(stops.count, 3, "Picking a day lost the plan.")
 
-        // Swapping a stop has to leave a plan behind, not an empty screen.
+        // Swapping a stop has to leave a plan behind, not an empty screen. The
+        // main thing always has a Swap here: more than one place can anchor it.
+        let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
+        XCTAssertGreaterThan(swaps.count, 0, "No stop on this plan can be swapped.")
         swaps.firstMatch.tap()
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'")).count, 3,
-                       "Swapping a stop lost the plan.")
+        XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
     }
 
