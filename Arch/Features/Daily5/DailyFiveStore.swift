@@ -263,6 +263,29 @@ final class DailyFiveStore {
         persist { try await ArchBackend.dismiss(person) }
     }
 
+    /// Writing to someone empties their slot, and unlike a dismissal it cannot be
+    /// taken back.
+    ///
+    /// **This used to be `dismiss`, and that put them under "take back".** A
+    /// dismissal waits until nine so it can be undone; writing does not wait --
+    /// `start_conversation` lands both dismissals the moment the message is
+    /// written. So the person sat in the waiting list with a button that put them
+    /// back in your five, where you could write to them again, while the server
+    /// had already let them go. Now they leave the five and appear nowhere: not
+    /// in waiting, and not in Messages either until they write back (`threads`
+    /// keeps an unanswered request of yours out of the list). Nothing is sent
+    /// from here, because the server already did it.
+    private func spendSlot(on person: Person) {
+        if let index = roster.slots.firstIndex(where: { $0.id == person.id }) {
+            roster.slots[index] = .empty(
+                id: "slot-\(person.id)",
+                refillsAt: Self.nextRefill(),
+                opening: .yours
+            )
+        }
+        waiting.removeAll { $0.id == person.id }
+    }
+
     /// Back into the five, while the dismissal is still yours to take back.
     ///
     /// Into the slot they left if it is still open, and otherwise appended --
@@ -524,8 +547,8 @@ final class DailyFiveStore {
             lastActivity: "Just now"
         )
         conversations.insert(conversation, at: 0)
-        // Writing to them spends the slot.
-        dismiss(person)
+        // Writing to them spends the slot -- for good.
+        spendSlot(on: person)
 
         // The id the server gives back replaces the placeholder, because every
         // later call -- replying, leaving, ending -- is addressed by it. A
