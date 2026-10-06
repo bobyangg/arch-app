@@ -348,6 +348,12 @@ final class ArchSmokeTests: XCTestCase {
         )
         XCTAssertEqual(swaps.count, 3, "A plan is three stops; found \(swaps.count).")
 
+        // A week of days, and picking one still leaves a whole plan.
+        XCTAssertTrue(app.buttons["planner.day.6"].exists, "The planner should offer seven days.")
+        app.buttons["planner.day.6"].tap()
+        XCTAssertTrue(app.buttons["planner.day.6"].isSelected, "Tapping a day did not pick it.")
+        XCTAssertEqual(swaps.count, 3, "Picking a day lost the plan.")
+
         // Swapping a stop has to leave a plan behind, not an empty screen.
         swaps.firstMatch.tap()
         XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'")).count, 3,

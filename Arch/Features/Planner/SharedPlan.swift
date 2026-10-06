@@ -23,12 +23,16 @@ struct SharedPlan: Codable, Hashable {
 
     /// "afternoon" or "evening", on a plan.
     var time: String?
+    /// "2026-10-10", on a plan made with a day. Optional, so plans sent before
+    /// there was a day still read, and builds from before ignore it.
+    var day: String?
     var stops: [Stop]?
     /// On an answer: the id of the message whose plan it answers.
     var answering: String?
 
     var isPlan: Bool { !(stops ?? []).isEmpty }
     var timeOfDay: DatePlan.TimeOfDay? { time.flatMap(DatePlan.TimeOfDay.init(rawValue:)) }
+    var planDay: PlanDay? { day.flatMap(PlanDay.init(iso:)) }
 
     /// A plan, frozen for sending.
     ///
@@ -40,6 +44,7 @@ struct SharedPlan: Codable, Hashable {
     init(_ plan: DatePlan, sharedWith recipient: Person, plannedWith: Person) {
         let keepReasons = recipient.id == plannedWith.id
         self.time = plan.time.rawValue
+        self.day = plan.day?.iso
         self.stops = plan.stops.map { stop in
             Stop(start: stop.start,
                  name: stop.venue.name,
@@ -54,13 +59,15 @@ struct SharedPlan: Codable, Hashable {
     /// "I'm in", to the plan in a given message.
     init(answering messageID: String) {
         self.time = nil
+        self.day = nil
         self.stops = nil
         self.answering = messageID
     }
 
     /// For fixtures, written by hand.
-    init(time: DatePlan.TimeOfDay, stops: [Stop]) {
+    init(time: DatePlan.TimeOfDay, day: PlanDay? = nil, stops: [Stop]) {
         self.time = time.rawValue
+        self.day = day?.iso
         self.stops = stops
         self.answering = nil
     }
@@ -72,8 +79,8 @@ struct SharedPlan: Codable, Hashable {
 struct PlanActions {
     /// Send words and a plan (or an answer to one) into a conversation.
     var send: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
-    /// Open the Date planner on this person, at this time of day.
-    var change: (Conversation, DatePlan.TimeOfDay) -> Void = { _, _ in }
+    /// Open the Date planner on this person, on this day, at this time of day.
+    var change: (Conversation, DatePlan.TimeOfDay, PlanDay?) -> Void = { _, _, _ in }
 }
 
 private struct PlanActionsKey: EnvironmentKey {
@@ -112,15 +119,30 @@ struct PlanCard: View {
 
     @State private var open: Set<Int> = []
 
+    /// "A plan for Saturday evening"; without a day, "A plan for the evening".
     private var title: String {
-        plan.timeOfDay == .evening ? "A plan for the evening" : "A plan for the afternoon"
+        let part = plan.timeOfDay == .evening ? "evening" : "afternoon"
+        if let day = plan.planDay { return "A plan for \(day.weekdayName) \(part)" }
+        return "A plan for the \(part)"
+    }
+
+    /// A plan for a day that has gone is history: nobody can say yes to it.
+    private var isPast: Bool {
+        plan.planDay.map { $0 < .today } ?? false
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(title)
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                if let day = plan.planDay {
+                    Text(day.long)
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array((plan.stops ?? []).enumerated()), id: \.offset) { index, stop in
@@ -198,6 +220,10 @@ struct PlanCard: View {
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xxs)
+        } else if isPast {
+            Text("This day has been and gone.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
         } else if canAct {
             if message.isOutgoing {
                 HStack {

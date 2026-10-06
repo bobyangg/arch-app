@@ -11,6 +11,11 @@ import Foundation
 /// distances are honest, and none of them shares a name with anywhere real that
 /// I know of.
 ///
+/// **Some are shut on some days**, so that picking a day changes the plan. For
+/// the real places that is when they say they are closed as this is written --
+/// the museum on Mondays and Tuesdays, the garden on Mondays; for the invented
+/// ones it is invented. A live provider brings real opening hours instead.
+///
 /// The live version wants a provider -- MapKit's point-of-interest search is the
 /// one that needs no key and no contract -- feeding the same `Venue` type, so
 /// nothing in `DatePlanner` changes when it arrives.
@@ -25,7 +30,7 @@ enum VenueLibrary {
         venue("prospect-long-meadow", "Prospect Park, the Long Meadow", .walk, "Prospect Park", 40.6650, -73.9700,
               [.outdoors], [.afternoon], [.opener, .main]),
         venue("botanic-garden", "Brooklyn Botanic Garden", .park, "Prospect Heights", 40.6694, -73.9624,
-              [.outdoors], [.afternoon], [.main]),
+              [.outdoors], [.afternoon], [.main], closed: [monday]),
         venue("bridge-park-pier-1", "Brooklyn Bridge Park, Pier 1", .walk, "Dumbo", 40.7020, -73.9965,
               [.outdoors, .buildings], [.afternoon, .evening], [.opener, .main]),
         venue("domino-park", "Domino Park", .walk, "Williamsburg", 40.7145, -73.9682,
@@ -38,7 +43,7 @@ enum VenueLibrary {
         // MARK: Looking at things
 
         venue("brooklyn-museum", "Brooklyn Museum", .museum, "Prospect Heights", 40.6712, -73.9636,
-              [.craft, .buildings], [.afternoon], [.main]),
+              [.craft, .buildings], [.afternoon], [.main], closed: [monday, tuesday]),
         venue("central-library", "Brooklyn Public Library, Central", .library, "Prospect Heights", 40.6725, -73.9682,
               [.words, .buildings], [.afternoon], [.opener, .main]),
         venue("bam", "BAM", .show, "Fort Greene", 40.6865, -73.9776,
@@ -55,7 +60,7 @@ enum VenueLibrary {
         venue("paper-thread", "Paper & Thread", .shop, "Park Slope", 40.6735, -73.9800,
               [.words, .craft], [.afternoon], [.opener]),
         venue("silver-bath", "Silver Bath Darkroom", .studio, "Gowanus", 40.6760, -73.9880,
-              [.craft], [.afternoon], [.main]),
+              [.craft], [.afternoon], [.main], closed: [monday, tuesday]),
         venue("short-fuse", "Short Fuse Coffee", .coffee, "Williamsburg", 40.7160, -73.9590,
               [.food], [.afternoon, .evening], [.opener]),
         venue("corner-booth", "Corner Booth", .coffee, "Crown Heights", 40.6705, -73.9480,
@@ -70,13 +75,13 @@ enum VenueLibrary {
         // MARK: Invented -- to finish
 
         venue("listening-room", "The Listening Room", .listening, "Clinton Hill", 40.6880, -73.9640,
-              [.sound, .night], [.evening], [.main, .closer]),
+              [.sound, .night], [.evening], [.main, .closer], closed: [sunday, monday]),
         venue("felt-hammer", "Felt & Hammer", .bar, "Prospect Heights", 40.6790, -73.9700,
-              [.sound, .night], [.evening], [.closer]),
+              [.sound, .night], [.evening], [.closer], closed: [monday]),
         venue("small-hours", "Small Hours", .bar, "Bed-Stuy", 40.6850, -73.9450,
               [.night, .sound], [.evening], [.closer]),
         venue("night-oven", "Night Oven", .food, "Crown Heights", 40.6700, -73.9500,
-              [.food, .night], [.evening], [.closer]),
+              [.food, .night], [.evening], [.closer], closed: [sunday]),
         venue("corner-table", "Corner Table", .food, "Fort Greene", 40.6880, -73.9760,
               [.food], [.afternoon, .evening], [.closer]),
         venue("saltbox", "Saltbox", .food, "Prospect Heights", 40.6765, -73.9635,
@@ -91,13 +96,17 @@ enum VenueLibrary {
               [.food, .words], [.evening], [.closer]),
     ]
 
+    // `Calendar`'s numbering.
+    private static let sunday = 1, monday = 2, tuesday = 3
+
     private static func venue(
         _ id: String, _ name: String, _ kind: Venue.Kind, _ neighbourhood: String,
         _ latitude: Double, _ longitude: Double,
-        _ themes: Set<DateTheme>, _ times: Set<DatePlan.TimeOfDay>, _ roles: Set<DatePlan.Role>
+        _ themes: Set<DateTheme>, _ times: Set<DatePlan.TimeOfDay>, _ roles: Set<DatePlan.Role>,
+        closed: Set<Int> = []
     ) -> Venue {
         Venue(id: id, name: name, kind: kind, neighbourhood: neighbourhood,
               coordinate: Coordinate(latitude: latitude, longitude: longitude),
-              themes: themes, times: times, roles: roles)
+              themes: themes, times: times, roles: roles, closedOn: closed)
     }
 }
