@@ -41,7 +41,7 @@ enum VenueLibrary {
               [.craft, .buildings], [.afternoon], [.main]),
         venue("central-library", "Brooklyn Public Library, Central", .library, "Prospect Heights", 40.6725, -73.9682,
               [.words, .buildings], [.afternoon], [.opener, .main]),
-        venue("bam", "BAM", .listening, "Fort Greene", 40.6865, -73.9776,
+        venue("bam", "BAM", .show, "Fort Greene", 40.6865, -73.9776,
               [.sound, .words], [.evening], [.main]),
         venue("pioneer-works", "Pioneer Works", .studio, "Red Hook", 40.6786, -74.0118,
               [.craft, .sound], [.afternoon, .evening], [.main]),
