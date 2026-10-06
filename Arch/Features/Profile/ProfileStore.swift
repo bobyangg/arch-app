@@ -300,6 +300,16 @@ final class ProfileStore {
         }
     }
 
+    // MARK: Date preferences
+
+    /// The Date planner's five answers. Setting them is what moves the planner
+    /// past its "Get started" screen, and the plan on screen redraws from them
+    /// at once -- it is computed from `person`, which this store publishes.
+    func setDatePreferences(_ preferences: DatePreferences) {
+        person.datePreferences = preferences
+        persist { try await ArchBackend.saveDatePreferences(preferences) }
+    }
+
     // MARK: Details
 
     /// Set from the device, never typed. Kept apart from `updateDetails` because

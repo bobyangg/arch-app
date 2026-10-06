@@ -32,6 +32,15 @@ struct PlannerCandidate: Identifiable, Hashable {
 /// further, in words. Their side is computed from their neighbourhood's centre,
 /// which is what their profile already shows; a planner that used anything
 /// finer would be the one screen in Arch that could find somebody's street.
+///
+/// **Five questions come first.** The first time the tab is opened it explains
+/// itself and asks what you want a date to be like (`PlannerGetStarted`,
+/// `DatePreferenceQuestions`); every plan after that is shaped by your answers
+/// and, when they have answered too, by theirs -- see `DateFit`.
+///
+/// **It is computed, not stored.** The plan is rebuilt from `you` and the
+/// person you picked on every render, so editing your interests on the You tab,
+/// or answering the questions again, changes the plan the next time you look.
 /// Where to point the planner when it is opened from a plan in a thread: on this
 /// person, at this time of day. Identified, so opening it twice on the same
 /// person still counts as a change the planner hears.
@@ -48,9 +57,18 @@ struct DatePlannerView: View {
     var preset: PlannerPreset? = nil
     var onSend: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
     var onOpenDaily: () -> Void = {}
+    /// Goes up when the popup after onboarding says "Get started": the planner
+    /// opens straight onto the first question. A count, because it is an event.
+    var startQuestions: Int = 0
+    var onSavePreferences: (DatePreferences) -> Void = { _ in }
 
     @State private var chosenID: String?
-    @State private var time: DatePlan.TimeOfDay = .afternoon
+    /// The time of day you chose with the toggle, or nil to use what your
+    /// answers (and theirs) prefer. Picking another person goes back to nil.
+    @State private var pickedTime: DatePlan.TimeOfDay?
+    /// The question showing, while the questions are; nil otherwise.
+    @State private var questionIndex: Int?
+    @State private var draft: [Int?] = Array(repeating: nil, count: DatePreferences.questions.count)
     /// How many times each stop has been swapped. Reset whenever the person or
     /// the time of day changes, because the rankings underneath have changed too.
     @State private var skips: [DatePlan.Role: Int] = [:]
@@ -63,20 +81,36 @@ struct DatePlannerView: View {
         candidates.first { $0.id == chosenID } ?? candidates.first
     }
 
+    /// The toggle's choice, or else the time your answers prefer.
+    private func openingTime(with person: Person) -> DatePlan.TimeOfDay {
+        pickedTime ?? DateFit(yours: you.datePreferences, theirs: person.datePreferences).time
+    }
+
     var body: some View {
         TopBarScroll {
             VStack(alignment: .leading, spacing: 0) {
                 masthead
 
-                if let chosen {
+                if questionIndex != nil {
+                    DatePreferenceQuestions(index: $questionIndex, draft: $draft) { answers in
+                        onSavePreferences(answers)
+                        skips = [:]
+                        pickedTime = nil
+                    }
+                } else if you.datePreferences == nil {
+                    PlannerGetStarted { startAsking() }
+                } else if let chosen {
+                    let time = openingTime(with: chosen.person)
                     let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
                                                 venues: venues, skips: skips)
                     picker
                     shared(plan, with: chosen.person)
-                    timeToggle
+                    preferencesRow
+                    timeToggle(time)
                     itinerary(plan)
                     footer(plan, with: chosen)
                 } else {
+                    preferencesRow
                     emptyState
                 }
             }
@@ -88,18 +122,34 @@ struct DatePlannerView: View {
             skips = [:]
             sentTo = nil
         }
-        .onChange(of: time) { _, _ in
+        .onChange(of: pickedTime) { _, _ in
             skips = [:]
             sentTo = nil
         }
+        // What you wrote and what you answered are what the rankings are built
+        // from. When either changes, a swap count from the old rankings would
+        // point at an arbitrary place in the new ones, so start from the top.
+        .onChange(of: you.interests) { _, _ in skips = [:] }
+        .onChange(of: you.datePreferences) { _, _ in skips = [:] }
         // "Change it" on a plan in a thread lands here, on that person.
         .onChange(of: preset) { _, preset in
             guard let preset else { return }
+            questionIndex = nil
             chosenID = preset.personID
-            time = preset.time
+            pickedTime = preset.time
             skips = [:]
             sentTo = nil
         }
+        // "Get started" in the popup after onboarding.
+        .onChange(of: startQuestions) { _, _ in startAsking() }
+    }
+
+    /// Into the questions, starting from what you said last time if you have
+    /// said anything.
+    private func startAsking() {
+        draft = you.datePreferences?.answers
+            ?? Array(repeating: nil, count: DatePreferences.questions.count)
+        withAnimation(ArchMotion.standard) { questionIndex = 0 }
     }
 
     // MARK: Pieces
@@ -130,7 +180,10 @@ struct DatePlannerView: View {
                 HStack(spacing: ArchSpacing.m) {
                     ForEach(candidates) { candidate in
                         let isChosen = candidate.id == chosen?.id
-                        Button { chosenID = candidate.id } label: {
+                        Button {
+                            chosenID = candidate.id
+                            pickedTime = nil
+                        } label: {
                             VStack(spacing: ArchSpacing.xs) {
                                 PhotoPlaceholder(toneIndex: candidate.person.avatarToneIndex,
                                                  url: candidate.person.mainPhoto?.url,
@@ -193,14 +246,38 @@ struct DatePlannerView: View {
         .padding(.bottom, ArchSpacing.l)
     }
 
+    /// Your own answers, in a line, and the way back into the questions. Only
+    /// ever yours: the other person's answers shape the plan and are not shown.
+    @ViewBuilder
+    private var preferencesRow: some View {
+        if let preferences = you.datePreferences {
+            VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Your date preferences")
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
+                    Spacer(minLength: ArchSpacing.s)
+                    ArchTextButton(title: "Edit") { startAsking() }
+                        .accessibilityLabel("Edit your date preferences")
+                        .accessibilityIdentifier("planner.editPreferences")
+                }
+                Text(preferences.summary)
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(.bottom, ArchSpacing.l)
+        }
+    }
+
     /// Two choices, so two buttons rather than a system segmented control: the
     /// app draws its own controls, and a stock one would be the only grey
     /// rectangle on the screen.
-    private var timeToggle: some View {
+    private func timeToggle(_ time: DatePlan.TimeOfDay) -> some View {
         HStack(spacing: ArchSpacing.xs) {
             ForEach(DatePlan.TimeOfDay.allCases) { option in
                 let isOn = option == time
-                Button { time = option } label: {
+                Button { pickedTime = option } label: {
                     Text(option.title)
                         .archText(.subhead)
                         .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
@@ -423,12 +500,31 @@ struct ShareWithSheet: View {
 
 #Preview("Date planner") {
     DatePlannerView(
-        you: MockData.you,
+        you: {
+            var you = MockData.you
+            you.datePreferences = DatePreferences(style: .doing, timeOfDay: .either,
+                                                  drinks: .sometimes, budget: .middle,
+                                                  distance: .walkable)
+            return you
+        }(),
         candidates: MockData.conversations.map { PlannerCandidate(person: $0.person, conversation: $0) }
     )
     .preferredColorScheme(.dark)
 }
 
-#Preview("Nobody yet") {
+#Preview("Get started") {
     DatePlannerView(you: MockData.you, candidates: [])
+        .preferredColorScheme(.dark)
+}
+
+#Preview("Nobody yet") {
+    DatePlannerView(
+        you: {
+            var you = MockData.you
+            you.datePreferences = DatePreferences(style: .talk, timeOfDay: .afternoon,
+                                                  drinks: .yes, budget: .any, distance: .ride)
+            return you
+        }(),
+        candidates: []
+    )
 }
