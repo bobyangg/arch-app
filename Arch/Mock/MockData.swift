@@ -1342,6 +1342,9 @@ enum MockData {
             detail: "Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."
         )
     ]
+    // Profile feedback is listed only while it works -- see
+    // `ArchConfig.profileFeedbackIsLive`.
+    .filter { $0.id != "b3" || ArchConfig.profileFeedbackIsLive }
 
     /// A phone's camera roll: portraits, squares, a few landscapes, one panorama.
     ///
