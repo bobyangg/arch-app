@@ -47,6 +47,8 @@ struct PlannerCandidate: Identifiable, Hashable {
 struct PlannerPreset: Equatable {
     let personID: String
     let time: DatePlan.TimeOfDay
+    /// The plan's day, when it had one and it is still ahead.
+    var day: PlanDay? = nil
     let id = UUID()
 }
 
@@ -66,6 +68,8 @@ struct DatePlannerView: View {
     /// The time of day you chose with the toggle, or nil to use what your
     /// answers (and theirs) prefer. Picking another person goes back to nil.
     @State private var pickedTime: DatePlan.TimeOfDay?
+    /// The day you chose, or nil for the first one offered (tomorrow).
+    @State private var pickedDay: PlanDay?
     /// The question showing, while the questions are; nil otherwise.
     @State private var questionIndex: Int?
     @State private var draft: [Int?] = Array(repeating: nil, count: DatePreferences.questions.count)
@@ -79,6 +83,16 @@ struct DatePlannerView: View {
 
     private var chosen: PlannerCandidate? {
         candidates.first { $0.id == chosenID } ?? candidates.first
+    }
+
+    /// The days on offer, worked out each time the screen is drawn so that a
+    /// planner left open overnight moves on with the calendar.
+    private var days: [PlanDay] { PlanDay.upcoming() }
+
+    /// The day you picked, if it is still on offer; otherwise tomorrow.
+    private var day: PlanDay? {
+        if let pickedDay, days.contains(pickedDay) { return pickedDay }
+        return days.first
     }
 
     /// The toggle's choice, or else the time your answers prefer.
@@ -102,10 +116,11 @@ struct DatePlannerView: View {
                 } else if let chosen {
                     let time = openingTime(with: chosen.person)
                     let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
-                                                venues: venues, skips: skips)
+                                                day: day, venues: venues, skips: skips)
                     picker
                     shared(plan, with: chosen.person)
                     preferencesRow
+                    dayRow
                     timeToggle(time)
                     itinerary(plan)
                     footer(plan, with: chosen)
@@ -126,6 +141,10 @@ struct DatePlannerView: View {
             skips = [:]
             sentTo = nil
         }
+        .onChange(of: pickedDay) { _, _ in
+            skips = [:]
+            sentTo = nil
+        }
         // What you wrote and what you answered are what the rankings are built
         // from. When either changes, a swap count from the old rankings would
         // point at an arbitrary place in the new ones, so start from the top.
@@ -137,6 +156,7 @@ struct DatePlannerView: View {
             questionIndex = nil
             chosenID = preset.personID
             pickedTime = preset.time
+            pickedDay = preset.day
             skips = [:]
             sentTo = nil
         }
@@ -273,6 +293,46 @@ struct DatePlannerView: View {
         }
     }
 
+    /// The next seven days, tomorrow first. A row of their own rather than a
+    /// calendar: a week is all the planner offers, and seven things fit on a
+    /// phone without a second screen to choose between them.
+    private var dayRow: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text("When")
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+
+            HStack(spacing: ArchSpacing.xxs) {
+                ForEach(Array(days.enumerated()), id: \.element) { index, option in
+                    let isOn = option == day
+                    Button { pickedDay = option } label: {
+                        VStack(spacing: 2) {
+                            Text(option.shortWeekday)
+                                .archText(.caption)
+                                .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                            Text(option.dayNumber)
+                                .archText(.subhead)
+                                .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                        }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 56)
+                        .background(
+                            RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                .fill(isOn ? ArchColor.stoneRaised : ArchColor.stone)
+                        )
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.97))
+                    .accessibilityLabel(index == 0 ? "Tomorrow, \(option.long)" : option.long)
+                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityIdentifier("planner.day.\(index)")
+                }
+            }
+        }
+        .padding(.bottom, ArchSpacing.s)
+    }
+
     /// Two choices, so two buttons rather than a system segmented control: the
     /// app draws its own controls, and a stock one would be the only grey
     /// rectangle on the screen.
@@ -402,6 +462,7 @@ struct DatePlannerView: View {
 
     private func summary(_ plan: DatePlan) -> String {
         var parts = ["Done by about \(DatePlanner.clockTime(plan.endsAt))."]
+        if let day = plan.day { parts.insert("\(day.long).", at: 0) }
         if let km = plan.fromYou {
             parts.append(String(format: "The first stop is %.1f km from you.", km))
         }

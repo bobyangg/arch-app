@@ -165,6 +165,13 @@ struct Venue: Identifiable, Hashable {
     let themes: Set<DateTheme>
     let times: Set<DatePlan.TimeOfDay>
     let roles: Set<DatePlan.Role>
+    /// Days of the week it is shut, as `Calendar` numbers them: 1 is Sunday.
+    var closedOn: Set<Int> = []
+
+    func isOpen(on day: PlanDay?) -> Bool {
+        guard let day else { return true }
+        return !closedOn.contains(day.weekday)
+    }
 }
 
 /// A plan for one date.
@@ -224,6 +231,8 @@ struct DatePlan: Hashable {
     }
 
     let time: TimeOfDay
+    /// Which day. Nil only for a plan made without one.
+    let day: PlanDay?
     /// What both of you are into.
     let shared: [DateTheme]
     /// Interests written the same way by both of you. Rare, and worth saying
@@ -271,10 +280,15 @@ enum DatePlanner {
 
     /// `skips` says, per role, how many times its stop has been swapped: the
     /// stop is the next-best place along the ranking, wrapping round.
+    ///
+    /// `day` takes out anywhere shut that day. A plan that sent two people to
+    /// a museum on the day it is closed would be the planner being wrong about
+    /// the one thing it is for.
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
+        day: PlanDay? = nil,
         venues: [Venue],
         skips: [DatePlan.Role: Int] = [:]
     ) -> DatePlan {
@@ -325,7 +339,7 @@ enum DatePlanner {
 
         func candidates(_ role: DatePlan.Role, besides used: Set<String>) -> [Venue] {
             venues.filter {
-                $0.roles.contains(role) && $0.times.contains(time)
+                $0.roles.contains(role) && $0.times.contains(time) && $0.isOpen(on: day)
                     && !used.contains($0.id) && fit.allows($0)
             }
         }
@@ -433,6 +447,7 @@ enum DatePlanner {
 
         return DatePlan(
             time: time,
+            day: day,
             shared: DateTheme.allCases.filter { shared.contains($0) },
             sameWords: sameWordsShown,
             halfway: middle.flatMap(nearestNeighbourhood),
@@ -442,10 +457,12 @@ enum DatePlanner {
         )
     }
 
-    /// The message a plan becomes when you send it.
+    /// The message a plan becomes when you send it. The day goes in the first
+    /// line, because the first line is what a notification shows.
     static func message(for plan: DatePlan) -> String {
         let lines = plan.stops.map { "\(clockTime($0.start)) · \($0.venue.name), \($0.venue.neighbourhood)" }
-        return (["How about this?"] + lines).joined(separator: "\n")
+        let opening = plan.day.map { "How about \($0.long)?" } ?? "How about this?"
+        return ([opening] + lines).joined(separator: "\n")
     }
 
     /// "2:00 pm". Written by hand rather than through a `DateFormatter`, because

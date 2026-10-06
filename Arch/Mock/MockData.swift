@@ -1297,7 +1297,10 @@ enum MockData {
                     text: "How about this?\n6:30 pm \u{00B7} Short Fuse Coffee, Williamsburg\n7:30 pm \u{00B7} Domino Park, Williamsburg\n8:40 pm \u{00B7} Wide Bowl Noodles, Williamsburg",
                     isOutgoing: false,
                     timestamp: "Yesterday",
-                    plan: SharedPlan(time: .evening, stops: [
+                    // The coming Thursday: the day the thread has already agreed on.
+                    plan: SharedPlan(time: .evening,
+                                     day: PlanDay.upcoming().first { $0.weekday == 5 },
+                                     stops: [
                         .init(start: 18 * 60 + 30, name: "Short Fuse Coffee", kind: "Coffee",
                               neighbourhood: "Williamsburg", travel: nil,
                               reason: "A short walk from Domino Park."),
