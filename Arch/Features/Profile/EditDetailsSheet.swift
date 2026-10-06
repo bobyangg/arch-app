@@ -149,16 +149,19 @@ struct EditDetailsSheet: View {
                         case .fix(let point):
                             locationPermission = .granted
                             Task { @MainActor in
-                                if let found = await PlaceSearch.place(at: point) {
+                                switch await PlaceSearch.place(at: point) {
+                                case .named(let found):
                                     place = found
                                     // Closing is the feedback: a geocoded place
                                     // is not in the list below, so a successful
                                     // tap changed nothing visible on this screen.
                                     isPickingPlace = false
-                                } else {
+                                case .unnamed:
                                     locationNote = "Arch found where you are but "
                                         + "could not name it. Search for your town "
                                         + "— it is exact either way."
+                                case .closed(let note):
+                                    locationNote = note
                                 }
                             }
                         case .refused:

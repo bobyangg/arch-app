@@ -49,8 +49,8 @@ struct PlacePickerView: View {
     var onOpenPremium: (() -> Void)? = nil
 
     @State private var search = ""
-    /// Asks the device's geocoder, which knows every town in the United States
-    /// and Canada. Held by the view rather than made per keystroke so that one
+    /// Asks the device's geocoder, which knows every town in Canada. Held by
+    /// the view rather than made per keystroke so that one
     /// lookup can cancel the one before it.
     @State private var searcher = PlaceSearch()
 
@@ -68,6 +68,12 @@ struct PlacePickerView: View {
     private var isSearching: Bool { !typed.isEmpty }
     private var isWaiting: Bool { !isOffline && searcher.state == .searching }
     private var isUnreachable: Bool { !isOffline && searcher.state == .unreachable }
+    /// Why a search came back with nothing to choose, when the reason is
+    /// that everything it found is somewhere Arch is not offered.
+    private var closedNote: String? {
+        guard !isOffline, case .closed(let note) = searcher.state else { return nil }
+        return note
+    }
 
     /// **One character is not a failed search, and saying so was the bug.**
     /// `PlaceSearch` does not ask the geocoder below two characters, so the
@@ -98,6 +104,8 @@ struct PlacePickerView: View {
                              "It needs a connection to find a town by name. "
                              + "The list below works without one.")
                         suggestions
+                    } else if let closedNote {
+                        note(closedNote, "Arch is in Canada for now, outside Quebec.")
                     } else if results.isEmpty {
                         nothingFound
                     } else if isSearching {
@@ -144,7 +152,7 @@ struct PlacePickerView: View {
     /// screen, and conclude the app is still only in New York — which is what
     /// happened.
     private var field: some View {
-        ArchField(text: $search, placeholder: "Any town in the US or Canada")
+        ArchField(text: $search, placeholder: "Any town in Canada")
             .padding(.top, ArchSpacing.m)
     }
 
@@ -254,8 +262,8 @@ struct PlacePickerView: View {
                     row(current)
                 }
             }
-            Text("Type the town or neighbourhood where you live. Anywhere in the "
-                 + "United States or Canada.")
+            Text("Type the town or neighbourhood where you live. Arch is in "
+                 + "Canada for now, outside Quebec.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -265,8 +273,8 @@ struct PlacePickerView: View {
     private var nothingFound: some View {
         note("Nothing by that name",
              isSearching
-                ? "Arch is in the United States and Canada. Try the town, or the "
-                  + "nearest one."
+                ? "Arch is in Canada for now, outside Quebec. Try the town, or "
+                  + "the nearest one."
                 : nil)
     }
 

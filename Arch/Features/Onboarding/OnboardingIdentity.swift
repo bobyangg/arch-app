@@ -144,19 +144,25 @@ struct OnboardingAbout: View {
                             // The position is applied either way -- a nameless
                             // fix still places you for the distance filter.
                             Task { @MainActor in
-                                let found = await PlaceSearch.place(at: point)
-                                store.useDeviceLocation(point, place: found)
-                                if found == nil {
-                                    locationNote = "Arch found where you are but "
-                                        + "could not name it. Search for your town "
-                                        + "— it is exact either way."
-                                } else {
+                                switch await PlaceSearch.place(at: point) {
+                                case .named(let found):
+                                    store.useDeviceLocation(point, place: found)
                                     // **Closing is the feedback.** A place from a
                                     // geocoder is not in the list below, so on
                                     // success nothing on this screen changed and
                                     // the button looked broken. The chip on the
                                     // step behind now says where you are.
                                     isPickingPlace = false
+                                case .unnamed:
+                                    store.useDeviceLocation(point, place: nil)
+                                    locationNote = "Arch found where you are but "
+                                        + "could not name it. Search for your town "
+                                        + "— it is exact either way."
+                                case .closed(let note):
+                                    // Not kept, not even the position: a fix
+                                    // somewhere Arch is not offered is the one
+                                    // thing this must not hold.
+                                    locationNote = note
                                 }
                             }
                         case .refused:

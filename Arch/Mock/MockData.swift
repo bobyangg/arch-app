@@ -1391,9 +1391,14 @@ enum MockData {
     ]
 
     static let premiumPlans: [PremiumPlan] = [
-        PremiumPlan(id: "p1", duration: "One month", total: "$24.99", perMonth: "$24.99 a month", isRecommended: false),
-        PremiumPlan(id: "p3", duration: "Three months", total: "$53.97", perMonth: "$17.99 a month", isRecommended: true),
-        PremiumPlan(id: "p12", duration: "Twelve months", total: "$143.88", perMonth: "$11.99 a month", isRecommended: false)
+        // The prices Arch intends to charge, so the design build -- and the App
+        // Review screenshot taken from it -- shows what a subscriber will see.
+        // The real build ignores these and shows Apple's own prices, which is
+        // where the per-month figure has to agree with whatever App Store
+        // Connect's price grid allows.
+        PremiumPlan(id: "p1", duration: "One month", total: "$14.99", perMonth: "$14.99 a month", isRecommended: false),
+        PremiumPlan(id: "p3", duration: "Three months", total: "$38.97", perMonth: "$12.99 a month", isRecommended: true),
+        PremiumPlan(id: "p12", duration: "Twelve months", total: "$119.88", perMonth: "$9.99 a month", isRecommended: false)
     ]
 
     /// What Apple requires a subscription to say before it is bought: that it

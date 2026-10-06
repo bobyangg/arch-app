@@ -321,4 +321,42 @@ final class ArchSmokeTests: XCTestCase {
         )
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the rejection screen.")
     }
+
+    // MARK: App Review
+
+    /// The Premium screen, photographed for App Store Connect.
+    ///
+    /// Every subscription needs a review screenshot before Apple will serve it --
+    /// even to TestFlight -- and the real build cannot take one: until a
+    /// subscription is ready, the Premium tab truthfully says there is nothing to
+    /// buy. The design build draws the same view with `MockData`'s prices, so the
+    /// picture is the shipping screen, not a mock-up of it.
+    ///
+    /// **The prices are checked before the picture is kept.** Each plan row reads
+    /// out as one label, so these are exact matches on what is drawn. A
+    /// screenshot showing the wrong prices would fail this test rather than be
+    /// uploaded to Apple.
+    func testPremiumScreenForAppReview() {
+        let app = launch()
+        app.buttons["tab.premium"].tap()
+
+        for plan in [
+            "One month, $14.99, $14.99 a month",
+            "Three months, $38.97, $12.99 a month",
+            "Twelve months, $119.88, $9.99 a month",
+        ] {
+            XCTAssertTrue(
+                app.buttons[plan].waitForExistence(timeout: 10),
+                "The Premium screen does not show \"\(plan)\"."
+            )
+        }
+        // Let the rail and the button finish settling before the picture.
+        XCTAssertTrue(app.buttons["Subscribe for $38.97"].waitForExistence(timeout: 5),
+                      "The subscribe button is not offering the recommended plan.")
+
+        let shot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        shot.name = "premium-for-app-review"
+        shot.lifetime = .keepAlways
+        add(shot)
+    }
 }

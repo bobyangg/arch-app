@@ -2,7 +2,8 @@ import CoreLocation
 import MapKit
 import Observation
 
-/// Finding anywhere in the United States or Canada, without shipping a gazetteer.
+/// Finding anywhere Arch is offered -- Canada, outside Quebec -- without shipping
+/// a gazetteer.
 ///
 /// **The bundled list stopped being the answer the moment Arch left one metro.**
 /// Thirty-two hand-written neighbourhoods work when the product is New York. For
@@ -37,6 +38,18 @@ final class PlaceSearch {
         /// Distinct from finding nothing, because there is something to say
         /// about it and something to do about it.
         case unreachable
+        /// Everything by that name is somewhere Arch is not offered, and the
+        /// note says where. Distinct from finding nothing: "Nothing by that
+        /// name" after typing Montreal or Seattle would say the map does not
+        /// know them.
+        case closed(String)
+    }
+
+    /// What a search turned up, and why anything was left out — which is what
+    /// tells `.closed` apart from an empty answer.
+    private struct Found {
+        var places: [Place] = []
+        var leftOut: String?
     }
 
     private(set) var results: [Place] = []
@@ -47,12 +60,12 @@ final class PlaceSearch {
     /// slow request for "bro" overwrites a fast one for "brooklyn".
     private var lookup: Task<Void, Never>?
 
-    /// Biases results towards North America. It is a hint, not a fence — Apple
-    /// will still answer with Bristol — so the country check in
-    /// `Place.init(_ placemark:)` is what actually holds the line.
-    private static let northAmerica = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 48, longitude: -97),
-        span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 110)
+    /// Biases results towards the populated south of Canada. It is a hint, not
+    /// a fence — Apple will still answer with Bristol, or Portland — so the
+    /// country check in `Place.init(_ placemark:)` is what actually holds the line.
+    private static let canada = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 52, longitude: -96),
+        span: MKCoordinateSpan(latitudeDelta: 24, longitudeDelta: 95)
     )
 
     /// Call on every keystroke. Debounced, so it is not a request per character.
@@ -76,8 +89,16 @@ final class PlaceSearch {
             let found = await PlaceSearch.lookUp(needle)
 
             guard !Task.isCancelled else { return }
-            self?.results = found ?? []
-            self?.state = found == nil ? .unreachable : .found
+            self?.results = found?.places ?? []
+            if let found {
+                if found.places.isEmpty, let note = found.leftOut {
+                    self?.state = .closed(note)
+                } else {
+                    self?.state = .found
+                }
+            } else {
+                self?.state = .unreachable
+            }
         }
     }
 
@@ -98,21 +119,25 @@ final class PlaceSearch {
     /// whether a town exists at all, but Apple rate limits it per app and is
     /// explicit that it is not for per-keystroke use — so it is the second
     /// opinion on an empty answer and never the first.
-    private static func lookUp(_ needle: String) async -> [Place]? {
+    private static func lookUp(_ needle: String) async -> Found? {
         let mapped = await mapSearch(needle)
-        if let mapped, !mapped.isEmpty { return mapped }
-        if let geocoded = await geocode(needle), !geocoded.isEmpty { return geocoded }
-        // nil when the map search itself failed, [] when it simply found nothing.
+        if let mapped, !mapped.places.isEmpty { return mapped }
+        let geocoded = await geocode(needle)
+        if let geocoded, !geocoded.places.isEmpty { return geocoded }
+        if let note = mapped?.leftOut ?? geocoded?.leftOut {
+            return Found(leftOut: note)
+        }
+        // nil when the map search itself failed, empty when it simply found nothing.
         return mapped
     }
 
-    private static func mapSearch(_ needle: String) async -> [Place]? {
+    private static func mapSearch(_ needle: String) async -> Found? {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = needle
         // Addresses and places, not businesses. Nobody lives in a coffee shop,
         // and a list of them under "where you live" reads as a mistake.
         request.resultTypes = [.address]
-        request.region = northAmerica
+        request.region = canada
 
         do {
             let response = try await MKLocalSearch(request: request).start()
@@ -123,7 +148,7 @@ final class PlaceSearch {
     }
 
     /// The plain geocoder, for a town the map search did not think to offer.
-    private static func geocode(_ needle: String) async -> [Place]? {
+    private static func geocode(_ needle: String) async -> Found? {
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         guard let marks = try? await geocoder.geocodeAddressString(needle) else {
@@ -133,17 +158,21 @@ final class PlaceSearch {
     }
 
     /// Placemarks to rows: to the words Arch keeps, in either country, once each.
-    private static func reduce(_ marks: [CLPlacemark]) -> [Place] {
+    private static func reduce(_ marks: [CLPlacemark]) -> Found {
         var seen = Set<String>()
-        var places: [Place] = []
+        var found = Found()
         for mark in marks {
+            if let note = mark.closedNote {
+                found.leftOut = found.leftOut ?? note
+                continue
+            }
             guard let place = Place(mark) else { continue }
             // Ten addresses on one street all reduce to the same neighbourhood,
             // and the same row ten times is not a list.
             guard seen.insert(place.id).inserted else { continue }
-            places.append(place)
+            found.places.append(place)
         }
-        return places
+        return found
     }
 
     /// The words for a point, for when somebody taps "Use my location".
@@ -160,14 +189,62 @@ final class PlaceSearch {
     /// permission, being granted it, and then finding nothing — twice, because
     /// tapping again did exactly the same thing. Apple's own documentation says
     /// to keep a strong reference for the life of the request; this is that.
-    static func place(at coordinate: Coordinate) async -> Place? {
+    static func place(at coordinate: Coordinate) async -> Spot {
         let point = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         guard let marks = try? await geocoder.reverseGeocodeLocation(point) else {
-            return nil
+            return .unnamed
         }
-        return marks.lazy.compactMap { Place($0) }.first
+        if let note = marks.lazy.compactMap(\.closedNote).first { return .closed(note) }
+        return marks.lazy.compactMap { Place($0) }.first.map(Spot.named) ?? .unnamed
+    }
+
+    /// What "Use my location" found.
+    enum Spot {
+        case named(Place)
+        /// A position the geocoder could not put a name to. The position is
+        /// still right, and still worth keeping.
+        case unnamed
+        /// Somewhere Arch is not offered, and the note that says so. Neither
+        /// the name nor the position is kept.
+        case closed(String)
+    }
+}
+
+extension CLPlacemark {
+
+    /// Why a place cannot be chosen, or nil when it can — or when it is
+    /// outside both countries, which is simply not a place Arch knows.
+    ///
+    /// **The terms say Arch is not offered in the United States or to residents
+    /// of Quebec**, and the App Store's country setting cannot hold the second
+    /// half of that. The address can, so both are held here, with a sentence
+    /// that says which rather than a search that comes back empty.
+    var closedNote: String? {
+        switch isoCountryCode {
+        case "US": return "Arch isn't available in the United States yet."
+        case "CA": return isInQuebec ? "Arch isn't available in Quebec yet." : nil
+        default: return nil
+        }
+    }
+
+    /// Quebec, where Arch is not offered.
+    ///
+    /// The province's name first, in either language and either spelling. The
+    /// postcode second, for a placemark whose province is missing or spelled
+    /// some other way: in Canada, G, H and J are Quebec's and nobody else's.
+    var isInQuebec: Bool {
+        guard isoCountryCode == "CA" else { return false }
+        if let area = administrativeArea?
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil),
+           area == "qc" || area == "quebec" {
+            return true
+        }
+        guard let first = postalCode?.trimmingCharacters(in: .whitespaces).uppercased().first else {
+            return false
+        }
+        return first == "G" || first == "H" || first == "J"
     }
 }
 
@@ -175,13 +252,12 @@ extension Place {
 
     /// A geocoder's answer, reduced to the two words Arch keeps.
     ///
-    /// Fails rather than guesses in two cases: outside the United States and
-    /// Canada, and when the placemark has no town in it at all — a point in the
-    /// middle of Lake Superior has a country and nothing else, and "Ontario,
-    /// Ontario" is not a place somebody lives.
+    /// Fails rather than guesses in two cases: anywhere Arch is not offered
+    /// (outside Canada, or in Quebec), and when the placemark has no town in it
+    /// at all — a point in the middle of Lake Superior has a country and nothing
+    /// else, and "Ontario, Ontario" is not a place somebody lives.
     init?(_ placemark: CLPlacemark) {
-        guard let country = placemark.isoCountryCode,
-              country == "US" || country == "CA" else { return nil }
+        guard placemark.isoCountryCode == "CA", !placemark.isInQuebec else { return nil }
 
         // `subAdministrativeArea` is the county, and it is the only thing an
         // unincorporated address has. Better than nothing, which is the
