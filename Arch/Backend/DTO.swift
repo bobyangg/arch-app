@@ -131,7 +131,7 @@ struct MessageRow: Codable, Hashable, Identifiable {
     var senderId: String
     var body: String
     var createdAt: Date
-    /// `messages.plan`, from `backend/022`. Optional and absent-tolerant: a
+    /// `messages.plan`, from `backend/024`. Optional and absent-tolerant: a
     /// database without the column simply never sends the key.
     var plan: SharedPlan? = nil
 }
@@ -144,7 +144,7 @@ struct NewMessage: Encodable {
     let body: String
     /// Left out of the request entirely when nil -- synthesised `Encodable`
     /// skips a nil optional -- so an ordinary message is the same insert it
-    /// always was, whether or not `backend/022` has been run.
+    /// always was, whether or not `backend/024` has been run.
     var plan: SharedPlan? = nil
 }
 

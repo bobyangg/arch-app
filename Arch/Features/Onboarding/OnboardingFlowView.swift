@@ -196,6 +196,9 @@ struct OnboardingFlowView: View {
                     switch store.step {
                     case .notifications: finish(allowing: true)
                     case .questions:     store.startQuestions()
+                    case .terms:
+                        recordTerms()
+                        store.advance()
                     default:             store.advance()
                     }
                 }
@@ -223,6 +226,8 @@ struct OnboardingFlowView: View {
         switch store.step {
         case .birthday:
             OnboardingBirthday(store: store)
+        case .terms:
+            OnboardingTerms(store: store)
         case .identity:
             OnboardingIdentity(store: store)
         case .about:
@@ -242,6 +247,15 @@ struct OnboardingFlowView: View {
         case .notifications:
             OnboardingNotifications()
         }
+    }
+
+    /// Written when the box is ticked and Continue pressed, not at the end:
+    /// the date that matters is when somebody agreed, and that was now. Sent
+    /// without waiting, so a slow network does not hold the screen; `commit`
+    /// sends it again in case this one is lost.
+    private func recordTerms() {
+        guard ArchConfig.isConfigured else { return }
+        Task { try? await ArchBackend.acceptTerms(version: ArchConfig.termsVersion) }
     }
 
     private func finish(allowing notifications: Bool) {
@@ -265,6 +279,11 @@ struct OnboardingFlowView: View {
     /// to show — that is a better failure than being held at a spinner on the last
     /// screen of onboarding with no way forward.
     private func commit(allowing notifications: Bool) async {
+        // Again, in case the first time did not arrive. The server keeps the
+        // first acceptance and ignores a repeat, so this never moves the date.
+        if store.acceptedTerms {
+            try? await ArchBackend.acceptTerms(version: ArchConfig.termsVersion)
+        }
         let person = store.profile.person
         try? await ArchBackend.createProfile(
             PersonDetails(

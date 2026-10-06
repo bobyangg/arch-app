@@ -3,7 +3,7 @@ import SwiftUI
 /// A plan as it travels in a message, or an answer to one.
 ///
 /// Stored in `messages.plan` beside the message's words, which stay readable on
-/// their own -- see `backend/022`. A plan is what the planner laid out, frozen:
+/// their own -- see `backend/024`. A plan is what the planner laid out, frozen:
 /// names, times and the way between, never a coordinate.
 struct SharedPlan: Codable, Hashable {
 
