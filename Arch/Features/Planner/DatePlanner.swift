@@ -101,7 +101,7 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
 /// Somewhere to go.
 struct Venue: Identifiable, Hashable {
     enum Kind: String, Hashable {
-        case coffee, walk, park, museum, library, studio, listening, food, bar, shop
+        case coffee, walk, park, museum, library, studio, listening, show, food, bar, shop
 
         var label: String {
             switch self {
@@ -112,6 +112,7 @@ struct Venue: Identifiable, Hashable {
             case .library:   return "Library"
             case .studio:    return "Open studio"
             case .listening: return "Listening bar"
+            case .show:      return "Something live"
             case .food:      return "Something to eat"
             case .bar:       return "Drinks"
             case .shop:      return "Shop"
@@ -120,6 +121,22 @@ struct Venue: Identifiable, Hashable {
 
         /// A park and a walk are the same kind of afternoon.
         var isOutside: Bool { self == .walk || self == .park }
+
+        /// A place you go *for* a drink. Somewhere live that also has a bar is
+        /// not, which is why a performance is its own kind rather than a
+        /// listening bar: "I don't drink" should take away the bars and leave
+        /// the concert.
+        var isDrinkLed: Bool { self == .bar || self == .listening }
+
+        /// Roughly what it costs two people: nothing, a little, or a meal's
+        /// worth. Read against the lower of two budgets, never shown as a price.
+        var price: Int {
+            switch self {
+            case .walk, .park, .library, .shop:  return 0
+            case .coffee, .museum, .studio:      return 1
+            case .listening, .show, .food, .bar: return 2
+            }
+        }
 
         /// How long a stop like this usually takes, in minutes. A guess the
         /// itinerary can be read against, not a booking.
@@ -132,6 +149,7 @@ struct Venue: Identifiable, Hashable {
             case .library:   return 60
             case .studio:    return 75
             case .listening: return 90
+            case .show:      return 90
             case .food:      return 75
             case .bar:       return 60
             case .shop:      return 40
@@ -147,6 +165,13 @@ struct Venue: Identifiable, Hashable {
     let themes: Set<DateTheme>
     let times: Set<DatePlan.TimeOfDay>
     let roles: Set<DatePlan.Role>
+    /// Days of the week it is shut, as `Calendar` numbers them: 1 is Sunday.
+    var closedOn: Set<Int> = []
+
+    func isOpen(on day: PlanDay?) -> Bool {
+        guard let day else { return true }
+        return !closedOn.contains(day.weekday)
+    }
 }
 
 /// A plan for one date.
@@ -200,12 +225,19 @@ struct DatePlan: Hashable {
         /// tone'". Only "you" changes; everything else already reads the same
         /// from either side.
         let sharedReason: String
+        /// Whether Swap has anywhere else to go. False when this is the only
+        /// place that can play this part -- under "keep it walkable" and "I
+        /// don't drink", next to some main things, that is often -- and then
+        /// the screen offers no Swap rather than one that changes nothing.
+        let canSwap: Bool
 
         var id: String { "\(role.rawValue)-\(venue.id)" }
         var end: Int { start + venue.kind.minutes }
     }
 
     let time: TimeOfDay
+    /// Which day. Nil only for a plan made without one.
+    let day: PlanDay?
     /// What both of you are into.
     let shared: [DateTheme]
     /// Interests written the same way by both of you. Rare, and worth saying
@@ -239,7 +271,10 @@ struct DatePlan: Hashable {
 /// - something you both like, worth three;
 /// - something only one of you likes, worth one;
 /// - for the main thing, being near halfway and about as far for both of you;
-/// - for the others, being near the main thing, and not being a second walk.
+/// - for the others, being near the main thing, and not being a second walk;
+/// - and, for every stop, how well it fits what you each said a date should be
+///   (`DateFit`) -- with "I don't drink" and "keep it walkable" applied as
+///   rules rather than weighed, whichever of you said them.
 enum DatePlanner {
 
     /// Walking pace, and how much longer a real route is than a straight line.
@@ -250,13 +285,22 @@ enum DatePlanner {
 
     /// `skips` says, per role, how many times its stop has been swapped: the
     /// stop is the next-best place along the ranking, wrapping round.
+    ///
+    /// `day` takes out anywhere shut that day. A plan that sent two people to
+    /// a museum on the day it is closed would be the planner being wrong about
+    /// the one thing it is for.
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
+        day: PlanDay? = nil,
         venues: [Venue],
         skips: [DatePlan.Role: Int] = [:]
     ) -> DatePlan {
+        // What you each said a date should be like. Either may be missing:
+        // somebody who has not answered is planned for from interests alone.
+        let fit = DateFit(yours: you.datePreferences, theirs: them.datePreferences)
+
         let yours = DateTheme.themes(of: you)
         let theirs = DateTheme.themes(of: them)
         let shared = Set(yours.keys).intersection(theirs.keys)
@@ -285,6 +329,7 @@ enum DatePlanner {
         func liking(_ venue: Venue) -> Double {
             3.0 * Double(venue.themes.intersection(shared).count)
                 + 1.0 * Double(venue.themes.intersection(oneSided).count)
+                + fit.score(venue)
         }
 
         /// Near halfway, and about as far for one of you as for the other.
@@ -298,7 +343,10 @@ enum DatePlanner {
         }
 
         func candidates(_ role: DatePlan.Role, besides used: Set<String>) -> [Venue] {
-            venues.filter { $0.roles.contains(role) && $0.times.contains(time) && !used.contains($0.id) }
+            venues.filter {
+                $0.roles.contains(role) && $0.times.contains(time) && $0.isOpen(on: day)
+                    && !used.contains($0.id) && fit.allows($0)
+            }
         }
 
         func pick(_ role: DatePlan.Role, from pool: [Venue], by score: (Venue) -> Double) -> Venue? {
@@ -310,8 +358,31 @@ enum DatePlanner {
             return ranked[(skips[role] ?? 0) % ranked.count]
         }
 
+        /// What could stand either side of a main thing, on foot from it -- and
+        /// not a second walk beside a walk.
+        func onFoot(from main: Venue, _ role: DatePlan.Role) -> [Venue] {
+            candidates(role, besides: [main.id]).filter {
+                travel(km(main.coordinate, $0.coordinate)).onFoot
+                    && !(main.kind.isOutside && $0.kind.isOutside)
+            }
+        }
+
+        /// "Keep it walkable" starts with the main thing: it has to be somewhere
+        /// with a first and a last stop on foot from it. Choosing the main thing
+        /// as usual and then looking for what was near it found, a quarter of
+        /// the time, a main thing with nothing near it at all -- and a walkable
+        /// date with a train in it.
+        func hasCompany(_ main: Venue) -> Bool {
+            let openers = onFoot(from: main, .opener), closers = onFoot(from: main, .closer)
+            guard let opener = openers.first, let closer = closers.first else { return false }
+            return openers.count > 1 || closers.count > 1 || opener.id != closer.id
+        }
+
         // The anchor.
-        let main = pick(.main, from: candidates(.main, besides: [])) { liking($0) - between($0) }
+        let mains = candidates(.main, besides: [])
+        let reachable = fit.walkable ? mains.filter(hasCompany) : mains
+        let mainPool = reachable.isEmpty ? mains : reachable
+        let main = pick(.main, from: mainPool) { liking($0) - between($0) }
 
         /// For the stops either side: near the main thing. With no main thing,
         /// halfway stands in for it.
@@ -330,10 +401,23 @@ enum DatePlanner {
             return indoors.isEmpty ? pool : indoors
         }
 
+        /// "Keep it walkable": only what is a walk from the main thing. Like
+        /// `besideMain`, it gives way only when nothing at all is in reach --
+        /// and then the leg says "by transit", so the plan never pretends.
+        func inReach(_ pool: [Venue]) -> [Venue] {
+            guard fit.walkable, let main else { return pool }
+            let near = pool.filter { travel(km(main.coordinate, $0.coordinate)).onFoot }
+            return near.isEmpty ? pool : near
+        }
+
         var used = Set(main.map { [$0.id] } ?? [])
-        let opener = pick(.opener, from: besideMain(candidates(.opener, besides: used)), by: nearMain)
+        let openerPool = besideMain(inReach(candidates(.opener, besides: used)))
+        let opener = pick(.opener, from: openerPool, by: nearMain)
         if let opener { used.insert(opener.id) }
-        let closer = pick(.closer, from: besideMain(candidates(.closer, besides: used)), by: nearMain)
+        let closerPool = besideMain(inReach(candidates(.closer, besides: used)))
+        let closer = pick(.closer, from: closerPool, by: nearMain)
+        let choices: [DatePlan.Role: Int] = [.opener: openerPool.count, .main: mainPool.count,
+                                             .closer: closerPool.count]
 
         var stops: [DatePlan.Stop] = []
         var clock = time.start
@@ -354,7 +438,8 @@ enum DatePlanner {
                                them: them, theirs: theirs, yourName: "You"),
                 sharedReason: reason(for: venue, near: role == .main ? nil : main,
                                      shared: shared, you: you, yours: yours,
-                                     them: them, theirs: theirs, yourName: you.name)
+                                     them: them, theirs: theirs, yourName: you.name),
+                canSwap: (choices[role] ?? 0) > 1
             ))
             clock += venue.kind.minutes
             previous = venue
@@ -373,6 +458,7 @@ enum DatePlanner {
 
         return DatePlan(
             time: time,
+            day: day,
             shared: DateTheme.allCases.filter { shared.contains($0) },
             sameWords: sameWordsShown,
             halfway: middle.flatMap(nearestNeighbourhood),
@@ -382,10 +468,12 @@ enum DatePlanner {
         )
     }
 
-    /// The message a plan becomes when you send it.
+    /// The message a plan becomes when you send it. The day goes in the first
+    /// line, because the first line is what a notification shows.
     static func message(for plan: DatePlan) -> String {
         let lines = plan.stops.map { "\(clockTime($0.start)) · \($0.venue.name), \($0.venue.neighbourhood)" }
-        return (["How about this?"] + lines).joined(separator: "\n")
+        let opening = plan.day.map { "How about \($0.long)?" } ?? "How about this?"
+        return ([opening] + lines).joined(separator: "\n")
     }
 
     /// "2:00 pm". Written by hand rather than through a `DateFormatter`, because

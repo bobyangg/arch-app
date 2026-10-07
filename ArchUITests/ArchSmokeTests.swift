@@ -42,8 +42,12 @@ final class ArchSmokeTests: XCTestCase {
     /// control itself is also the difference between a test that is slow on a busy
     /// runner and a test that is flaky on one.
     @discardableResult
-    private func launch(file: StaticString = #filePath, line: UInt = #line) -> XCUIApplication {
+    private func launch(
+        arguments: [String] = [],
+        file: StaticString = #filePath, line: UInt = #line
+    ) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments = arguments
         app.launch()
         XCTAssertTrue(
             app.buttons["tab.daily"].waitForExistence(timeout: 30),
@@ -335,19 +339,127 @@ final class ArchSmokeTests: XCTestCase {
         let app = launch()
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(app.buttons["tab.planner"].isSelected)
+        answerDatePreferences(app)
 
-        let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
+        // Counted by their cards, not their Swap buttons: a stop that is the
+        // only place that fits has no Swap, because one would change nothing.
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
         XCTAssertTrue(
-            swaps.firstMatch.waitForExistence(timeout: 5),
+            stops.firstMatch.waitForExistence(timeout: 5),
             "The Date planner drew no stops."
         )
-        XCTAssertEqual(swaps.count, 3, "A plan is three stops; found \(swaps.count).")
+        XCTAssertEqual(stops.count, 3, "A plan is three stops; found \(stops.count).")
 
-        // Swapping a stop has to leave a plan behind, not an empty screen.
+        // A week of days, and picking one still leaves a whole plan.
+        XCTAssertTrue(app.buttons["planner.day.6"].exists, "The planner should offer seven days.")
+        app.buttons["planner.day.6"].tap()
+        XCTAssertTrue(app.buttons["planner.day.6"].isSelected, "Tapping a day did not pick it.")
+        XCTAssertEqual(stops.count, 3, "Picking a day lost the plan.")
+
+        // Swapping a stop has to leave a plan behind, not an empty screen. The
+        // main thing always has a Swap here: more than one place can anchor it.
+        let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
+        XCTAssertGreaterThan(swaps.count, 0, "No stop on this plan can be swapped.")
         swaps.firstMatch.tap()
-        XCTAssertEqual(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'")).count, 3,
-                       "Swapping a stop lost the plan.")
+        XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
+    }
+
+    /// Through "Get started" and the five questions, taking the first option
+    /// each time. Waits for each question by its "N of 5" line, because the
+    /// questions move on by themselves a beat after a tap, and a tap that lands
+    /// before the move is a tap on the question just answered.
+    private func answerDatePreferences(
+        _ app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        let start = app.buttons["planner.getStarted"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5),
+                      "The Date planner did not open on its Get started screen.",
+                      file: file, line: line)
+        start.tap()
+        for question in 1...5 {
+            XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5),
+                          "Question \(question) of the date preferences never appeared.",
+                          file: file, line: line)
+            app.buttons["planner.option.0"].tap()
+        }
+        XCTAssertTrue(app.buttons["planner.editPreferences"].waitForExistence(timeout: 5),
+                      "Answering all five did not take the planner to a plan.",
+                      file: file, line: line)
+    }
+
+    /// Straight after onboarding the planner is introduced in a popup, and its
+    /// "Get started" goes to the first question in the planner tab.
+    ///
+    /// The design build has no onboarding to finish, so `-introducePlanner`
+    /// stands in for having just finished it -- the same flag finishing sets.
+    func testThePlannerIsIntroducedAfterOnboarding() {
+        let app = launch(arguments: ["-introducePlanner"])
+
+        let start = app.buttons["planner.getStarted"]
+        XCTAssertTrue(start.waitForExistence(timeout: 10),
+                      "No Date planner popup after onboarding.")
+        start.tap()
+
+        XCTAssertTrue(app.staticTexts["1 of 5"].waitForExistence(timeout: 5),
+                      "Get started in the popup did not open the first question.")
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected,
+                      "Get started in the popup did not go to the Date planner tab.")
+    }
+
+    /// "Not now" leaves the questions waiting where they belong: on the
+    /// planner tab's Get started screen.
+    func testThePlannerPopupCanWait() {
+        let app = launch(arguments: ["-introducePlanner"])
+
+        let later = app.buttons["plannerIntro.later"]
+        XCTAssertTrue(later.waitForExistence(timeout: 10),
+                      "No Date planner popup after onboarding.")
+        later.tap()
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected,
+                      "Not now should leave you where you were.")
+
+        app.buttons["tab.planner"].tap()
+        XCTAssertTrue(app.buttons["planner.getStarted"].waitForExistence(timeout: 5),
+                      "After Not now, the planner tab should still ask first.")
+    }
+
+    /// Editing your interests changes the plan.
+    ///
+    /// The plan is computed from your profile every time it is drawn, so this
+    /// should be true by construction -- which is exactly the kind of thing
+    /// that stops being true quietly. Hana wrote "Street trees" and you did
+    /// not; once you have, the planner says you both wrote it.
+    func testEditingYourInterestsChangesThePlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        // By identifier: "Hana" is also the label of her row in Messages, and
+        // the first run of this test failed on exactly that ambiguity.
+        app.buttons["planner.with.hana"].tap()
+        let bothWrote = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'You both wrote'"))
+        XCTAssertEqual(bothWrote.count, 0, "Nothing you wrote matches Hana's words yet.")
+
+        app.buttons["tab.you"].tap()
+        let edit = app.buttons["Edit your interests"]
+        var tries = 0
+        while !edit.isHittable && tries < 6 { app.swipeUp(); tries += 1 }
+        XCTAssertTrue(edit.isHittable, "No way to edit your interests on the You tab.")
+        edit.tap()
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "The interests editor has no fields.")
+        // Tapped at its far end, so the deletes take the whole of what is there.
+        field.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)).tap()
+        field.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: 45))
+        field.typeText("Street trees")
+        app.buttons["interests.save"].tap()
+
+        app.buttons["tab.planner"].tap()
+        XCTAssertTrue(bothWrote.firstMatch.waitForExistence(timeout: 5),
+                      "The plan did not change after your interests did.")
     }
 
     // MARK: App Review

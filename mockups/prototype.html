@@ -237,6 +237,14 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .ptime button{flex:1; height:44px; border-radius:var(--r-control); background:var(--stone);
               font-size:15px; font-weight:600; color:var(--mortar); text-align:center;}
 .ptime button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+/* The next seven days, tomorrow first: weekday over date. */
+.pday{display:flex; gap:4px;}
+.pday button{flex:1; min-width:0; height:56px; border-radius:var(--r-control); background:var(--stone);
+             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+             color:var(--mortar);}
+.pday button .wd{font-size:12px;}
+.pday button .dn{font-size:15px; font-weight:600;}
+.pday button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
 .pstop{display:flex; gap:12px; align-items:flex-start; padding:16px; border-radius:var(--r-card);
        background:var(--stone);}
 .pstop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
@@ -753,7 +761,8 @@ const S={
   stacks:{premium:[],daily:[],messages:[],planner:[],you:[]},
   /* The Date planner: who with, when, how many times each stop was swapped,
      and who a plan has just gone to. */
-  planner:{with:null,time:"afternoon",skips:{},sent:null},
+  /* time: null means "what your answers prefer"; q: the question showing. */
+  planner:{with:null,time:null,skips:{},sent:null,q:null,draft:[]},
   /* Nobody here is somebody you have written to — writing is what takes them out
      of your five. Hana is the exception that shows the rule: she wrote first, so
      your slot is untouched. */
@@ -1295,8 +1304,46 @@ const themesOf=p=>{const out={}; (p.interests||[]).filter(Boolean)
 /* How long a stop like this usually takes, in minutes. */
 const KINDS={coffee:["Coffee",45],walk:["A walk",60],park:["Park",60],museum:["Museum",90],
   library:["Library",60],studio:["Open studio",75],listening:["Listening bar",90],
-  food:["Something to eat",75],bar:["Drinks",60],shop:["Shop",40]};
+  show:["Something live",90],food:["Something to eat",75],bar:["Drinks",60],shop:["Shop",40]};
 const OUTSIDE=k=>k==="walk"||k==="park";
+/* A place you go *for* a drink. Somewhere live is its own kind, so "I don't
+   drink" takes away the bars and leaves the concert. */
+const DRINK_LED=k=>k==="bar"||k==="listening";
+/* Roughly what it costs two people: nothing, a little, a meal's worth. */
+const PRICE={walk:0,park:0,library:0,shop:0,coffee:1,museum:1,studio:1,listening:2,show:2,food:2,bar:2};
+
+/* The Date planner's five questions. Each option carries the value it stores,
+   which is what backend/025's checks allow. */
+const PREF_QS=[
+  ["style","What sounds like a good first date?",[["talk","Coffee and a long conversation"],
+    ["doing","Doing something together"],["outside","Getting outside"],["night_out","A proper night out"]]],
+  ["time","When are you at your best?",[["afternoon","In the afternoon"],["evening","In the evening"],["either","Either is fine"]]],
+  ["drinks","How do you feel about drinks?",[["yes","Happy to have one"],["sometimes","Fine, but not the point"],["no","I don\u2019t drink"]]],
+  ["budget","What would you like to spend?",[["low","As little as possible"],["middle","A coffee and a meal"],["any","Whatever makes it good"]]],
+  ["distance","How far would you go in one date?",[["walkable","Keep it walkable"],["ride","A short ride is fine"]]]];
+const STYLE_KINDS={talk:["coffee","walk","food"],doing:["studio","museum","shop","show"],
+  outside:["walk","park"],night_out:["bar","listening","show","food"]};
+const prefsFrom=draft=>draft.length===PREF_QS.length&&draft.every(x=>x!=null)
+  ?Object.fromEntries(PREF_QS.map(([k,,o],i)=>[k,o[draft[i]][0]])):null;
+const prefsDraft=p=>PREF_QS.map(([k,,o])=>p?o.findIndex(x=>x[0]===p[k]):null);
+const prefsSummary=p=>PREF_QS.map(([k,,o])=>o.find(x=>x[0]===p[k])[1]).join(" \u00B7 ");
+
+/* Two people's answers, as the planner uses them. Rules take the stricter
+   answer -- if either of you does not drink, nothing is a bar; if either wants
+   it walkable, it stays on foot; the lower budget wins. Tastes are blended. */
+function dateFit(a,b){
+  const both=[a,b].filter(Boolean);
+  const noDrinks=both.some(p=>p.drinks==="no"), walkable=both.some(p=>p.distance==="walkable");
+  const budget=["low","middle","any"].find(x=>both.some(p=>p.budget===x))||"any";
+  const time=(a&&a.time!=="either"&&a.time)||(b&&b.time!=="either"&&b.time)||"afternoon";
+  const allows=v=>!(noDrinks&&DRINK_LED(v.kind));
+  const score=v=>{let n=0;
+    both.forEach(p=>{if(STYLE_KINDS[p.style].includes(v.kind)) n+=1.5;});
+    if(DRINK_LED(v.kind)) both.forEach(p=>{n+=p.drinks==="yes"?0.5:p.drinks==="sometimes"?-0.5:0;});
+    n-=(budget==="low"?1.5:budget==="middle"?0.5:0)*PRICE[v.kind];
+    return n;};
+  return {noDrinks,walkable,budget,time,allows,score};
+}
 
 /* Parks, museums and libraries are real places; every café, bar, studio and
    restaurant is invented, so the prototype never sends anybody to a real
@@ -1312,7 +1359,7 @@ const VENUES=[
   VN("green-wood","Green-Wood Cemetery","walk","Sunset Park",40.6522,-73.9910,["outdoors","buildings","words"],["afternoon"],["main"]),
   VN("brooklyn-museum","Brooklyn Museum","museum","Prospect Heights",40.6712,-73.9636,["craft","buildings"],["afternoon"],["main"]),
   VN("central-library","Brooklyn Public Library, Central","library","Prospect Heights",40.6725,-73.9682,["words","buildings"],["afternoon"],["opener","main"]),
-  VN("bam","BAM","listening","Fort Greene",40.6865,-73.9776,["sound","words"],["evening"],["main"]),
+  VN("bam","BAM","show","Fort Greene",40.6865,-73.9776,["sound","words"],["evening"],["main"]),
   VN("pioneer-works","Pioneer Works","studio","Red Hook",40.6786,-74.0118,["craft","sound"],["afternoon","evening"],["main"]),
   VN("lowlight-coffee","Lowlight Coffee","coffee","Fort Greene",40.6889,-73.9725,["food","night"],["afternoon","evening"],["opener"]),
   VN("half-measure","Half Measure Café","coffee","Prospect Heights",40.6770,-73.9660,["food","words"],["afternoon"],["opener"]),
@@ -1332,9 +1379,36 @@ const VENUES=[
   VN("wide-bowl","Wide Bowl Noodles","food","Williamsburg",40.7135,-73.9620,["food"],["afternoon","evening"],["closer"]),
   VN("tin-roof","Tin Roof Dumplings","food","Sunset Park",40.6450,-74.0110,["food"],["afternoon","evening"],["closer"]),
   VN("platform-diner","Platform Diner","food","Bushwick",40.6990,-73.9230,["food","buildings","night"],["afternoon","evening"],["closer"]),
-  VN("slope-wine","Long Pour","bar","Park Slope",40.6725,-73.9775,["food","words"],["evening"],["closer"])];
+  VN("slope-wine","Long Pour","bar","Park Slope",40.6725,-73.9775,["food","words"],["evening"],["closer"]),
+  /* Added so a Swap has somewhere to go: under "keep it walkable", Domino Park
+     had one café and one restaurant in reach, and the stops either side of it
+     could not be swapped at all. */
+  VN("slack-water","Slack Water Coffee","coffee","Williamsburg",40.7122,-73.9662,["food"],["afternoon","evening"],["opener"]),
+  VN("little-ladle","Little Ladle","food","Williamsburg",40.7171,-73.9601,["food"],["afternoon","evening"],["closer"]),
+  VN("ferry-light","Ferry Light Pizza","food","Williamsburg",40.7103,-73.9638,["food","night"],["afternoon","evening"],["closer"]),
+  VN("night-kettle","Night Kettle","coffee","Fort Greene",40.6872,-73.9748,["food","night"],["evening"],["opener"]),
+  VN("gatehouse-kitchen","Gatehouse Kitchen","food","Prospect Heights",40.6738,-73.9612,["food"],["afternoon","evening"],["closer"]),
+  VN("meadow-edge","Meadow Edge","food","Park Slope",40.6668,-73.9752,["food"],["afternoon","evening"],["closer"]),
+  VN("quiet-hours","Quiet Hours Tea","coffee","Clinton Hill",40.6893,-73.9658,["food","words"],["afternoon","evening"],["opener"])];
 
 const ROLES=[["opener","To start"],["main","The main thing"],["closer","To finish"]];
+
+/* The day a date is on, as "2026-10-10": the day itself, not an instant, so a
+   plan for Saturday is Saturday on both phones. From tomorrow, for a week --
+   not tonight, because Arch is unhurried; not further, because past a week a
+   plan is a promise about a week nobody can see yet. */
+const isoDay=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+const dayDate=iso=>{const [y,m,d]=iso.split("-").map(Number); return new Date(y,m-1,d,12);};
+const upcomingDays=()=>{const t=new Date(); t.setHours(12,0,0,0);
+  return [1,2,3,4,5,6,7].map(n=>{const d=new Date(t); d.setDate(t.getDate()+n); return isoDay(d);});};
+const dayLong=iso=>dayDate(iso).toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric"});
+const dayName=iso=>dayDate(iso).toLocaleDateString(undefined,{weekday:"long"});
+const dayShort=iso=>dayDate(iso).toLocaleDateString(undefined,{weekday:"short"});
+/* Shut on these days (0 is Sunday). The real places as they say as this is
+   written -- the museum Mondays and Tuesdays, the garden Mondays; the invented
+   ones invented. A live provider brings real hours. */
+const CLOSED={"botanic-garden":[1],"brooklyn-museum":[1,2],"silver-bath":[1,2],
+  "listening-room":[0,1],"felt-hammer":[1],"night-oven":[0]};
 const PLAN_START={afternoon:14*60,evening:18*60+30};
 const kmBetween=(a,b)=>{const R=6371,rad=x=>x*Math.PI/180,dLa=rad(b.lat-a.lat),dLo=rad(b.lon-a.lon);
   const h=Math.sin(dLa/2)**2+Math.cos(rad(a.lat))*Math.cos(rad(b.lat))*Math.sin(dLo/2)**2;
@@ -1352,7 +1426,12 @@ const clockAt=m=>{const h=Math.floor(m/60)%24,mm=m%60,t=h%12===0?12:h%12;
    changes that stop and the walks either side of it and nothing else.
    Something you both like is worth three, something one of you likes one; being
    near halfway, and about as far for both of you, counts too. */
-function planDate(you,them,time,skips){
+function planDate(you,them,time,skips,day){
+  /* Anywhere shut that day is not on the plan. */
+  const dow=day?dayDate(day).getDay():null;
+  /* What you each said a date should be like. Either may be missing: somebody
+     who has not answered is planned for from interests alone. */
+  const fit=dateFit(you.prefs,them.prefs);
   const yours=themesOf(you),theirs=themesOf(them);
   const shared=DATE_THEME_ORDER.filter(k=>k in yours&&k in theirs);
   const oneSided=DATE_THEME_ORDER.filter(k=>(k in yours)!==(k in theirs));
@@ -1365,9 +1444,11 @@ function planDate(you,them,time,skips){
   const mid=yp&&tp?{lat:(yp.lat+tp.lat)/2,lon:(yp.lon+tp.lon)/2}:(yp||tp);
   /* The main thing anchors the date: chosen first, for what you share and for
      being about halfway. The stops either side are chosen for being near it. */
-  const liking=v=>3*v.themes.filter(t=>shared.includes(t)).length+v.themes.filter(t=>oneSided.includes(t)).length;
+  const liking=v=>3*v.themes.filter(t=>shared.includes(t)).length+v.themes.filter(t=>oneSided.includes(t)).length
+    +fit.score(v);
   const between=v=>(mid?0.8*kmBetween(mid,v.c):0)+(yp&&tp?0.5*Math.abs(kmBetween(yp,v.c)-kmBetween(tp,v.c)):0);
-  const cands=(role,used)=>VENUES.filter(v=>v.roles.includes(role)&&v.times.includes(time)&&!used.has(v.id));
+  const cands=(role,used)=>VENUES.filter(v=>v.roles.includes(role)&&v.times.includes(time)&&!used.has(v.id)&&fit.allows(v)
+    &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow)));
   const pick=(role,pool,score)=>{const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(a[0].id<b[0].id?-1:1)).map(x=>x[0]);
     return r.length?r[(skips[role]||0)%r.length]:null;};
   const reason=(v,near,who)=>{
@@ -1383,16 +1464,36 @@ function planDate(you,them,time,skips){
       ?`A short walk from ${near.name}.`:`The closest option to ${near.name}.`;
     return "About halfway between you.";};
 
-  const main=pick("main",cands("main",new Set()),v=>liking(v)-between(v));
+  /* "Keep it walkable" starts with the main thing: it has to be somewhere with
+     a first and a last stop on foot from it. Choosing the main thing first and
+     then looking for what is near it found, a quarter of the time, a main thing
+     with nothing near it at all -- and a walkable date with a train in it. */
+  const onFootFrom=(m,role)=>cands(role,new Set([m.id])).filter(v=>
+    travelFor(kmBetween(m.c,v.c)).foot&&!(OUTSIDE(m.kind)&&OUTSIDE(v.kind)));
+  const hasCompany=m=>{const o=onFootFrom(m,"opener"), c=onFootFrom(m,"closer");
+    return o.length&&c.length&&(o.length>1||c.length>1||o[0].id!==c[0].id);};
+  const mains=cands("main",new Set()), reachable=fit.walkable?mains.filter(hasCompany):mains;
+  const mainPool=reachable.length?reachable:mains;
+  const main=pick("main",mainPool,v=>liking(v)-between(v));
   /* Near the main thing. */
   const nearMain=v=>main?liking(v)-1.5*kmBetween(main.c,v.c):liking(v)-between(v);
   /* Not a second walk beside a walk -- a rule, not a penalty, giving way only if
      there is nothing else at all. */
   const besideMain=pool=>{if(!main||!OUTSIDE(main.kind)) return pool;
     const indoors=pool.filter(v=>!OUTSIDE(v.kind)); return indoors.length?indoors:pool;};
+  /* "Keep it walkable": only what is a walk from the main thing, giving way
+     only when nothing is in reach -- and then the leg says "by transit". */
+  const inReach=pool=>{if(!fit.walkable||!main) return pool;
+    const near=pool.filter(v=>travelFor(kmBetween(main.c,v.c)).foot); return near.length?near:pool;};
   const used=new Set(main?[main.id]:[]);
-  const opener=pick("opener",besideMain(cands("opener",used)),nearMain); if(opener) used.add(opener.id);
-  const closer=pick("closer",besideMain(cands("closer",used)),nearMain);
+  const openerPool=besideMain(inReach(cands("opener",used)));
+  const opener=pick("opener",openerPool,nearMain); if(opener) used.add(opener.id);
+  const closerPool=besideMain(inReach(cands("closer",used)));
+  const closer=pick("closer",closerPool,nearMain);
+  /* Whether Swap has anywhere else to go. Under "keep it walkable" and "I
+     don't drink", next to some main things, a stop is often the only place
+     that fits -- and a Swap that lands on the same place looks broken. */
+  const choices={opener:openerPool.length,main:mainPool.length,closer:closerPool.length};
 
   const stops=[]; let clock=PLAN_START[time], prev=null;
   [["opener",opener],["main",main],["closer",closer]].forEach(([role,v])=>{
@@ -1404,7 +1505,8 @@ function planDate(you,them,time,skips){
     const near=role==="main"?null:main;
     /* `reason` is for this screen ("You wrote ..."); `shared` is for a message
        both people read ("Sam wrote ..."). */
-    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name)});
+    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name),
+      canSwap:choices[role]>1});
     clock+=KINDS[v.kind][1]; prev=v;
   });
 
@@ -1416,7 +1518,7 @@ function planDate(you,them,time,skips){
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
-  return {shared,sameWords,halfway,fairness,stops,
+  return {day,shared,sameWords,halfway,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+KINDS[stops[stops.length-1].v.kind][1]:PLAN_START[time]};
 }
@@ -1424,7 +1526,7 @@ function planDate(you,them,time,skips){
    made for: they quote what that person wrote, and "Share this plan" can send it
    to anybody in Messages -- sent to somebody else, it would show them another
    person's interests and that you are planning a date with them. */
-const frozenPlan=(plan,time,keepReasons)=>({time,stops:plan.stops.map(st=>({
+const frozenPlan=(plan,time,keepReasons)=>({time,day:plan.day||null,stops:plan.stops.map(st=>({
   start:st.start,name:st.v.name,kind:KINDS[st.v.kind][0],hood:st.v.hood,
   leg:st.leg?travelLabel(st.leg):null,reason:keepReasons?st.shared:null}))});
 
@@ -1435,7 +1537,11 @@ const frozenPlan=(plan,time,keepReasons)=>({time,stops:plan.stops.map(st=>({
 function planCard(c,m,i){
   const pl=m[4].plan, out=m[0]==="out";
   const ans=c.msgs.findIndex(x=>x[4]&&x[4].answering===i);
-  let h=`<div class="plancard ${out?"out":""}"><div class="subhead">${pl.time==="evening"?"A plan for the evening":"A plan for the afternoon"}</div><div class="v mt-s">`;
+  const part=pl.time==="evening"?"evening":"afternoon";
+  /* A plan for a day that has gone is history: nobody can say yes to it. */
+  const past=!!pl.day&&pl.day<isoDay(new Date());
+  let h=`<div class="plancard ${out?"out":""}"><div class="subhead">${pl.day?`A plan for ${dayName(pl.day)} ${part}`:`A plan for the ${part}`}</div>
+    ${pl.day?`<div class="footnote mortar" style="margin-top:2px">${esc(dayLong(pl.day))}</div>`:""}<div class="v mt-s">`;
   pl.stops.forEach((st,k)=>{
     if(st.leg) h+=`<div class="pcwalk"><i></i><div class="footnote mortar">${esc(st.leg)}</div></div>`;
     const key=`${c.id}:${i}:${k}`, open=!!(S.planOpen&&S.planOpen[key]);
@@ -1447,10 +1553,11 @@ function planCard(c,m,i){
   });
   h+=`</div>`;
   if(ans>=0) h+=`<div class="subhead mt-s">${c.msgs[ans][0]==="in"?esc(c.person.name)+" is in.":"You are in."}</div>`;
+  else if(past) h+=`<div class="footnote mortar mt-s">This day has been and gone.</div>`;
   else if(!hasEnded(c)&&!isRequest(c)){
     h+=out
       ?`<div class="spread mt-s" style="align-items:center"><div class="footnote mortar">Waiting on ${esc(c.person.name)}.</div>
-          <button class="btntext" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`
       :`<div style="display:flex; gap:8px" class="mt-s">
           <button class="btn primary" style="flex:1" data-a="planYes" data-id="${c.id}" data-i="${i}">I\u2019m in</button>
           <button class="btn quiet" style="flex:1" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`;
@@ -1461,14 +1568,26 @@ function planCard(c,m,i){
 /* Hana's thread ends on a plan she sent, so there is a card to answer. Built at
    start-up from her side of the planner -- she is "you" and Sam is "them" -- so
    it is a plan the engine would actually make. */
+/* Two people in Messages have answered the questions, so their plans are shaped
+   by somebody else's answers: Hana does not drink and keeps it walkable; Nadia
+   likes a proper night out. Nobody's answers are ever shown to anybody else. */
+function seedPrefs(){
+  HANA.prefs={style:"outside",time:"evening",drinks:"no",budget:"middle",distance:"walkable"};
+  const n=byId("nadia"); if(n) n.prefs={style:"night_out",time:"evening",drinks:"yes",budget:"any",distance:"ride"};
+}
+
 function seedHanaPlan(){
   const c=S.convos.find(x=>x.id==="hana"); if(!c||c.msgs.some(m=>m[4]&&m[4].plan)) return;
-  const plan=planDate(HANA,S.you,"evening",{});
+  /* For the coming Thursday, because that is the day the two of them have
+     already agreed on in the thread. */
+  const thursday=upcomingDays().find(d=>dayDate(d).getDay()===4);
+  const plan=planDate(HANA,S.you,"evening",{},thursday);
   c.msgs.push(["in",planMessage(plan),"Yesterday",undefined,{plan:frozenPlan(plan,"evening",true)}]);
   c.when="Yesterday";
 }
 
-const planMessage=plan=>["How about this?"].concat(
+/* The day goes in the first line, because that is what a notification shows. */
+const planMessage=plan=>[plan.day?`How about ${dayLong(plan.day)}?`:"How about this?"].concat(
   plan.stops.map(s=>`${clockAt(s.start)} \u00B7 ${s.v.name}, ${s.v.hood}`)).join("\n");
 
 /* The people in Messages, and nobody from the Daily 5: a date is planned with
@@ -1485,19 +1604,62 @@ function plannerCandidates(){
   return out;
 }
 
+/* What the planner says before its first plan. One block in two places -- the
+   tab on first visit, and the popup straight after onboarding -- so the two can
+   never describe it differently. The privacy line is exact: answers are planned
+   around, not shown; it does not claim nobody could ever read them. */
+function plannerGetStarted(action){
+  const pt=(n,t)=>`<div style="display:flex; gap:12px; align-items:baseline">
+    <div class="titleM" style="color:var(--lamp); width:28px; flex:none" aria-hidden="true">${n}</div>
+    <div class="body">${t}</div></div>`;
+  return `<div class="v gap-s"><div class="titleM">Plan dates you would both enjoy</div>
+      <div class="body mortar">Pick somebody you are talking to, and the planner lays out an afternoon or an evening: three stops, chosen from what you both like, about halfway between you.</div></div>
+    <div class="v gap-m mt-l">
+      ${pt("5","Five quick questions about your ideal date. Multiple choice, under a minute.")}
+      ${pt("2","Plans fit you both. If either of you does not drink, or wants to keep it walkable, so does every plan.")}
+      ${pt("0","Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")}</div>
+    <button class="btn primary mt-l" data-a="${action}">Get started</button>`;
+}
+
+/* The five questions, one to a screen, built like onboarding's: the same
+   options, the same rule, the same short pause before moving on. */
+function plannerQuestion(){
+  const P_=S.planner, i=P_.q, [,q,opts]=PREF_QS[i];
+  let segs=""; for(let k=0;k<PREF_QS.length;k++) segs+=`<div class="seg ${k<=i?"on":""}"></div>`;
+  return `<div class="rule mt-l">${segs}</div>
+    <div class="caption mortar mt-s">${i+1} of ${PREF_QS.length}</div>
+    <div class="titleM mt-l">${esc(q)}</div>
+    <div class="v gap-xs mt-xl">${opts.map(([,label],k)=>
+      `<button data-a="planAns" data-k="${k}" style="display:block;width:100%">
+        <div class="opt ${P_.draft[i]===k?"sel":""}">${esc(label)}</div></button>`).join("")}</div>
+    <button class="btntext mt-m" data-a="planBack">${i===0?"Back":"Back a question"}</button>`;
+}
+
+/* The toggle's choice, or else the time your answers (and theirs) prefer. */
+const plannerTime=cur=>S.planner.time||dateFit(S.you.prefs,cur&&cur.p.prefs).time;
+
 function plannerRoot(){
   const cands=plannerCandidates(), P_=S.planner;
   let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-s" style="padding-top:8px">
       <div class="titleL">Date planner</div>
       <div class="body mortar">Somewhere you would both actually like, about halfway between you.</div></div>`;
+  if(P_.q!=null) return h+plannerQuestion()+`</div></div>`;
+  if(!S.you.prefs) return h+`<div class="mt-xl">${plannerGetStarted("planStart")}</div></div></div>`;
+  /* Your own answers in a line, and the way back into them. Only ever yours. */
+  const prefRow=`<div class="mt-l"><div class="spread" style="align-items:baseline">
+      <div class="subhead">Your date preferences</div>
+      <button class="btntext" data-a="planStart" aria-label="Edit your date preferences" style="width:auto">Edit</button></div>
+    <div class="footnote mortar" style="margin-top:4px">${esc(prefsSummary(S.you.prefs))}</div></div>`;
   if(!cands.length){
-    return h+`<div class="v gap-s mt-xl"><div class="titleM">Nobody to plan with yet</div>
+    return h+prefRow+`<div class="v gap-s mt-xl"><div class="titleM">Nobody to plan with yet</div>
       <div class="body mortar">Plans are for people you are talking to. Write to one of your matches, and you can plan a date with them here.</div>
       <button class="btn quiet mt-s" data-a="tab" data-k="daily">See your matches</button></div></div></div>`;
   }
   const cur=cands.find(c=>c.p.id===P_.with)||cands[0];
-  const plan=planDate(S.you,cur.p,P_.time,P_.skips);
+  const time=plannerTime(cur), days=upcomingDays();
+  const day=days.includes(P_.day)?P_.day:days[0];
+  const plan=planDate(S.you,cur.p,time,P_.skips,day);
 
   h+=`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>
     `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${c.p.id===cur.p.id}">
@@ -1509,9 +1671,16 @@ function plannerRoot(){
     :`<div class="footnote mortar mt-s">Nothing in common yet in what you each wrote, so this leans on what ${esc(cur.p.name)} wrote.</div>`;
   if(plan.sameWords.length) h+=`<div class="footnote mortar mt-s">You both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}.</div>`;
   if(plan.halfway) h+=`<div class="footnote mortar mt-s">About halfway: ${esc(plan.halfway)}</div>`;
+  h+=prefRow;
 
-  h+=`<div class="ptime mt-l">`+["afternoon","evening"].map(t=>
-    `<button data-a="planTime" data-k="${t}" aria-pressed="${P_.time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")+`</div>`;
+  /* The next seven days, tomorrow first. */
+  h+=`<div class="subhead mt-l">When</div><div class="pday mt-s">`+days.map((d,i)=>
+    `<button data-a="planDay" data-k="${d}" aria-pressed="${d===day}"
+      aria-label="${i===0?"Tomorrow, ":""}${esc(dayLong(d))}">
+      <span class="wd">${esc(dayShort(d))}</span><span class="dn">${dayDate(d).getDate()}</span></button>`).join("")+`</div>`;
+
+  h+=`<div class="ptime mt-s">`+["afternoon","evening"].map(t=>
+    `<button data-a="planTime" data-k="${t}" aria-pressed="${time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")+`</div>`;
 
   h+=`<div class="v mt-l">`;
   plan.stops.forEach(s=>{
@@ -1521,13 +1690,16 @@ function plannerRoot(){
         <div class="caption mortar">${s.title}</div>
         <div class="subhead">${esc(s.v.name)}</div>
         <div class="footnote mortar">${KINDS[s.v.kind][0]} \u00B7 ${esc(s.v.hood)}</div>
-        <div class="footnote" style="margin-top:4px">${esc(s.reason)}</div></div>
-      <button class="swap" data-a="planSwap" data-k="${s.role}"
-        aria-label="Swap ${esc(s.v.name)}">Swap</button></div>`;
+        <div class="footnote" style="margin-top:4px">${esc(s.reason)}</div>
+        ${s.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${s.role==="main"
+          ?"The only place that fits what you both said."
+          :"The only place near the main thing that fits. Swap the main thing to move the whole date."}</div>`}</div>
+      ${s.canSwap?`<button class="swap" data-a="planSwap" data-k="${s.role}"
+        aria-label="Swap ${esc(s.v.name)}">Swap</button>`:""}</div>`;
   });
   h+=`</div>`;
 
-  const bits=[`Done by about ${clockAt(plan.endsAt)}.`];
+  const bits=[`${dayLong(day)}.`,`Done by about ${clockAt(plan.endsAt)}.`];
   if(plan.fromYou!=null) bits.push(`The first stop is ${plan.fromYou.toFixed(1)} km from you.`);
   if(plan.fairness) bits.push(plan.fairness);
   h+=`<div class="footnote mortar mt-l">${bits.join(" ")}</div>`;
@@ -2819,8 +2991,24 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,skips:{},sent:null}; render();},
+    planWith:()=>{S.planner={...S.planner,with:id,time:null,skips:{},sent:null}; render();},
+    /* Into the questions, from what you said last time if you said anything. */
+    planStart:()=>{S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
+    planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; render();
+      setTimeout(()=>{
+        if(S.planner.q!==at) return;
+        if(at+1<PREF_QS.length) S.planner.q=at+1;
+        else { S.you.prefs=prefsFrom(S.planner.draft);
+          S.planner={...S.planner,q:null,time:null,skips:{},sent:null}; }
+        render();
+      },260);},
+    planBack:()=>{const P_=S.planner; P_.q=P_.q>0?P_.q-1:null; render();},
+    /* The popup after onboarding: "Get started" goes straight to question one
+       in the planner tab; "Not now" leaves the questions waiting there. */
+    introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
+      S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,skips:{},sent:null}; render();},
+    planDay:()=>{S.planner={...S.planner,day:el.dataset.k,skips:{},sent:null}; render();},
     planSwap:()=>{const k=el.dataset.k, sk={...S.planner.skips}; sk[k]=(sk[k]||0)+1;
       S.planner={...S.planner,skips:sk,sent:null}; render();},
     planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
@@ -2839,14 +3027,15 @@ document.addEventListener("click",e=>{
     planYes:()=>{const c=S.convos.find(x=>x.id===id), i=+el.dataset.i; if(!c) return;
       c.msgs.push(["out","I\u2019m in.","Just now",undefined,{answering:i}]); c.when="Just now"; render();},
     planChange:()=>{const c=S.convos.find(x=>x.id===id), m=c&&c.msgs[+el.dataset.i]; if(!m) return;
-      S.planner={with:c.person.id,time:m[4].plan.time,skips:{},sent:null};
+      S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,skips:{},sent:null,q:null,draft:[]};
       S.stacks.planner=[]; S.tab="planner"; render();},
     planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         to=cands.find(c=>c.p.id===id);
       if(!cur||!to) return;
-      const plan=planDate(S.you,cur.p,S.planner.time,S.planner.skips);
+      const days=upcomingDays(), day=days.includes(S.planner.day)?S.planner.day:days[0];
+      const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.skips,day);
       to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
-        {plan:frozenPlan(plan,S.planner.time,to.p.id===cur.p.id)}]);
+        {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
       to.convo.when="Just now";
       S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
     back:()=>pop(),
@@ -3028,8 +3217,18 @@ document.addEventListener("click",e=>{
       <div class="footnote mortar mt-s">Three things you are actually into.</div>
       <div class="v gap-xs mt-m">${S.you.interests.map(t=>
         `<div class="field"><input value="${esc(t)}" maxlength="24"></div>`).join("")}</div>
-      <button class="btn primary mt-m" data-a="closeSheet">Save</button>
+      <button class="btn primary mt-m" data-a="saveInterests">Save</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
+    /* Save used to only close the sheet, so an edited interest was gone the
+       moment you looked away -- and nothing built from your interests, the Date
+       planner included, could ever see the change. Blanks are dropped. */
+    saveInterests:()=>{
+      const ints=[...document.querySelectorAll("#sheet .field input")].map(i=>i.value.trim()).filter(Boolean);
+      if(ints.length) S.you.interests=ints.slice(0,3);
+      /* The planner's rankings are built from these; old swap counts would
+         point at an arbitrary place in the new ones. */
+      S.planner={...S.planner,skips:{},sent:null};
+      closeSheet(); render();},
     editDetails:()=>openDetails(),
     convoMenu:()=>convoMenuSheet(id),
     blockOpen:()=>{ closeSheet(); setTimeout(()=>blockSheet(id),220); },
@@ -3241,8 +3440,14 @@ function finishOnboarding(){
     const ints=o.interests.filter(t=>t.trim());
     if(ints.length) S.you.interests=ints;
   }
-  S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],you:[]};
+  S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],planner:[],you:[]};
+  /* A new account has said nothing about dates yet. */
+  S.you.prefs=null; S.planner={with:null,time:null,skips:{},sent:null,q:null,draft:[]};
   render();
+  /* Introduced once, straight after onboarding, over the roster. */
+  setTimeout(()=>openSheet(`<div class="caption mortar">New in Arch</div>
+    <div class="mt-m">${plannerGetStarted("introStart")}</div>
+    <button class="btntext mt-s" data-a="closeSheet">Not now</button>`),350);
 }
 
 
@@ -3353,6 +3558,7 @@ render=function(){
 })();
 
 applyTheme();
+seedPrefs();
 seedHanaPlan();
 render();
 </script>
