@@ -70,6 +70,33 @@ struct InterestRow: Codable, Hashable, Identifiable {
     var text: String
 }
 
+// MARK: - Date preferences
+
+/// One row of `date_preferences` (`backend/029`): text columns holding the raw
+/// values of `DatePreferences`' enums.
+struct DatePreferencesRow: Codable, Hashable {
+    var accountId: String
+    var style: String
+    var timeOfDay: String
+    var drinks: String
+    var budget: String
+    var distance: String
+
+    /// Nil for a value this build does not know -- a choice added later is a
+    /// row an older build plans around as if it were unanswered, rather than
+    /// one it misreads.
+    var preferences: DatePreferences? {
+        guard let style = DatePreferences.Style(rawValue: style),
+              let time = DatePreferences.Time(rawValue: timeOfDay),
+              let drinks = DatePreferences.Drinks(rawValue: drinks),
+              let budget = DatePreferences.Budget(rawValue: budget),
+              let distance = DatePreferences.Distance(rawValue: distance)
+        else { return nil }
+        return DatePreferences(style: style, timeOfDay: time, drinks: drinks,
+                               budget: budget, distance: distance)
+    }
+}
+
 // MARK: - Discovery
 
 struct DiscoveryRow: Codable, Hashable {

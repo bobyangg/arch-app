@@ -270,6 +270,7 @@ enum ArchBackend {
         async let interests: [InterestRow] = SupabaseClient.shared.select(
             "profile_interests", filters: ["account_id": "eq.\(me)"], order: "position.asc"
         )
+        async let preferences = datePreferences(for: [me])
 
         // Each `async let` is awaited into its own binding first. Writing
         // `try await photos.map { ... }` inline reads as awaiting the *result of
@@ -279,6 +280,7 @@ enum ArchBackend {
         let photoRows = try await photos
         let promptRows = try await prompts
         let interestRows = try await interests
+        let preferencesBy = await preferences
 
         // Signed in one batch. A photograph with no URL keeps its tone, which is
         // also what it looks like while one is still loading.
@@ -306,7 +308,8 @@ enum ArchBackend {
                        question: PromptLibrary.text(forID: $0.promptKey),
                        answer: $0.answer)
             },
-            interests: interestRows.map { Interest(id: $0.id, text: $0.text) }
+            interests: interestRows.map { Interest(id: $0.id, text: $0.text) },
+            datePreferences: preferencesBy[me]
         )
     }
 
@@ -793,6 +796,7 @@ enum ArchBackend {
         async let interests: [InterestRow] = SupabaseClient.shared.select(
             "profile_interests", filters: ["account_id": list], order: "position.asc"
         )
+        async let preferences = datePreferences(for: ids)
 
         let profileRows = try await profiles
         let photoRows = try await photos
@@ -800,17 +804,71 @@ enum ArchBackend {
         let photosBy = Dictionary(grouping: photoRows, by: \.accountId)
         let promptsBy = Dictionary(grouping: try await prompts, by: \.accountId)
         let interestsBy = Dictionary(grouping: try await interests, by: \.accountId)
+        let preferencesBy = await preferences
 
         // Ordered as asked, not as the database felt like returning them.
         let byID = Dictionary(uniqueKeysWithValues: profileRows.map { ($0.accountId, $0) })
         return ids.compactMap { id in
-            byID[id]?.person(
+            var person = byID[id]?.person(
                 photos: photosBy[id] ?? [],
                 prompts: promptsBy[id] ?? [],
                 interests: interestsBy[id] ?? [],
                 urls: urls
             )
+            person?.datePreferences = preferencesBy[id]
+            return person
         }
+    }
+
+    // MARK: Date preferences
+
+    /// The Date planner answers for a set of accounts, by account.
+    ///
+    /// The table's policy decides who comes back: yourself, and people you have
+    /// a request or open conversation with. Asking for today's five returns
+    /// nothing for them, which is right -- the planner does not plan with the
+    /// Daily 5 -- and needs no filtering here.
+    ///
+    /// **Never fails the load it is part of.** A missing row is somebody who
+    /// has not answered, and a missing *table* is a database `backend/029` has
+    /// not reached yet; either way the planner plans from interests alone, and
+    /// the profile and the conversations still arrive.
+    static func datePreferences(for ids: [String]) async -> [String: DatePreferences] {
+        guard !ids.isEmpty else { return [:] }
+        let rows: [DatePreferencesRow] = (try? await SupabaseClient.shared.select(
+            "date_preferences",
+            filters: ["account_id": "in.(\(ids.joined(separator: ",")))"]
+        )) ?? []
+        var byID: [String: DatePreferences] = [:]
+        for row in rows {
+            if let preferences = row.preferences { byID[row.accountId] = preferences }
+        }
+        return byID
+    }
+
+    /// Yours, whole. An upsert, because answering again replaces what you said.
+    static func saveDatePreferences(_ preferences: DatePreferences, at time: Date = .now) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        struct Write: Encodable {
+            let accountId: String
+            let style: String
+            let timeOfDay: String
+            let drinks: String
+            let budget: String
+            let distance: String
+            let answeredAt: Date
+        }
+        try await SupabaseClient.shared.upsert("date_preferences", [Write(
+            accountId: session.userID,
+            style: preferences.style.rawValue,
+            timeOfDay: preferences.timeOfDay.rawValue,
+            drinks: preferences.drinks.rawValue,
+            budget: preferences.budget.rawValue,
+            distance: preferences.distance.rawValue,
+            answeredAt: time
+        )])
     }
 
     /// Silent, and not immediate: it lands at nine tomorrow morning.

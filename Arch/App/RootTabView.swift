@@ -25,6 +25,11 @@ struct RootTabView: View {
     /// What iOS answered when onboarding asked. Seeded here so "Not now" is
     /// reflected in Settings from the first launch rather than the second.
     var allowsNotifications: Bool = true
+    /// True once, straight after onboarding: the Date planner is introduced in
+    /// a popup over the roster. `onPlannerIntroduced` is told as soon as it is
+    /// shown, so it is never shown twice.
+    var introducePlanner: Bool = false
+    var onPlannerIntroduced: () -> Void = {}
     /// Deleting an account puts you back where you came from.
     var onDeleteAccount: () -> Void = {}
     /// Not the same thing as deleting, even though both land in the same place:
@@ -59,6 +64,10 @@ struct RootTabView: View {
 
     /// Set by "Change it" on a plan in a thread; the Date planner hears it.
     @State private var plannerPreset: PlannerPreset?
+    @State private var showingPlannerIntro = false
+    /// Goes up when the popup's "Get started" is tapped; the planner hears it
+    /// and opens on its first question.
+    @State private var plannerStarts = 0
 
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
@@ -116,13 +125,28 @@ struct RootTabView: View {
             send: { conversation, text, plan in
                 store.reply(to: conversation, text: text, plan: plan)
             },
-            change: { conversation, time in
-                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time)
+            change: { conversation, time, day in
+                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time, day: day)
                 selection = .planner
             }
         ))
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
+        .onChange(of: introducePlanner, initial: true) { _, introduce in
+            guard introduce else { return }
+            showingPlannerIntro = true
+            onPlannerIntroduced()
+        }
+        .sheet(isPresented: $showingPlannerIntro) {
+            PlannerIntroSheet(
+                onStart: {
+                    showingPlannerIntro = false
+                    selection = .planner
+                    plannerStarts += 1
+                },
+                onLater: { showingPlannerIntro = false }
+            )
+        }
     }
 
     /// Blocking writes to two places: the roster and conversations live in the
@@ -246,7 +270,9 @@ struct RootTabView: View {
                     onSend: { conversation, text, plan in
                         store.reply(to: conversation, text: text, plan: plan)
                     },
-                    onOpenDaily: { selection = .daily }
+                    onOpenDaily: { selection = .daily },
+                    startQuestions: plannerStarts,
+                    onSavePreferences: { profile.setDatePreferences($0) }
                 )
             }
             tab(.you) {

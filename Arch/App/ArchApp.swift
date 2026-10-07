@@ -118,6 +118,9 @@ struct ArchApp: App {
                 injectedDaily: session.daily,
                 injectedSettings: session.settings,
                 allowsNotifications: session.allowsNotifications,
+                // After the bridge has finished going up, not under it.
+                introducePlanner: session.introducePlanner && hasLaunched && !isBuilding,
+                onPlannerIntroduced: { session.introducePlanner = false },
                 onDeleteAccount: { Task { await session.deleteAccount() } },
                 // The same screen, and not the same thing: deleting throws the
                 // account away, signing out leaves it exactly where it is.
