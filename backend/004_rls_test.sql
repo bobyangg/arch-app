@@ -85,7 +85,7 @@ insert into conversations (lo_account, hi_account, state, opened_by, last_messag
 insert into messages (conversation_id, sender_id, body)
  select id,'00000000-0000-4000-8000-0000000000a1','hello' from conversations limit 1;
 
--- Date planner answers (backend/025). Unlike the questionnaire, these are read by
+-- Date planner answers (backend/029). Unlike the questionnaire, these are read by
 -- the people you are *talking to* -- and by nobody else. D is in B's five tonight
 -- but has never written: that is the Daily 5, and it must not be enough.
 insert into auth.users (id, aud, role, email, created_at, updated_at) values

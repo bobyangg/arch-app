@@ -11,7 +11,7 @@ import SwiftUI
 /// onboarding answers are seen by nobody, ever. These are planned around on the
 /// phone of anybody you are talking to, because a plan for two has to know what
 /// both people said; so this says they are not on your profile and are never
-/// shown, not that nobody could ever read them. See `backend/025`.
+/// shown, not that nobody could ever read them. See `backend/029`.
 struct PlannerGetStarted: View {
     let onStart: () -> Void
 

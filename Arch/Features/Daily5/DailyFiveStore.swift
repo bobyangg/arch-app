@@ -263,6 +263,29 @@ final class DailyFiveStore {
         persist { try await ArchBackend.dismiss(person) }
     }
 
+    /// Writing to someone empties their slot, and unlike a dismissal it cannot be
+    /// taken back.
+    ///
+    /// **This used to be `dismiss`, and that put them under "take back".** A
+    /// dismissal waits until nine so it can be undone; writing does not wait --
+    /// `start_conversation` lands both dismissals the moment the message is
+    /// written. So the person sat in the waiting list with a button that put them
+    /// back in your five, where you could write to them again, while the server
+    /// had already let them go. Now they leave the five and appear nowhere: not
+    /// in waiting, and not in Messages either until they write back (`threads`
+    /// keeps an unanswered request of yours out of the list). Nothing is sent
+    /// from here, because the server already did it.
+    private func spendSlot(on person: Person) {
+        if let index = roster.slots.firstIndex(where: { $0.id == person.id }) {
+            roster.slots[index] = .empty(
+                id: "slot-\(person.id)",
+                refillsAt: Self.nextRefill(),
+                opening: .yours
+            )
+        }
+        waiting.removeAll { $0.id == person.id }
+    }
+
     /// Back into the five, while the dismissal is still yours to take back.
     ///
     /// Into the slot they left if it is still open, and otherwise appended --
@@ -488,7 +511,10 @@ final class DailyFiveStore {
         text: String,
         quoting item: ProfileItem?
     ) -> Conversation {
-        if let existing = conversations.first(where: { $0.person.id == person.id }) {
+        // A live conversation with them is the one to continue. An ended one is
+        // not: it belongs to an earlier introduction, and returning it is what
+        // turned "write to them" into a thread that said "ended" (`backend/028`).
+        if let existing = conversations.first(where: { $0.person.id == person.id && !$0.hasEnded }) {
             return existing
         }
         // **Shown at once and sent immediately after, and the sending is what
@@ -521,8 +547,8 @@ final class DailyFiveStore {
             lastActivity: "Just now"
         )
         conversations.insert(conversation, at: 0)
-        // Writing to them spends the slot.
-        dismiss(person)
+        // Writing to them spends the slot -- for good.
+        spendSlot(on: person)
 
         // The id the server gives back replaces the placeholder, because every
         // later call -- replying, leaving, ending -- is addressed by it. A
@@ -565,6 +591,14 @@ final class DailyFiveStore {
 
     /// Blocking does everything leaving does, and stops them reaching you again.
     func block(_ person: Person) {
+        // **Read before the list is emptied.** This looked the thread up after
+        // `removeAll`, found nothing, and so never ended it -- a blocked person
+        // could go on writing. The server now ends it too, when the block lands
+        // (`backend/028`), so a build with this bug is covered; this keeps the
+        // app honest about what it asked for.
+        let threads = conversations
+            .filter { $0.person.id == person.id && !$0.hasEnded && !$0.id.hasPrefix("pending-") }
+            .map(\.id)
         conversations.removeAll { $0.person.id == person.id }
         dismiss(person)
         persist {
@@ -572,8 +606,8 @@ final class DailyFiveStore {
             // The conversation ends too, and lands on the same state
             // leaving does -- if blocking looked different from here the
             // other person could tell the two apart.
-            if let thread = self.conversations.first(where: { $0.person.id == person.id }) {
-                try await ArchBackend.end(thread.id)
+            for id in threads {
+                try await ArchBackend.end(id)
             }
         }
     }

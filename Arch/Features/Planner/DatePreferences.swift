@@ -6,7 +6,7 @@ import Foundation
 /// **Not part of the onboarding questionnaire.** Those answers decide who reaches
 /// your five and are never seen by anybody. These decide what a date with
 /// somebody you are already talking to looks like, so the planner on their phone
-/// needs yours -- see `backend/025`. Nothing in the app shows another person's
+/// needs yours -- see `backend/029`. Nothing in the app shows another person's
 /// answers; a plan only reflects them.
 ///
 /// Stored as raw values, which are the values the table's checks allow.
