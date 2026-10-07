@@ -60,6 +60,18 @@ enum ArchConfig {
     /// the old ones.
     static let termsVersion = "1.0"
 
+    /// Whether profile feedback -- "Review your profile", and the Premium benefit
+    /// that sells it -- is switched on.
+    ///
+    /// **Off until it works.** The screen calls the `review` edge function, which
+    /// is not deployed, so a subscriber who opened it got an error, and Premium
+    /// was selling it. Selling a feature that fails is the one thing a paywall
+    /// must not do, and App Review checks exactly that. Turn this on when the
+    /// function is deployed with its key, and the privacy policy names the
+    /// provider it sends profiles to. Both builds read it, so the App Review
+    /// screenshot of the Premium screen matches the app.
+    static let profileFeedbackIsLive = false
+
     /// The privacy policy, on Arch's own domain. Required beside the subscribe
     /// button, and there is no Apple standard to fall back on the way there is
     /// for the terms. The page is `site/privacy.html` in this repository.

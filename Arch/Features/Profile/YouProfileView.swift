@@ -149,7 +149,8 @@ struct YouProfileView: View {
             identity
             completeness
             rows
-            reviewRow
+            // Hidden while the feedback behind it is not deployed.
+            if ArchConfig.profileFeedbackIsLive { reviewRow }
         }
         .padding(.bottom, ArchSpacing.sectionGap)
     }

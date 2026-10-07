@@ -10,7 +10,7 @@ promises. Everything here runs fine from Windows.
 | `001_schema.sql` | 20 tables, 9 enums, the constraints, the indexes |
 | `002_policies.sql` | RLS, 36 policies, the `private` helpers, the `visible_profiles` view |
 | `003_functions.sql` | `start_conversation` and `delete_account` |
-| `004_rls_test.sql` | 23 security checks, run in the SQL Editor, rolls back. Needs `025` applied |
+| `004_rls_test.sql` | 23 security checks, run in the SQL Editor, rolls back. Needs `029` applied |
 | `013_profile_review.sql` | `profile_reviews`: the reviewer's notes, written by the `review` function only |
 | `014_photo_reviews.sql` | `photo_reviews`: one ask per refused photograph. Was live with no file behind it |
 | `lint.py` | Cross-references the SQL before it ever reaches a database |

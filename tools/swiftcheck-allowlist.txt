@@ -118,6 +118,10 @@ CLLocation
 CLGeocoder
 CLPlacemark
 
+# MapKit, added when the Date planner started finding places in Apple Maps
+MKPointOfInterestFilter
+MKLocalPointsOfInterestRequest
+
 # In-memory photograph cache, added when reordering blanked tiles
 NSCache
 Locale

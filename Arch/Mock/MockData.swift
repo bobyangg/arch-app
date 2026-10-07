@@ -310,7 +310,7 @@ struct Person: Identifiable, Hashable {
     var interests: [Interest]
     /// What they said a date should be like, from the Date planner's questions.
     /// Nil until they have answered -- and, for anybody else, nil unless you are
-    /// talking to them (see `backend/025`). Planned around, never shown.
+    /// talking to them (see `backend/029`). Planned around, never shown.
     var datePreferences: DatePreferences? = nil
 
     // MARK: Requirements
@@ -1355,6 +1355,9 @@ enum MockData {
             detail: "Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."
         )
     ]
+    // Profile feedback is listed only while it works -- see
+    // `ArchConfig.profileFeedbackIsLive`.
+    .filter { $0.id != "b3" || ArchConfig.profileFeedbackIsLive }
 
     /// A phone's camera roll: portraits, squares, a few landscapes, one panorama.
     ///

@@ -289,13 +289,20 @@ enum DatePlanner {
     /// `day` takes out anywhere shut that day. A plan that sent two people to
     /// a museum on the day it is closed would be the planner being wrong about
     /// the one thing it is for.
+    ///
+    /// `theirCentre` and `halfwayName` come from Apple Maps when the venues do
+    /// (see `VenueSearch`): a profile from the server names a neighbourhood but
+    /// carries no position, so its centre has to be looked up, and the halfway
+    /// point has to be named by something that knows more than New York.
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
         day: PlanDay? = nil,
         venues: [Venue],
-        skips: [DatePlan.Role: Int] = [:]
+        skips: [DatePlan.Role: Int] = [:],
+        theirCentre: Coordinate? = nil,
+        halfwayName: String? = nil
     ) -> DatePlan {
         // What you each said a date should be like. Either may be missing:
         // somebody who has not answered is planned for from interests alone.
@@ -314,17 +321,8 @@ enum DatePlanner {
         // planner that used a more exact position than the profile shows would
         // be the one screen that could tell you where somebody lives.
         let yourPoint = you.matchPoint
-        let theirPoint = them.place?.centre
-        let middle: Coordinate? = {
-            switch (yourPoint, theirPoint) {
-            case let (a?, b?):
-                return Coordinate(latitude: (a.latitude + b.latitude) / 2,
-                                  longitude: (a.longitude + b.longitude) / 2)
-            case let (a?, nil): return a
-            case let (nil, b?): return b
-            default:            return nil
-            }
-        }()
+        let theirPoint = theirCentre ?? them.place?.centre
+        let middle = Self.middle(yourPoint, theirPoint)
 
         func liking(_ venue: Venue) -> Double {
             3.0 * Double(venue.themes.intersection(shared).count)
@@ -461,11 +459,23 @@ enum DatePlanner {
             day: day,
             shared: DateTheme.allCases.filter { shared.contains($0) },
             sameWords: sameWordsShown,
-            halfway: middle.flatMap(nearestNeighbourhood),
+            halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
             fromYou: fromYou,
             fairness: fairness,
             stops: stops
         )
+    }
+
+    /// Halfway between two points, or whichever one there is.
+    static func middle(_ a: Coordinate?, _ b: Coordinate?) -> Coordinate? {
+        switch (a, b) {
+        case let (a?, b?):
+            return Coordinate(latitude: (a.latitude + b.latitude) / 2,
+                              longitude: (a.longitude + b.longitude) / 2)
+        case let (a?, nil): return a
+        case let (nil, b?): return b
+        default:            return nil
+        }
     }
 
     /// The message a plan becomes when you send it. The day goes in the first
@@ -533,9 +543,16 @@ enum DatePlanner {
         return DatePlan.Travel(minutes: Int((riding / 5).rounded(.up)) * 5, onFoot: false)
     }
 
+    /// The nearest of the bundled neighbourhoods, if one is actually near.
+    ///
+    /// **Within five kilometres, or nothing.** The bundled list is New York, so
+    /// without a limit a halfway point in Toronto was "About halfway: Bay Ridge",
+    /// five hundred kilometres off. The real build names the point with Apple
+    /// Maps instead and only falls back to this.
     private static func nearestNeighbourhood(to point: Coordinate) -> String? {
         PlaceLibrary.all
             .compactMap { place in place.centre.map { (place.name, km(point, $0)) } }
+            .filter { $0.1 <= 5 }
             .min { $0.1 < $1.1 }?
             .0
     }

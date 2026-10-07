@@ -72,7 +72,7 @@ struct InterestRow: Codable, Hashable, Identifiable {
 
 // MARK: - Date preferences
 
-/// One row of `date_preferences` (`backend/025`): text columns holding the raw
+/// One row of `date_preferences` (`backend/029`): text columns holding the raw
 /// values of `DatePreferences`' enums.
 struct DatePreferencesRow: Codable, Hashable {
     var accountId: String

@@ -830,7 +830,7 @@ enum ArchBackend {
     /// Daily 5 -- and needs no filtering here.
     ///
     /// **Never fails the load it is part of.** A missing row is somebody who
-    /// has not answered, and a missing *table* is a database `backend/025` has
+    /// has not answered, and a missing *table* is a database `backend/029` has
     /// not reached yet; either way the planner plans from interests alone, and
     /// the profile and the conversations still arrive.
     static func datePreferences(for ids: [String]) async -> [String: DatePreferences] {
