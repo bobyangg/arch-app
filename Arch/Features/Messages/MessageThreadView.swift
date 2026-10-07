@@ -226,7 +226,8 @@ struct MessageThreadView: View {
                                                  SharedPlan(answering: message.id))
                             },
                             onChange: {
-                                planActions.change(conversation, plan.timeOfDay ?? .afternoon)
+                                planActions.change(conversation, plan.timeOfDay ?? .afternoon,
+                                                   plan.planDay)
                             }
                         )
                     } else {
