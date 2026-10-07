@@ -308,6 +308,10 @@ struct Person: Identifiable, Hashable {
     var prompts: [Prompt]
     /// Up to three.
     var interests: [Interest]
+    /// What they said a date should be like, from the Date planner's questions.
+    /// Nil until they have answered -- and, for anybody else, nil unless you are
+    /// talking to them (see `backend/029`). Planned around, never shown.
+    var datePreferences: DatePreferences? = nil
 
     // MARK: Requirements
 
@@ -773,7 +777,9 @@ enum MockData {
             Interest(id: "nadia-i1", text: "Bridge inspections"),
             Interest(id: "nadia-i2", text: "Long-distance walking"),
             Interest(id: "nadia-i3", text: "Brutalist car parks")
-        ]
+        ],
+        datePreferences: DatePreferences(style: .nightOut, timeOfDay: .evening,
+                                         drinks: .yes, budget: .any, distance: .ride)
     )
 
     static let teo = Person(
@@ -953,7 +959,11 @@ enum MockData {
             Interest(id: "hana-i1", text: "Street trees"),
             Interest(id: "hana-i2", text: "Drainage"),
             Interest(id: "hana-i3", text: "Chairs outdoors")
-        ]
+        ],
+        // Answered, so the design build has a plan shaped by somebody else's
+        // answers: no bars, and nothing past walking distance.
+        datePreferences: DatePreferences(style: .outside, timeOfDay: .evening,
+                                         drinks: .no, budget: .middle, distance: .walkable)
     )
 
 
@@ -1287,7 +1297,10 @@ enum MockData {
                     text: "How about this?\n6:30 pm \u{00B7} Short Fuse Coffee, Williamsburg\n7:30 pm \u{00B7} Domino Park, Williamsburg\n8:40 pm \u{00B7} Wide Bowl Noodles, Williamsburg",
                     isOutgoing: false,
                     timestamp: "Yesterday",
-                    plan: SharedPlan(time: .evening, stops: [
+                    // The coming Thursday: the day the thread has already agreed on.
+                    plan: SharedPlan(time: .evening,
+                                     day: PlanDay.upcoming().first { $0.weekday == 5 },
+                                     stops: [
                         .init(start: 18 * 60 + 30, name: "Short Fuse Coffee", kind: "Coffee",
                               neighbourhood: "Williamsburg", travel: nil,
                               reason: "A short walk from Domino Park."),

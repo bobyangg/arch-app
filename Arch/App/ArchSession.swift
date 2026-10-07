@@ -60,6 +60,14 @@ final class ArchSession {
 
     var allowsNotifications = true
 
+    /// Whether the app should introduce the Date planner when the tabs appear:
+    /// once, straight after onboarding, and never again. Not stored, because it
+    /// is about this moment -- a reinstall is not a new account.
+    ///
+    /// The design build has no onboarding to finish, so a launch argument stands
+    /// in for it; it is how the popup can be seen, and how the UI test reaches it.
+    var introducePlanner = false
+
     // MARK: Launch
 
     /// Works out what to show. Safe to call again after a failure.
@@ -68,6 +76,7 @@ final class ArchSession {
             // No keys: the design build, driven by the mock data the stores already
             // default to. Nothing below this line would have anywhere to go.
             state = .designBuild
+            introducePlanner = ProcessInfo.processInfo.arguments.contains("-introducePlanner")
             return
         }
 
@@ -206,6 +215,7 @@ final class ArchSession {
     /// reloads rather than trusting what the flow had in memory.
     func finishedOnboarding(allowing notifications: Bool) async {
         allowsNotifications = notifications
+        introducePlanner = true
         await refresh()
     }
 

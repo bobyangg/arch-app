@@ -116,9 +116,13 @@ enum VenueSearch {
                   themes: [.words], times: [.afternoon], roles: [.opener]),
             Group(categories: [.store], query: "record store", kind: .shop,
                   themes: [.sound], times: [.afternoon], roles: [.opener]),
+            // "Something live": a performance rather than a bar, so "I don't
+            // drink" leaves it in.
+            Group(categories: [.theater], kind: .show,
+                  themes: [.words, .sound], times: [.evening], roles: [.main]),
         ]
         if #available(iOS 18.0, *) {
-            groups.append(Group(categories: [.musicVenue], kind: .music,
+            groups.append(Group(categories: [.musicVenue], kind: .show,
                                 themes: [.sound, .night], times: [.evening], roles: [.main, .closer]))
         }
         return groups
