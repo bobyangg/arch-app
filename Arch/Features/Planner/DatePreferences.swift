@@ -21,7 +21,7 @@ struct DatePreferences: Codable, Hashable {
         var kinds: Set<Venue.Kind> {
             switch self {
             case .talk:     return [.coffee, .walk, .food]
-            case .doing:    return [.studio, .museum, .shop, .show]
+            case .doing:    return [.studio, .museum, .shop, .show, .activity]
             case .outside:  return [.walk, .park]
             case .nightOut: return [.bar, .listening, .show, .food]
             }
