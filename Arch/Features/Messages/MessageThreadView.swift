@@ -205,15 +205,49 @@ struct MessageThreadView: View {
             .map { !$0.isOutgoing }
     }
 
+    /// The date to draw above this message, when it is the first of its day.
+    ///
+    /// "October 6, 2026", centred, once per day in the reader's own calendar. A
+    /// thread that runs over several days otherwise reads as one long afternoon:
+    /// the times under the messages say 9:14 pm and then 10:02 am with nothing to
+    /// say a night went by between them. Nil for messages with no date, which is
+    /// the mock threads -- they have written times and no days to divide.
+    private func dayHeader(at index: Int) -> String? {
+        let messages = conversation.messages
+        guard messages.indices.contains(index), let sent = messages[index].sentAt else { return nil }
+        if index > 0, let before = messages[index - 1].sentAt,
+           Calendar.current.isDate(before, inSameDayAs: sent) {
+            return nil
+        }
+        return sent.formatted(.dateTime.month(.wide).day().year())
+    }
+
+    private func dayDivider(_ text: String) -> some View {
+        Text(text)
+            .archText(.caption)
+            .foregroundStyle(ArchColor.mortar)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, ArchSpacing.xs)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private var transcript: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
+                // The first day goes above the quoted prompt, because the quote
+                // is the first message's and belongs under its date.
+                if let first = dayHeader(at: 0) {
+                    dayDivider(first)
+                }
                 if let opening = conversation.opening {
                     QuotedBlock(item: opening)
                         .padding(.bottom, ArchSpacing.m)
                 }
 
                 ForEach(Array(conversation.messages.enumerated()), id: \.element.id) { index, message in
+                    if index > 0, let day = dayHeader(at: index) {
+                        dayDivider(day)
+                    }
                     if let plan = message.plan, plan.isPlan {
                         PlanCard(
                             message: message,

@@ -8,10 +8,18 @@ import Foundation
 /// words are *about* finds a lot: somebody who likes bridge inspections and
 /// somebody who likes above-ground platforms both like how cities are built.
 ///
-/// Seven themes, deliberately broad. A narrower set would split people who would
+/// Nine themes, deliberately broad. A narrower set would split people who would
 /// enjoy the same afternoon; a broader one would stop saying anything.
+///
+/// **The words were the mock people's, and real people do not write like them.**
+/// The first lists were built from "Darkroom printing" and "Brutalist car parks",
+/// and the first two real profiles -- "Gaming", "Gym", "Cooking"; "wood
+/// shopping", "arcade", "drinking" -- matched one theme between them, so the
+/// planner planned for one person's cooking and nothing of the other's. The lists
+/// now carry everyday words too, and `play` and `active` exist because games and
+/// staying active are two of the commonest things anybody writes.
 enum DateTheme: String, CaseIterable, Hashable, Identifiable {
-    case outdoors, buildings, craft, food, words, sound, night
+    case outdoors, buildings, craft, food, words, sound, night, play, active
 
     var id: String { rawValue }
 
@@ -25,6 +33,8 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         case .words:     return "Words"
         case .sound:     return "Sound"
         case .night:     return "Late hours"
+        case .play:      return "Games"
+        case .active:    return "Staying active"
         }
     }
 
@@ -38,6 +48,8 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         case .words:     return "books and language"
         case .sound:     return "how things sound"
         case .night:     return "the late hours"
+        case .play:      return "playing games"
+        case .active:    return "staying active"
         }
     }
 
@@ -47,28 +59,64 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
     /// because "late" is inside "articulated", and an interest in buses is not an
     /// interest in staying up. An interest can point at more than one theme:
     /// "Walking at night" is both outdoors and night, which is right.
+    ///
+    /// A fragment starting with `=` matches only the whole word, for the short
+    /// ones whose starts are everywhere: "=bar" is a bar and not a barber or a
+    /// barbecue, "=tea" is tea and not teaching, "=run" is running and not a
+    /// runway.
     private var fragments: [String] {
         switch self {
         case .outdoors:
             return ["walk", "park", "tree", "dawn", "garden", "outdoor", "hike", "hiking",
-                    "river", "beach", "swim", "climb", "cycl", "bike", "bird"]
+                    "river", "beach", "swim", "climb", "cycl", "bike", "bird",
+                    "camp", "fishing", "kayak", "canoe", "sail", "lake", "mountain", "nature",
+                    "picnic", "trail", "ocean", "=sea", "snow", "stargaz", "dog", "sunset",
+                    "sunrise", "island", "boat"]
         case .buildings:
             return ["bridge", "brutalis", "car park", "platform", "bus", "train", "subway",
-                    "drainage", "architect", "street", "tower", "building", "transit"]
+                    "drainage", "architect", "street", "tower", "building", "transit",
+                    "city", "urban", "skyline", "interior", "history", "historic", "museum"]
         case .craft:
             return ["darkroom", "rolleiflex", "camera", "photo", "print", "paper", "repair",
-                    "pottery", "ceramic", "knit", "sew", "woodwork", "spines", "felt", "film"]
+                    "pottery", "ceramic", "knit", "sew", "woodwork", "spines", "felt", "film",
+                    "wood", "diy", "paint", "draw", "sketch", "=art", "=arts", "artist", "artwork",
+                    "sculpt", "crochet", "embroider", "quilt", "carpent", "craft", "maker",
+                    "candle", "jewel", "leather", "design", "illustrat", "lego"]
         case .food:
             return ["bak", "bread", "dulce", "cook", "food", "coffee", "dumpling", "market",
-                    "noodle", "pastry", "wine", "tea", "cheese", "taco", "pizza"]
+                    "noodle", "pastry", "wine", "=tea", "cheese", "taco", "pizza",
+                    "=eat", "eating", "restaurant", "brunch", "sushi", "ramen", "bbq",
+                    "barbecue", "grill", "chef", "foodie", "dessert", "ice cream", "chocolate",
+                    "curry", "dim sum", "boba", "matcha", "latte", "espresso", "dining",
+                    "cuisine", "recipe", "kitchen", "burger", "pho", "spicy", "cafe", "café"]
         case .words:
             return ["poet", "tense", "book", "read", "manual", "spines", "novel", "language",
-                    "translat", "writing", "library", "essay"]
+                    "translat", "writing", "library", "essay",
+                    "writer", "journal", "comic", "manga", "literat", "philosoph", "podcast",
+                    "debate", "story", "stories", "learn"]
         case .sound:
             return ["sound", "room tone", "click track", "music", "jazz", "vinyl", "record",
-                    "hammer", "piano", "noise", "engine", "choir", "concert", "synth"]
+                    "hammer", "piano", "noise", "engine", "choir", "concert", "synth",
+                    "singing", "singer", "guitar", "drum", "=band", "=bands", "=dj", "song", "opera",
+                    "orchestra", "violin", "=rap", "hip hop", "festival", "=gig", "=gigs",
+                    "karaoke", "spotify"]
         case .night:
-            return ["night", "four in the morning", "late", "laundromat", "midnight", "insomnia"]
+            return ["night", "four in the morning", "late", "laundromat", "midnight", "insomnia",
+                    "drink", "=bar", "=bars", "bar hopping", "=pub", "=pubs", "cocktail", "beer",
+                    "brew", "whisk", "=club", "clubs", "clubbing", "party", "partying",
+                    "danc", "rave", "karaoke", "comedy", "stand up", "stand-up"]
+        case .play:
+            return ["gam", "arcade", "board game", "video game", "puzzle", "trivia", "bowling",
+                    "billiard", "=pool", "dart", "chess", "poker", "escape room", "mini golf",
+                    "minigolf", "pinball", "nintendo", "playstation", "xbox", "=cards",
+                    "card game", "go kart", "karting", "lego"]
+        case .active:
+            return ["=gym", "fitness", "workout", "working out", "lifting", "weightlift",
+                    "=weights", "=run", "running", "runner", "jog", "marathon", "yoga",
+                    "pilates", "sport", "basketball", "soccer", "football", "tennis",
+                    "volleyball", "badminton", "hockey", "skat", "skiing", "snowboard",
+                    "surf", "boxing", "martial", "climb", "bouldering", "golf", "crossfit",
+                    "cycl", "swim", "hike", "hiking"]
         }
     }
 
@@ -78,7 +126,10 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         let words = lowered.split { !$0.isLetter }.map(String.init)
         return Set(allCases.filter { theme in
             theme.fragments.contains { fragment in
-                fragment.contains(" ")
+                if fragment.hasPrefix("=") {
+                    return words.contains(String(fragment.dropFirst()))
+                }
+                return fragment.contains(" ") || fragment.contains("-")
                     ? lowered.contains(fragment)
                     : words.contains { $0.hasPrefix(fragment) }
             }
@@ -102,6 +153,9 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
 struct Venue: Identifiable, Hashable {
     enum Kind: String, Hashable {
         case coffee, walk, park, museum, library, studio, listening, show, food, bar, shop
+        /// An arcade, bowling, mini golf, a board-game café, a climbing gym:
+        /// somewhere you go to *do* something together. Only from Apple Maps.
+        case activity
 
         var label: String {
             switch self {
@@ -116,6 +170,7 @@ struct Venue: Identifiable, Hashable {
             case .food:      return "Something to eat"
             case .bar:       return "Drinks"
             case .shop:      return "Shop"
+            case .activity:  return "Something to do"
             }
         }
 
@@ -133,7 +188,7 @@ struct Venue: Identifiable, Hashable {
         var price: Int {
             switch self {
             case .walk, .park, .library, .shop:  return 0
-            case .coffee, .museum, .studio:      return 1
+            case .coffee, .museum, .studio, .activity: return 1
             case .listening, .show, .food, .bar: return 2
             }
         }
@@ -153,6 +208,7 @@ struct Venue: Identifiable, Hashable {
             case .food:      return 75
             case .bar:       return 60
             case .shop:      return 40
+            case .activity:  return 75
             }
         }
     }

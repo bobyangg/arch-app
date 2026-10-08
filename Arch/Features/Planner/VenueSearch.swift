@@ -120,10 +120,21 @@ enum VenueSearch {
             // drink" leaves it in.
             Group(categories: [.theater], kind: .show,
                   themes: [.words, .sound], times: [.evening], roles: [.main]),
+            // Somewhere to do something together. Arcades and board-game cafés
+            // have no category of their own, so they are asked for by name, with
+            // no category filter at all.
+            Group(categories: [], query: "arcade", kind: .activity,
+                  themes: [.play], times: [.afternoon, .evening], roles: [.opener, .main]),
+            Group(categories: [], query: "board game cafe", kind: .activity,
+                  themes: [.play, .food], times: [.afternoon, .evening], roles: [.opener, .main]),
         ]
         if #available(iOS 18.0, *) {
             groups.append(Group(categories: [.musicVenue], kind: .show,
                                 themes: [.sound, .night], times: [.evening], roles: [.main, .closer]))
+            groups.append(Group(categories: [.bowling, .miniGolf, .goKart], kind: .activity,
+                                themes: [.play, .active], times: [.afternoon, .evening], roles: [.main]))
+            groups.append(Group(categories: [.rockClimbing], kind: .activity,
+                                themes: [.active], times: [.afternoon, .evening], roles: [.main]))
         }
         return groups
     }
@@ -160,7 +171,11 @@ enum VenueSearch {
                 let request = MKLocalSearch.Request()
                 request.naturalLanguageQuery = query
                 request.resultTypes = .pointOfInterest
-                request.pointOfInterestFilter = filter
+                // No categories means the name is the whole search: a filter
+                // including nothing would find nothing.
+                if !group.categories.isEmpty {
+                    request.pointOfInterestFilter = filter
+                }
                 request.region = region
                 items = try await MKLocalSearch(request: request).start().mapItems
             } else {
