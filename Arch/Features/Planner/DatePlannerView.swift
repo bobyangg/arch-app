@@ -49,6 +49,10 @@ struct PlannerPreset: Equatable {
     let time: DatePlan.TimeOfDay
     /// The plan's day, when it had one and it is still ahead.
     var day: PlanDay? = nil
+    /// The plan's items -- what kind of thing, and for how long -- so "Change
+    /// it" starts from the same shape of date. Nil for a plan sent before
+    /// plans were made of items.
+    var items: [PlanItem]? = nil
     let id = UUID()
 }
 
@@ -76,9 +80,13 @@ struct DatePlannerView: View {
     /// The question showing, while the questions are; nil otherwise.
     @State private var questionIndex: Int?
     @State private var draft: [Int?] = Array(repeating: nil, count: DatePreferences.questions.count)
-    /// How many times each stop has been swapped. Reset whenever the person or
-    /// the time of day changes, because the rankings underneath have changed too.
-    @State private var skips: [DatePlan.Role: Int] = [:]
+    /// What you have added to the date, in order. It opens with one blank
+    /// item, and holds at most `PlanItem.maximum`.
+    @State private var items: [PlanItem] = [PlanItem()]
+    /// Said for a moment after the plan has been worked out again because
+    /// somebody's interests changed, so that a rerun which lands on the same
+    /// places is still visibly a rerun.
+    @State private var replanned: String?
     /// Who the plan last went to, by name, for the line under the button.
     @State private var sentTo: String?
     /// The plan being shared, while the list of people is open.
@@ -109,6 +117,20 @@ struct DatePlannerView: View {
         return days.first
     }
 
+    /// What the rankings are built from that can change under you: your
+    /// interests, and the interests of the person you are planning with.
+    private struct PlanInputs: Equatable {
+        let personID: String?
+        let yours: [String]
+        let theirs: [String]
+    }
+
+    private var inputs: PlanInputs {
+        PlanInputs(personID: chosen?.id,
+                   yours: you.interests.map(\.text),
+                   theirs: chosen?.person.interests.map(\.text) ?? [])
+    }
+
     /// The toggle's choice, or else the time your answers prefer.
     private func openingTime(with person: Person) -> DatePlan.TimeOfDay {
         pickedTime ?? DateFit(yours: you.datePreferences, theirs: person.datePreferences).time
@@ -122,7 +144,7 @@ struct DatePlannerView: View {
                 if questionIndex != nil {
                     DatePreferenceQuestions(index: $questionIndex, draft: $draft) { answers in
                         onSavePreferences(answers)
-                        skips = [:]
+                        restartSwaps()
                         pickedTime = nil
                     }
                 } else if you.datePreferences == nil {
@@ -139,10 +161,10 @@ struct DatePlannerView: View {
                         let time = openingTime(with: chosen.person)
                         let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
                                                     day: day, venues: found?.venues ?? venues,
-                                                    skips: skips,
+                                                    items: items,
                                                     theirCentre: found?.theirCentre,
                                                     halfwayName: found?.halfway)
-                        if isLive && plan.stops.isEmpty {
+                        if isLive && (found?.venues.isEmpty ?? true) {
                             preferencesRow
                             dayRow
                             timeToggle(time)
@@ -152,8 +174,17 @@ struct DatePlannerView: View {
                             preferencesRow
                             dayRow
                             timeToggle(time)
+                            if let replanned {
+                                Text(replanned)
+                                    .archText(.footnote)
+                                    .foregroundStyle(ArchColor.lamp)
+                                    .padding(.bottom, ArchSpacing.s)
+                                    .accessibilityIdentifier("planner.replanned")
+                            }
                             itinerary(plan)
-                            footer(plan, with: chosen)
+                            if !plan.stops.isEmpty {
+                                footer(plan, with: chosen)
+                            }
                         }
                     }
                 } else {
@@ -166,23 +197,41 @@ struct DatePlannerView: View {
         }
         .background(ArchColor.night)
         .task(id: "\(chosen?.id ?? "")#\(attempt)") { await findPlaces() }
+        // Somebody else, another time or another day: the rankings underneath
+        // have changed, so every item starts again from its best place. What
+        // you added -- the kinds and the hours -- stays.
         .onChange(of: chosenID) { _, _ in
-            skips = [:]
+            restartSwaps()
             sentTo = nil
+            replanned = nil
         }
         .onChange(of: pickedTime) { _, _ in
-            skips = [:]
+            restartSwaps()
             sentTo = nil
         }
         .onChange(of: pickedDay) { _, _ in
-            skips = [:]
+            restartSwaps()
             sentTo = nil
         }
-        // What you wrote and what you answered are what the rankings are built
-        // from. When either changes, a swap count from the old rankings would
-        // point at an arbitrary place in the new ones, so start from the top.
-        .onChange(of: you.interests) { _, _ in skips = [:] }
-        .onChange(of: you.datePreferences) { _, _ in skips = [:] }
+        // **Interests changed: plan again, and say so.** The plan is computed
+        // from both of you on every draw, so it always followed an edit -- but
+        // a swap count from the old rankings pointed at an arbitrary place in
+        // the new ones, and a rerun that landed on the same places looked like
+        // nothing had happened. Now every item goes back to its best place
+        // under the new interests, and a line says why the plan moved. Theirs
+        // arrive with the conversations, which are fetched every twelve seconds.
+        .onChange(of: inputs) { old, new in
+            // Picking somebody else is not a change of interests.
+            guard old.personID == new.personID else { return }
+            restartSwaps()
+            sentTo = nil
+            if old.yours != new.yours {
+                replanned = "Replanned around your new interests."
+            } else if old.theirs != new.theirs, let name = chosen?.person.name {
+                replanned = "Replanned around \(name)\u{2019}s new interests."
+            }
+        }
+        .onChange(of: you.datePreferences) { _, _ in restartSwaps() }
         // "Change it" on a plan in a thread lands here, on that person.
         .onChange(of: preset) { _, preset in
             guard let preset else { return }
@@ -190,11 +239,63 @@ struct DatePlannerView: View {
             chosenID = preset.personID
             pickedTime = preset.time
             pickedDay = preset.day
-            skips = [:]
+            if let restored = preset.items, !restored.isEmpty {
+                items = restored
+            } else {
+                restartSwaps()
+            }
             sentTo = nil
+            replanned = nil
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+    }
+
+    /// Every item back to the best place in its ranking.
+    private func restartSwaps() {
+        items = items.map { item in
+            var item = item
+            item.skips = 0
+            return item
+        }
+    }
+
+    // MARK: Items
+
+    private func fill(_ index: Int, with category: DatePlan.Category) {
+        guard items.indices.contains(index) else { return }
+        items[index].category = category
+        items[index].hours = category.defaultHours
+        items[index].skips = 0
+        replanned = nil
+        sentTo = nil
+    }
+
+    private func add() {
+        guard items.count < PlanItem.maximum else { return }
+        items.append(PlanItem())
+        replanned = nil
+    }
+
+    /// Never down to nothing: the last one removed leaves a blank one.
+    private func remove(_ index: Int) {
+        guard items.indices.contains(index) else { return }
+        items.remove(at: index)
+        if items.isEmpty { items = [PlanItem()] }
+        replanned = nil
+        sentTo = nil
+    }
+
+    /// "Surprise me": an activity if there is none -- a date with nothing to
+    /// do is a meal -- then something to eat if there is none, and after that
+    /// the other kind from the item before it, so two dinners never sit
+    /// back to back.
+    private func surprise(for index: Int) -> DatePlan.Category {
+        let kinds = items.compactMap(\.category)
+        if !kinds.contains(.activity) { return .activity }
+        if !kinds.contains(.food) { return .food }
+        let before = items[..<min(index, items.count)].compactMap(\.category).last
+        return before == .food ? .activity : .food
     }
 
     /// Into the questions, starting from what you said last time if you have
@@ -408,60 +509,192 @@ struct DatePlannerView: View {
         .padding(.bottom, ArchSpacing.l)
     }
 
+    /// What you have added, in order: each item the planner found a place for
+    /// as its stop, a blank one as the choice of what it should be, and under
+    /// them the way to add another.
     private func itinerary(_ plan: DatePlan) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(plan.stops) { stop in
-                if let travel = stop.travel {
-                    travelLine(travel)
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                if let stop = plan.stops.first(where: { $0.itemID == item.id }) {
+                    if let travel = stop.travel {
+                        travelLine(travel)
+                    } else if index > 0 {
+                        Color.clear.frame(height: ArchSpacing.s)
+                    }
+                    stopCard(stop, index: index, in: plan)
+                } else {
+                    if index > 0 { Color.clear.frame(height: ArchSpacing.s) }
+                    if let category = item.category {
+                        nothingFits(category, index: index)
+                    } else {
+                        blankCard(index: index)
+                    }
                 }
-                stopCard(stop)
             }
+            addRow
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planner.itinerary")
     }
 
-    private func stopCard(_ stop: DatePlan.Stop) -> some View {
-        HStack(alignment: .top, spacing: ArchSpacing.s) {
-            Text(DatePlanner.clockTime(stop.start))
+    /// An item added and not yet told what it is.
+    private func blankCard(index: Int) -> some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text(index == 0 ? "What should the date start with?" : "What next?")
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
-                .frame(width: 64, alignment: .leading)
+            HStack(spacing: ArchSpacing.xs) {
+                ForEach(DatePlan.Category.allCases) { category in
+                    Button { withAnimation(ArchMotion.standard) { fill(index, with: category) } } label: {
+                        Text(category.title)
+                            .archText(.subhead)
+                            .foregroundStyle(ArchColor.limestone)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: ArchSpacing.minimumTapTarget)
+                            .background(
+                                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                    .fill(ArchColor.stoneRaised)
+                            )
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.99))
+                    .accessibilityIdentifier("planner.choose.\(category.rawValue)")
+                }
+            }
+            HStack {
+                ArchTextButton(title: "Surprise me") {
+                    withAnimation(ArchMotion.standard) { fill(index, with: surprise(for: index)) }
+                }
+                .accessibilityIdentifier("planner.choose.surprise")
+                Spacer(minLength: 0)
+                if items.count > 1 {
+                    ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+                        .accessibilityLabel("Remove this item")
+                }
+            }
+        }
+        .padding(ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .strokeBorder(ArchColor.quietBorder, style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planner.blank")
+    }
 
-            VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
-                Text(stop.role.title)
-                    .archText(.caption)
+    /// An item the planner could find nowhere for: every place of that kind is
+    /// shut that day, or ruled out by what one of you said.
+    private func nothingFits(_ category: DatePlan.Category, index: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Nowhere fits for \(category.title.lowercased()) here, on this day.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: ArchSpacing.s)
+            ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+        }
+        .padding(ArchSpacing.m)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .fill(ArchColor.stone)
+        )
+    }
+
+    /// Another item, while there is room; the limit said in words once there
+    /// is not. Hidden while a blank one is waiting to be chosen.
+    @ViewBuilder
+    private var addRow: some View {
+        if !items.contains(where: { $0.category == nil }) {
+            if items.count < PlanItem.maximum {
+                ArchButton(title: "Add to the date", kind: .quiet) {
+                    withAnimation(ArchMotion.standard) { add() }
+                }
+                .accessibilityIdentifier("planner.addItem")
+                .padding(.top, ArchSpacing.m)
+            } else {
+                Text("Three is as many as a plan holds.")
+                    .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
-                Text(stop.venue.name)
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, ArchSpacing.m)
+            }
+        }
+    }
+
+    private func stopCard(_ stop: DatePlan.Stop, index: Int, in plan: DatePlan) -> some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            HStack(alignment: .top, spacing: ArchSpacing.s) {
+                Text(DatePlanner.clockTime(stop.start))
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.limestone)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text("\(stop.venue.kind.label) \u{00B7} \(stop.venue.neighbourhood)")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                Text(stop.reason)
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.limestone)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, ArchSpacing.xxs)
-                if !stop.canSwap {
-                    Text(stop.role == .main
-                         ? "The only place that fits what you both said."
-                         : "The only place near the main thing that fits. Swap the main thing to move the whole date.")
+                    .frame(width: 64, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+                    Text(stop.category.title)
                         .archText(.caption)
                         .foregroundStyle(ArchColor.mortar)
+                    Text(stop.venue.name)
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
                         .fixedSize(horizontal: false, vertical: true)
+                    Text("\(stop.venue.kind.label) \u{00B7} \(stop.venue.neighbourhood)")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                    Text(stop.reason)
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.limestone)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, ArchSpacing.xxs)
+                    if !stop.canSwap {
+                        Text(onlyFit(stop, in: plan))
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                // Only where there is somewhere else to go. A Swap that lands on
+                // the same place looks like a button that does not work.
+                if stop.canSwap {
+                    ArchTextButton(title: "Swap") {
+                        if items.indices.contains(index) { items[index].skips += 1 }
+                        replanned = nil
+                        sentTo = nil
+                    }
+                    .accessibilityLabel("Swap \(stop.venue.name)")
                 }
             }
 
-            Spacer(minLength: 0)
-
-            // Only where there is somewhere else to go. A Swap that lands on
-            // the same place looks like a button that does not work.
-            if stop.canSwap {
-                ArchTextButton(title: "Swap") { skips[stop.role, default: 0] += 1 }
-                    .accessibilityLabel("Swap \(stop.venue.name)")
+            // How long: one, two or three hours. Everything after it moves.
+            HStack(spacing: ArchSpacing.xxs) {
+                ForEach(PlanItem.hourChoices, id: \.self) { hours in
+                    let isOn = items.indices.contains(index) && items[index].hours == hours
+                    Button {
+                        if items.indices.contains(index) { items[index].hours = hours }
+                        sentTo = nil
+                    } label: {
+                        Text("\(hours) hr")
+                            .archText(.footnote)
+                            .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                            .frame(width: 48, height: 32)
+                            .background(
+                                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                    .fill(isOn ? ArchColor.stoneRaised : ArchColor.night)
+                            )
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.97))
+                    .accessibilityLabel(hours == 1 ? "One hour" : "\(hours) hours")
+                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityIdentifier("planner.hours.\(index).\(hours)")
+                }
+                Spacer(minLength: 0)
+                ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+                    .accessibilityLabel("Remove \(stop.venue.name)")
+                    .accessibilityIdentifier("planner.remove.\(index)")
             }
+            .padding(.leading, 64 + ArchSpacing.s)
         }
         .padding(ArchSpacing.m)
         .background(
@@ -470,6 +703,15 @@ struct DatePlannerView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planner.stop")
+    }
+
+    /// Why a stop has no Swap: it is the only place that fits.
+    private func onlyFit(_ stop: DatePlan.Stop, in plan: DatePlan) -> String {
+        guard !stop.isAnchor, let near = stop.placedNear,
+              let anchor = plan.stops.first(where: \.isAnchor) else {
+            return "The only place that fits what you both said."
+        }
+        return "The only place near \(near) that fits. Swap \(anchor.venue.name) to move the whole date."
     }
 
     /// Getting between two stops, drawn as the gap it is.

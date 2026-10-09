@@ -245,6 +245,18 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .pday button .wd{font-size:12px;}
 .pday button .dn{font-size:15px; font-weight:600;}
 .pday button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+/* Items: a blank one is a dashed outline with the choice of what it is; a
+   filled one is a stop with its hours under it. */
+.pblank{padding:16px; border-radius:var(--r-card); border:1px dashed var(--quiet);}
+.pchoose{display:flex; gap:8px;}
+.pchoose button{flex:1; height:44px; border-radius:var(--r-control); background:var(--stoneRaised);
+                font-size:15px; font-weight:600; color:var(--limestone); text-align:center;}
+.phours{display:flex; gap:4px; align-items:center; margin-top:12px; padding-left:70px;}
+.phours button{width:48px; height:32px; border-radius:var(--r-control); background:var(--night);
+               font-size:13px; color:var(--mortar); text-align:center;}
+.phours button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+.pcard{padding:16px; border-radius:var(--r-card); background:var(--stone);}
+.pcard .pstop{padding:0; background:none;}
 .pstop{display:flex; gap:12px; align-items:flex-start; padding:16px; border-radius:var(--r-card);
        background:var(--stone);}
 .pstop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
@@ -756,13 +768,22 @@ function promptPicker(currentText,taken,act){
 }
 
 /* ============================ state ============================ */
+/* Defined before `S`, whose planner starts with one blank item. Which button adds a place: something to eat or drink, or something to do. */
+const CAT=k=>(k==="coffee"||k==="food"||k==="bar")?"food":"activity";
+const CAT_TITLE={food:"Food & drink",activity:"Activity"};
+const CAT_HOURS={food:1,activity:2};
+const MAX_ITEMS=3;
+const newItem=(cat=null,hours=null)=>({id:"it"+Math.random().toString(36).slice(2,9),cat,hours:hours||(cat?CAT_HOURS[cat]:1),skips:0});
+
 const S={
   tab:"daily",
   stacks:{premium:[],daily:[],messages:[],planner:[],you:[]},
   /* The Date planner: who with, when, how many times each stop was swapped,
      and who a plan has just gone to. */
   /* time: null means "what your answers prefer"; q: the question showing. */
-  planner:{with:null,time:null,skips:{},sent:null,q:null,draft:[]},
+  /* items: what you added, in order -- one blank one to start. replanned:
+     the line that says the plan was worked out again after interests changed. */
+  planner:{with:null,time:null,items:[newItem()],sent:null,q:null,draft:[],replanned:null},
   /* Nobody here is somebody you have written to — writing is what takes them out
      of your five. Hana is the exception that shows the rule: she wrote first, so
      your slot is untouched. */
@@ -1389,9 +1410,17 @@ const VENUES=[
   VN("night-kettle","Night Kettle","coffee","Fort Greene",40.6872,-73.9748,["food","night"],["evening"],["opener"]),
   VN("gatehouse-kitchen","Gatehouse Kitchen","food","Prospect Heights",40.6738,-73.9612,["food"],["afternoon","evening"],["closer"]),
   VN("meadow-edge","Meadow Edge","food","Park Slope",40.6668,-73.9752,["food"],["afternoon","evening"],["closer"]),
-  VN("quiet-hours","Quiet Hours Tea","coffee","Clinton Hill",40.6893,-73.9658,["food","words"],["afternoon","evening"],["opener"])];
+  VN("quiet-hours","Quiet Hours Tea","coffee","Clinton Hill",40.6893,-73.9658,["food","words"],["afternoon","evening"],["opener"]),
+  /* Something to do after dark. A plan can hold three activities now, and an
+     evening had five in the whole list, a long way apart. */
+  VN("main-street-park","Main Street Park","walk","Dumbo",40.7040,-73.9900,["outdoors","buildings"],["afternoon","evening"],[]),
+  VN("little-reel","Little Reel Cinema","show","Williamsburg",40.7158,-73.9628,["words","sound"],["evening"],[]),
+  VN("back-room-comedy","Back Room Comedy","show","Fort Greene",40.6893,-73.9762,["words","night"],["evening"],[]),
+  VN("clay-hours","Clay Hours","studio","Prospect Heights",40.6778,-73.9672,["craft"],["afternoon","evening"],[])];
 
-const ROLES=[["opener","To start"],["main","The main thing"],["closer","To finish"]];
+/* Every item back to the best place in its ranking: what you added, the kinds
+   and the hours, stays. */
+const restartSwaps=()=>S.planner.items.map(it=>({...it,skips:0}));
 
 /* The day a date is on, as "2026-10-10": the day itself, not an instant, so a
    plan for Saturday is Saturday on both phones. From tomorrow, for a week --
@@ -1426,7 +1455,11 @@ const clockAt=m=>{const h=Math.floor(m/60)%24,mm=m%60,t=h%12===0?12:h%12;
    changes that stop and the walks either side of it and nothing else.
    Something you both like is worth three, something one of you likes one; being
    near halfway, and about as far for both of you, counts too. */
-function planDate(you,them,time,skips,day){
+/* Plans the items you added, in order. A blank item is skipped; the rest each
+   become a stop, if anywhere fits. One stop anchors the date -- the first
+   activity, or the first item if there is none -- chosen for what you share
+   and for being about halfway; every other stop is chosen for being near it. */
+function planDate(you,them,time,items,day){
   /* Anywhere shut that day is not on the plan. */
   const dow=day?dayDate(day).getDay():null;
   /* What you each said a date should be like. Either may be missing: somebody
@@ -1442,15 +1475,13 @@ function planDate(you,them,time,skips,day){
      their profile already shows. */
   const yp=you.coord||(you.place&&you.place.centre)||null, tp=(them.place&&them.place.centre)||null;
   const mid=yp&&tp?{lat:(yp.lat+tp.lat)/2,lon:(yp.lon+tp.lon)/2}:(yp||tp);
-  /* The main thing anchors the date: chosen first, for what you share and for
-     being about halfway. The stops either side are chosen for being near it. */
   const liking=v=>3*v.themes.filter(t=>shared.includes(t)).length+v.themes.filter(t=>oneSided.includes(t)).length
     +fit.score(v);
   const between=v=>(mid?0.8*kmBetween(mid,v.c):0)+(yp&&tp?0.5*Math.abs(kmBetween(yp,v.c)-kmBetween(tp,v.c)):0);
-  const cands=(role,used)=>VENUES.filter(v=>v.roles.includes(role)&&v.times.includes(time)&&!used.has(v.id)&&fit.allows(v)
+  const cands=(cat,used)=>VENUES.filter(v=>CAT(v.kind)===cat&&v.times.includes(time)&&!used.has(v.id)&&fit.allows(v)
     &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow)));
-  const pick=(role,pool,score)=>{const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(a[0].id<b[0].id?-1:1)).map(x=>x[0]);
-    return r.length?r[(skips[role]||0)%r.length]:null;};
+  const pick=(pool,skips,score)=>{const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(a[0].id<b[0].id?-1:1)).map(x=>x[0]);
+    return r.length?r[(skips||0)%r.length]:null;};
   const reason=(v,near,who)=>{
     const both=DATE_THEME_ORDER.find(k=>v.themes.includes(k)&&shared.includes(k));
     if(both) return `You both like ${DATE_THEMES[both].phrase}.`;
@@ -1458,69 +1489,82 @@ function planDate(you,them,time,skips,day){
     if(th) return `${them.name} wrote \u201C${theirs[th]}\u201D.`;
     const yo=DATE_THEME_ORDER.find(k=>v.themes.includes(k)&&k in yours);
     if(yo) return `${who} wrote \u201C${yours[yo]}\u201D.`;
-    /* Nothing either of you wrote points here, so say what chose it. */
-    /* "Close" only when it is: a walk, not a ride. */
+    /* Nothing either of you wrote points here, so say what chose it. "Close"
+       only when it is: a walk, not a ride. */
     if(near&&near.id!==v.id) return travelFor(kmBetween(near.c,v.c)).foot
       ?`A short walk from ${near.name}.`:`The closest option to ${near.name}.`;
     return "About halfway between you.";};
 
-  /* "Keep it walkable" starts with the main thing: it has to be somewhere with
-     a first and a last stop on foot from it. Choosing the main thing first and
-     then looking for what is near it found, a quarter of the time, a main thing
-     with nothing near it at all -- and a walkable date with a train in it. */
-  const onFootFrom=(m,role)=>cands(role,new Set([m.id])).filter(v=>
-    travelFor(kmBetween(m.c,v.c)).foot&&!(OUTSIDE(m.kind)&&OUTSIDE(v.kind)));
-  const hasCompany=m=>{const o=onFootFrom(m,"opener"), c=onFootFrom(m,"closer");
-    return o.length&&c.length&&(o.length>1||c.length>1||o[0].id!==c[0].id);};
-  const mains=cands("main",new Set()), reachable=fit.walkable?mains.filter(hasCompany):mains;
-  const mainPool=reachable.length?reachable:mains;
-  const main=pick("main",mainPool,v=>liking(v)-between(v));
-  /* Near the main thing. */
-  const nearMain=v=>main?liking(v)-1.5*kmBetween(main.c,v.c):liking(v)-between(v);
-  /* Not a second walk beside a walk -- a rule, not a penalty, giving way only if
-     there is nothing else at all. */
-  const besideMain=pool=>{if(!main||!OUTSIDE(main.kind)) return pool;
-    const indoors=pool.filter(v=>!OUTSIDE(v.kind)); return indoors.length?indoors:pool;};
-  /* "Keep it walkable": only what is a walk from the main thing, giving way
-     only when nothing is in reach -- and then the leg says "by transit". */
-  const inReach=pool=>{if(!fit.walkable||!main) return pool;
-    const near=pool.filter(v=>travelFor(kmBetween(main.c,v.c)).foot); return near.length?near:pool;};
-  const used=new Set(main?[main.id]:[]);
-  const openerPool=besideMain(inReach(cands("opener",used)));
-  const opener=pick("opener",openerPool,nearMain); if(opener) used.add(opener.id);
-  const closerPool=besideMain(inReach(cands("closer",used)));
-  const closer=pick("closer",closerPool,nearMain);
-  /* Whether Swap has anywhere else to go. Under "keep it walkable" and "I
-     don't drink", next to some main things, a stop is often the only place
-     that fits -- and a Swap that lands on the same place looks broken. */
-  const choices={opener:openerPool.length,main:mainPool.length,closer:closerPool.length};
-
-  const stops=[]; let clock=PLAN_START[time], prev=null;
-  [["opener",opener],["main",main],["closer",closer]].forEach(([role,v])=>{
-    if(!v) return;
-    const title=ROLES.find(r=>r[0]===role)[1];
-    const leg=prev?travelFor(kmBetween(prev.c,v.c)):null;
-    /* Rounded up to the next five minutes: "3:33" reads as computed. */
-    clock=Math.ceil((clock+(leg?leg.min:0))/5)*5;
-    const near=role==="main"?null:main;
-    /* `reason` is for this screen ("You wrote ..."); `shared` is for a message
-       both people read ("Sam wrote ..."). */
-    stops.push({role,title,v,start:clock,leg,reason:reason(v,near,"You"),shared:reason(v,near,you.name),
-      canSwap:choices[role]>1});
-    clock+=KINDS[v.kind][1]; prev=v;
-  });
-
-  const first=stops[0]&&stops[0].v;
   let halfway=null;
   if(mid){let best=Infinity; PLACES.forEach(pl=>{if(!pl.centre) return;
     const d=kmBetween(mid,pl.centre); if(d<best){best=d; halfway=pl.name;}});}
+
+  const filled=(items||[]).filter(it=>it.cat);
+  let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
+  if(ai<0) return {day,shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+
+  /* "Keep it walkable" starts with the anchor: it has to be somewhere with
+     enough of every other item you asked for on foot from it. */
+  const needed={}; filled.forEach((it,i)=>{if(i!==ai) needed[it.cat]=(needed[it.cat]||0)+1;});
+  /* ...and not a second walk: an anchor in a park needs company indoors, or
+     the only thing on foot from it is the next park along. */
+  const hasCompany=m=>Object.entries(needed).every(([cat,n])=>
+    cands(cat,new Set([m.id])).filter(v=>travelFor(kmBetween(m.c,v.c)).foot
+      &&!(OUTSIDE(m.kind)&&OUTSIDE(v.kind))).length>=n);
+  const anchors=cands(filled[ai].cat,new Set());
+  const reachable=fit.walkable&&filled.length>1?anchors.filter(hasCompany):anchors;
+  const anchorPool=reachable.length?reachable:anchors;
+  const anchor=pick(anchorPool,filled[ai].skips,v=>liking(v)-between(v));
+  /* Every other stop is placed beside one already placed: outward from the
+     anchor, each near the stop on the anchor's side of it. Near the anchor
+     alone was not enough -- two cafés either side of a park are each a walk
+     from the park and not from each other, and with the items in any order a
+     walkable date had a train in it. */
+  const nearTo=ref=>v=>ref?liking(v)-1.5*kmBetween(ref.c,v.c):liking(v)-between(v);
+  /* "Keep it walkable": only what is a walk from that stop, giving way only
+     when nothing is in reach -- and then the leg says "by transit". */
+  const inReach=(pool,ref)=>{if(!fit.walkable||!ref) return pool;
+    const near=pool.filter(v=>travelFor(kmBetween(ref.c,v.c)).foot); return near.length?near:pool;};
+  const chosen={}, sizes={[ai]:anchorPool.length};
+  if(anchor) chosen[ai]=anchor;
+  /* Not a second walk beside a walk -- a rule, not a penalty, giving way only
+     if there is nothing else at all. */
+  const notBesideAWalk=(pool,i)=>{const nb=[chosen[i-1],chosen[i+1]].filter(Boolean);
+    if(!nb.some(v=>OUTSIDE(v.kind))) return pool;
+    const indoors=pool.filter(v=>!OUTSIDE(v.kind)); return indoors.length?indoors:pool;};
+  const refOf={};
+  filled.map((it,i)=>i).filter(i=>i!==ai)
+    .sort((x,y)=>Math.abs(x-ai)-Math.abs(y-ai)||x-y)
+    .forEach(i=>{ const it=filled[i];
+      const ref=chosen[i<ai?i+1:i-1]||anchor; refOf[i]=ref;
+      const used=new Set(Object.values(chosen).map(v=>v.id));
+      const pool=notBesideAWalk(inReach(cands(it.cat,used),ref),i);
+      sizes[i]=pool.length;
+      const v=pick(pool,it.skips,nearTo(ref)); if(v) chosen[i]=v; });
+
+  const stops=[]; let clock=PLAN_START[time], prev=null;
+  filled.forEach((it,i)=>{
+    const v=chosen[i]; if(!v) return;
+    const leg=prev?travelFor(kmBetween(prev.c,v.c)):null;
+    /* Rounded up to the next five minutes: "3:33" reads as computed. */
+    clock=Math.ceil((clock+(leg?leg.min:0))/5)*5;
+    const near=i===ai?null:refOf[i];
+    /* `reason` is for this screen ("You wrote ..."); `shared` is for a message
+       both people read ("Sam wrote ..."). */
+    stops.push({id:it.id,cat:it.cat,v,start:clock,minutes:it.hours*60,leg,
+      reason:reason(v,near,"You"),shared:reason(v,near,you.name),canSwap:sizes[i]>1,isAnchor:i===ai,
+      nearName:near?near.name:null});
+    clock+=it.hours*60; prev=v;
+  });
+
+  const first=stops[0]&&stops[0].v;
   let fairness=null;
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
   return {day,shared,sameWords,halfway,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
-    endsAt:stops.length?stops[stops.length-1].start+KINDS[stops[stops.length-1].v.kind][1]:PLAN_START[time]};
+    endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
 /* A plan as it travels in a message. The reasons go only to the person it was
    made for: they quote what that person wrote, and "Share this plan" can send it
@@ -1528,7 +1572,8 @@ function planDate(you,them,time,skips,day){
    person's interests and that you are planning a date with them. */
 const frozenPlan=(plan,time,keepReasons)=>({time,day:plan.day||null,stops:plan.stops.map(st=>({
   start:st.start,name:st.v.name,kind:KINDS[st.v.kind][0],hood:st.v.hood,
-  leg:st.leg?travelLabel(st.leg):null,reason:keepReasons?st.shared:null}))});
+  leg:st.leg?travelLabel(st.leg):null,reason:keepReasons?st.shared:null,
+  minutes:st.minutes,category:st.cat}))});
 
 /* A plan in a thread, as a card. Each stop opens to say why it was chosen. The
    person it was sent to can say "I'm in" -- an answer tied to this plan, so the
@@ -1548,7 +1593,7 @@ function planCard(c,m,i){
     h+=`<button class="pcstop" data-a="planStop" data-k="${key}" ${st.reason?"":"disabled"}
         aria-expanded="${open}"><div class="at">${clockAt(st.start)}</div>
       <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(st.name)}</div>
-        <div class="footnote mortar">${esc(st.kind)} \u00B7 ${esc(st.hood)}</div>
+        <div class="footnote mortar">${[st.kind,st.hood].concat(st.minutes?[`${st.minutes/60} hr`]:[]).map(esc).join(" \u00B7 ")}</div>
         ${open&&st.reason?`<div class="footnote" style="margin-top:2px">${esc(st.reason)}</div>`:""}</div></button>`;
   });
   h+=`</div>`;
@@ -1581,7 +1626,7 @@ function seedHanaPlan(){
   /* For the coming Thursday, because that is the day the two of them have
      already agreed on in the thread. */
   const thursday=upcomingDays().find(d=>dayDate(d).getDay()===4);
-  const plan=planDate(HANA,S.you,"evening",{},thursday);
+  const plan=planDate(HANA,S.you,"evening",[newItem("food"),newItem("activity",1),newItem("food")],thursday);
   c.msgs.push(["in",planMessage(plan),"Yesterday",undefined,{plan:frozenPlan(plan,"evening",true)}]);
   c.when="Yesterday";
 }
@@ -1659,7 +1704,7 @@ function plannerRoot(){
   const cur=cands.find(c=>c.p.id===P_.with)||cands[0];
   const time=plannerTime(cur), days=upcomingDays();
   const day=days.includes(P_.day)?P_.day:days[0];
-  const plan=planDate(S.you,cur.p,time,P_.skips,day);
+  const plan=planDate(S.you,cur.p,time,P_.items,day);
 
   h+=`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>
     `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${c.p.id===cur.p.id}">
@@ -1682,22 +1727,55 @@ function plannerRoot(){
   h+=`<div class="ptime mt-s">`+["afternoon","evening"].map(t=>
     `<button data-a="planTime" data-k="${t}" aria-pressed="${time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")+`</div>`;
 
+  if(P_.replanned) h+=`<div class="footnote mt-m" style="color:var(--lamp)">${esc(P_.replanned)}</div>`;
+
+  /* What you added, in order: each item the planner found a place for as its
+     stop, a blank one as the choice of what it should be, and under them the
+     way to add another, up to three. */
+  const anchorStop=plan.stops.find(x=>x.isAnchor);
   h+=`<div class="v mt-l">`;
-  plan.stops.forEach(s=>{
-    if(s.leg) h+=`<div class="pwalk"><i></i><div class="footnote mortar">${travelLabel(s.leg)}</div></div>`;
-    h+=`<div class="pstop"><div class="at">${clockAt(s.start)}</div>
+  P_.items.forEach((it,i)=>{
+    const st=plan.stops.find(x=>x.id===it.id);
+    if(st&&st.leg) h+=`<div class="pwalk"><i></i><div class="footnote mortar">${travelLabel(st.leg)}</div></div>`;
+    else if(i>0) h+=`<div style="height:12px"></div>`;
+    if(!it.cat){
+      h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
+        <div class="pchoose mt-s">${["food","activity"].map(c=>
+          `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
+        <div class="spread mt-s" style="align-items:center">
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="planChoose" data-i="${i}" data-k="surprise">Surprise me</button>
+          ${P_.items.length>1?`<button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button>`:""}</div></div>`;
+      return;
+    }
+    if(!st){
+      h+=`<div class="pcard spread" style="align-items:center"><div class="footnote mortar">Nowhere fits for ${CAT_TITLE[it.cat].toLowerCase()} here, on this day.</div>
+        <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button></div>`;
+      return;
+    }
+    const only=st.isAnchor||!anchorStop||!st.nearName?"The only place that fits what you both said."
+      :`The only place near ${st.nearName} that fits. Swap ${anchorStop.v.name} to move the whole date.`;
+    h+=`<div class="pcard"><div class="pstop"><div class="at">${clockAt(st.start)}</div>
       <div class="v gap-xxs" style="flex:1; min-width:0">
-        <div class="caption mortar">${s.title}</div>
-        <div class="subhead">${esc(s.v.name)}</div>
-        <div class="footnote mortar">${KINDS[s.v.kind][0]} \u00B7 ${esc(s.v.hood)}</div>
-        <div class="footnote" style="margin-top:4px">${esc(s.reason)}</div>
-        ${s.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${s.role==="main"
-          ?"The only place that fits what you both said."
-          :"The only place near the main thing that fits. Swap the main thing to move the whole date."}</div>`}</div>
-      ${s.canSwap?`<button class="swap" data-a="planSwap" data-k="${s.role}"
-        aria-label="Swap ${esc(s.v.name)}">Swap</button>`:""}</div>`;
+        <div class="caption mortar">${CAT_TITLE[st.cat]}</div>
+        <div class="subhead">${esc(st.v.name)}</div>
+        <div class="footnote mortar">${KINDS[st.v.kind][0]} \u00B7 ${esc(st.v.hood)}</div>
+        <div class="footnote" style="margin-top:4px">${esc(st.reason)}</div>
+        ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}</div>
+      ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}"
+        aria-label="Swap ${esc(st.v.name)}">Swap</button>`:""}</div>
+      <div class="phours">${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
+        aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}
+        <div style="flex:1"></div>
+        <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}"
+          aria-label="Remove ${esc(st.v.name)}">Remove</button></div></div>`;
   });
+  if(!P_.items.some(it=>!it.cat)){
+    h+=P_.items.length<MAX_ITEMS
+      ?`<button class="btn quiet mt-m" data-a="planAddItem">Add to the date</button>`
+      :`<div class="footnote mortar center mt-m">Three is as many as a plan holds.</div>`;
+  }
   h+=`</div>`;
+  if(!plan.stops.length) return h+`</div></div>`;
 
   const bits=[`${dayLong(day)}.`,`Done by about ${clockAt(plan.endsAt)}.`];
   if(plan.fromYou!=null) bits.push(`The first stop is ${plan.fromYou.toFixed(1)} km from you.`);
@@ -2991,7 +3069,24 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,skips:{},sent:null}; render();},
+    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null}; render();},
+    /* What a blank item is: food, an activity, or "Surprise me" -- an
+       activity if there is none (a date with nothing to do is a meal), then
+       food if there is none, then the other kind from the item before it, so
+       two dinners never sit back to back. */
+    planChoose:()=>{const P_=S.planner, i=+el.dataset.i; let c=el.dataset.k;
+      if(c==="surprise"){const kinds=P_.items.map(x=>x.cat).filter(Boolean);
+        const before=P_.items.slice(0,i).map(x=>x.cat).filter(Boolean).pop();
+        c=!kinds.includes("activity")?"activity":!kinds.includes("food")?"food":before==="food"?"activity":"food";}
+      const items=P_.items.slice(); items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0};
+      S.planner={...P_,items,sent:null,replanned:null}; render();},
+    planAddItem:()=>{const P_=S.planner; if(P_.items.length>=MAX_ITEMS) return;
+      S.planner={...P_,items:P_.items.concat([newItem()]),replanned:null}; render();},
+    planRemove:()=>{const P_=S.planner, i=+el.dataset.i; let items=P_.items.filter((x,k)=>k!==i);
+      if(!items.length) items=[newItem()];
+      S.planner={...P_,items,sent:null,replanned:null}; render();},
+    planHours:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice();
+      items[i]={...items[i],hours:+el.dataset.k}; S.planner={...P_,items,sent:null}; render();},
     /* Into the questions, from what you said last time if you said anything. */
     planStart:()=>{S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
     planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; render();
@@ -2999,7 +3094,7 @@ document.addEventListener("click",e=>{
         if(S.planner.q!==at) return;
         if(at+1<PREF_QS.length) S.planner.q=at+1;
         else { S.you.prefs=prefsFrom(S.planner.draft);
-          S.planner={...S.planner,q:null,time:null,skips:{},sent:null}; }
+          S.planner={...S.planner,q:null,time:null,items:restartSwaps(),sent:null}; }
         render();
       },260);},
     planBack:()=>{const P_=S.planner; P_.q=P_.q>0?P_.q-1:null; render();},
@@ -3007,10 +3102,10 @@ document.addEventListener("click",e=>{
        in the planner tab; "Not now" leaves the questions waiting there. */
     introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
       S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
-    planTime:()=>{S.planner={...S.planner,time:el.dataset.k,skips:{},sent:null}; render();},
-    planDay:()=>{S.planner={...S.planner,day:el.dataset.k,skips:{},sent:null}; render();},
-    planSwap:()=>{const k=el.dataset.k, sk={...S.planner.skips}; sk[k]=(sk[k]||0)+1;
-      S.planner={...S.planner,skips:sk,sent:null}; render();},
+    planTime:()=>{S.planner={...S.planner,time:el.dataset.k,items:restartSwaps(),sent:null}; render();},
+    planDay:()=>{S.planner={...S.planner,day:el.dataset.k,items:restartSwaps(),sent:null}; render();},
+    planSwap:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice();
+      items[i]={...items[i],skips:items[i].skips+1}; S.planner={...P_,items,sent:null,replanned:null}; render();},
     planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
       if(!cur) return;
       const ordered=[cur].concat(cands.filter(c=>c.p.id!==cur.p.id));
@@ -3027,13 +3122,17 @@ document.addEventListener("click",e=>{
     planYes:()=>{const c=S.convos.find(x=>x.id===id), i=+el.dataset.i; if(!c) return;
       c.msgs.push(["out","I\u2019m in.","Just now",undefined,{answering:i}]); c.when="Just now"; render();},
     planChange:()=>{const c=S.convos.find(x=>x.id===id), m=c&&c.msgs[+el.dataset.i]; if(!m) return;
-      S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,skips:{},sent:null,q:null,draft:[]};
+      /* The same shape of date: its kinds and hours. The planner finds the
+         places afresh. */
+      const shape=(m[4].plan.stops||[]).filter(x=>x.category).map(x=>newItem(x.category,Math.min(3,Math.max(1,Math.round((x.minutes||60)/60)))));
+      S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,
+        items:shape.length?shape:[newItem()],sent:null,q:null,draft:[],replanned:null};
       S.stacks.planner=[]; S.tab="planner"; render();},
     planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         to=cands.find(c=>c.p.id===id);
       if(!cur||!to) return;
       const days=upcomingDays(), day=days.includes(S.planner.day)?S.planner.day:days[0];
-      const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.skips,day);
+      const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.items,day);
       to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
         {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
       to.convo.when="Just now";
@@ -3223,11 +3322,16 @@ document.addEventListener("click",e=>{
        moment you looked away -- and nothing built from your interests, the Date
        planner included, could ever see the change. Blanks are dropped. */
     saveInterests:()=>{
-      const ints=[...document.querySelectorAll("#sheet .field input")].map(i=>i.value.trim()).filter(Boolean);
-      if(ints.length) S.you.interests=ints.slice(0,3);
-      /* The planner's rankings are built from these; old swap counts would
-         point at an arbitrary place in the new ones. */
-      S.planner={...S.planner,skips:{},sent:null};
+      const ints=[...document.querySelectorAll("#sheet .field input")].map(i=>i.value.trim()).filter(Boolean).slice(0,3);
+      /* Compared before they are saved, or every save would look unchanged. */
+      const changed=ints.length>0&&ints.join("|")!==(S.you.interests||[]).join("|");
+      if(ints.length) S.you.interests=ints;
+      /* The planner's rankings are built from these: every item goes back to
+         its best place under the new interests, and the planner says it
+         planned again -- a rerun that lands on the same places should not
+         look like nothing happened. */
+      S.planner={...S.planner,items:restartSwaps(),sent:null,
+        replanned:changed?"Replanned around your new interests.":S.planner.replanned};
       closeSheet(); render();},
     editDetails:()=>openDetails(),
     convoMenu:()=>convoMenuSheet(id),
@@ -3442,7 +3546,7 @@ function finishOnboarding(){
   }
   S.onboarding=null; S.tab="daily"; S.stacks={premium:[],daily:[],messages:[],planner:[],you:[]};
   /* A new account has said nothing about dates yet. */
-  S.you.prefs=null; S.planner={with:null,time:null,skips:{},sent:null,q:null,draft:[]};
+  S.you.prefs=null; S.planner={with:null,time:null,items:[newItem()],sent:null,q:null,draft:[],replanned:null};
   render();
   /* Introduced once, straight after onboarding, over the roster. */
   setTimeout(()=>openSheet(`<div class="caption mortar">New in Arch</div>

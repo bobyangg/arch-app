@@ -13,7 +13,7 @@ import MapKit
 /// category comes back with a name, a position and a category, and nothing about
 /// whether it suits a first date. Each category is mapped once, below, to the
 /// same things `VenueLibrary` writes by hand -- a kind, the themes it speaks to,
-/// the times of day it works for, and which stop it can be -- and the place's own
+/// and the times of day it works for -- and the place's own
 /// name adds any theme it plainly names ("Jazz", "Books"). `DatePlanner` then
 /// ranks them exactly as it ranked the library, and does not know the difference.
 ///
@@ -73,10 +73,11 @@ enum VenueSearch {
                       venues: found ?? [])
     }
 
-    /// Enough for a plan of three: somewhere to start, a main thing, and
-    /// somewhere to finish.
+    /// Enough to plan with: somewhere to eat or drink, and something to do.
     private static func isEnough(_ venues: [Venue]) -> Bool {
-        DatePlan.Role.allCases.allSatisfy { role in venues.contains { $0.roles.contains(role) } }
+        DatePlan.Category.allCases.allSatisfy { category in
+            venues.contains { $0.kind.category == category }
+        }
     }
 
     // MARK: Categories
@@ -91,39 +92,36 @@ enum VenueSearch {
         let kind: Venue.Kind
         let themes: Set<DateTheme>
         let times: Set<DatePlan.TimeOfDay>
-        let roles: Set<DatePlan.Role>
     }
 
     private static var groups: [Group] {
         var groups = [
             Group(categories: [.cafe, .bakery], kind: .coffee,
-                  themes: [.food], times: [.afternoon], roles: [.opener]),
+                  themes: [.food], times: [.afternoon]),
             Group(categories: [.park, .nationalPark], kind: .park,
-                  themes: [.outdoors], times: [.afternoon], roles: [.opener, .main]),
+                  themes: [.outdoors], times: [.afternoon]),
             Group(categories: [.beach, .marina], kind: .walk,
-                  themes: [.outdoors], times: [.afternoon, .evening], roles: [.opener, .main]),
+                  themes: [.outdoors], times: [.afternoon, .evening]),
             Group(categories: [.museum], kind: .museum,
-                  themes: [.craft, .buildings], times: [.afternoon], roles: [.main]),
+                  themes: [.craft, .buildings], times: [.afternoon]),
             Group(categories: [.library], kind: .library,
-                  themes: [.words, .buildings], times: [.afternoon], roles: [.opener, .main]),
-            // Dinner is the main thing of an evening, as often as not, so a
-            // restaurant can be the anchor as well as the last stop.
+                  themes: [.words, .buildings], times: [.afternoon]),
             Group(categories: [.restaurant], kind: .food,
-                  themes: [.food], times: [.afternoon, .evening], roles: [.main, .closer]),
+                  themes: [.food], times: [.afternoon, .evening]),
             Group(categories: [.brewery, .winery, .nightlife], kind: .bar,
-                  themes: [.food, .night], times: [.evening], roles: [.opener, .closer]),
+                  themes: [.food, .night], times: [.evening]),
             Group(categories: [.store], query: "bookstore", kind: .shop,
-                  themes: [.words], times: [.afternoon], roles: [.opener]),
+                  themes: [.words], times: [.afternoon]),
             Group(categories: [.store], query: "record store", kind: .shop,
-                  themes: [.sound], times: [.afternoon], roles: [.opener]),
+                  themes: [.sound], times: [.afternoon]),
             // "Something live": a performance rather than a bar, so "I don't
             // drink" leaves it in.
             Group(categories: [.theater], kind: .show,
-                  themes: [.words, .sound], times: [.evening], roles: [.main]),
+                  themes: [.words, .sound], times: [.evening]),
         ]
         if #available(iOS 18.0, *) {
             groups.append(Group(categories: [.musicVenue], kind: .show,
-                                themes: [.sound, .night], times: [.evening], roles: [.main, .closer]))
+                                themes: [.sound, .night], times: [.evening]))
         }
         return groups
     }
@@ -195,8 +193,7 @@ enum VenueSearch {
             // "Jazz Bar", "Paper & Ink Books": the name says what the category
             // cannot.
             themes: group.themes.union(DateTheme.themes(in: name)),
-            times: group.times,
-            roles: group.roles
+            times: group.times
         )
     }
 
