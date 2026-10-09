@@ -1436,6 +1436,25 @@ const dayShort=iso=>dayDate(iso).toLocaleDateString(undefined,{weekday:"short"})
 /* Shut on these days (0 is Sunday). The real places as they say as this is
    written -- the museum Mondays and Tuesdays, the garden Mondays; the invented
    ones invented. A live provider brings real hours. */
+/* Opening hours, in minutes after midnight; a close after midnight is written
+   past it (a bar open until two closes at 26*60). A place without its own keeps
+   the hours its kind usually does -- every place from Apple Maps, which does
+   not give apps opening hours -- and the card says "Usually open". */
+const H=(h,m=0)=>h*60+m;
+const KIND_HOURS={coffee:[H(7),H(18)],walk:[H(6),H(23)],park:[H(6),H(22)],museum:[H(10),H(17,30)],
+  library:[H(10),H(18)],studio:[H(11),H(19)],listening:[H(17),H(25)],show:[H(18),H(23,30)],
+  food:[H(11,30),H(22,30)],bar:[H(16),H(26)],shop:[H(10),H(20)]};
+const OWN_HOURS={"green-wood":[H(7),H(19)],"brooklyn-museum":[H(11),H(18)],"botanic-garden":[H(10),H(18)],
+  "central-library":[H(9),H(20)],"pioneer-works":[H(12),H(22)],"lowlight-coffee":[H(8),H(23)],
+  "short-fuse":[H(7),H(21)],"corner-booth":[H(7),H(21)],"listening-room":[H(18),H(25)],
+  "slack-water":[H(7),H(20)],"night-kettle":[H(16),H(24)],"quiet-hours":[H(10),H(21)],
+  "little-reel":[H(13),H(24)],"clay-hours":[H(12),H(22)]};
+const hoursOf=v=>OWN_HOURS[v.id]?{o:OWN_HOURS[v.id][0],c:OWN_HOURS[v.id][1],typical:false}
+  :{o:KIND_HOURS[v.kind][0],c:KIND_HOURS[v.kind][1],typical:true};
+/* What the hours check allows for getting between stops before they are known. */
+const LEG_ALLOWANCE=30;
+/* From when a stop counts as part of the evening. */
+const EVENING_FROM=H(17);
 const CLOSED={"botanic-garden":[1],"brooklyn-museum":[1,2],"silver-bath":[1,2],
   "listening-room":[0,1],"felt-hammer":[1],"night-oven":[0]};
 const PLAN_START={afternoon:14*60,evening:18*60+30};
@@ -1478,8 +1497,18 @@ function planDate(you,them,time,items,day){
   const liking=v=>3*v.themes.filter(t=>shared.includes(t)).length+v.themes.filter(t=>oneSided.includes(t)).length
     +fit.score(v);
   const between=v=>(mid?0.8*kmBetween(mid,v.c):0)+(yp&&tp?0.5*Math.abs(kmBetween(yp,v.c)-kmBetween(tp,v.c)):0);
-  const cands=(cat,used)=>VENUES.filter(v=>CAT(v.kind)===cat&&v.times.includes(time)&&!used.has(v.id)&&fit.allows(v)
-    &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow)));
+  /* When each item will happen, before any place is chosen: the earliest it
+     can start, and the latest it can end once getting between stops is
+     allowed for. A place has to be open across all of it -- "afternoon"
+     alone let a café that shuts at six land at seven. */
+  const filledAll=(items||[]).filter(it=>it.cat);
+  const windows=[]; {let t=PLAN_START[time]; filledAll.forEach((it,i)=>{windows.push([t,t+i*LEG_ALLOWANCE+it.hours*60]); t+=it.hours*60;});}
+  const cands=(cat,i,used)=>VENUES.filter(v=>{const h=hoursOf(v), w=windows[i];
+    /* Afternoon or evening by when this item starts, not when the date does:
+       the third thing on a long afternoon is an evening thing. */
+    const part=w[0]>=EVENING_FROM?"evening":"afternoon";
+    return CAT(v.kind)===cat&&v.times.includes(part)&&!used.has(v.id)&&fit.allows(v)
+      &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow))&&w[0]>=h.o&&w[1]<=h.c;});
   const pick=(pool,skips,score)=>{const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(a[0].id<b[0].id?-1:1)).map(x=>x[0]);
     return r.length?r[(skips||0)%r.length]:null;};
   const reason=(v,near,who)=>{
@@ -1505,13 +1534,17 @@ function planDate(you,them,time,items,day){
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
-  const needed={}; filled.forEach((it,i)=>{if(i!==ai) needed[it.cat]=(needed[it.cat]||0)+1;});
   /* ...and not a second walk: an anchor in a park needs company indoors, or
-     the only thing on foot from it is the next park along. */
-  const hasCompany=m=>Object.entries(needed).every(([cat,n])=>
-    cands(cat,new Set([m.id])).filter(v=>travelFor(kmBetween(m.c,v.c)).foot
-      &&!(OUTSIDE(m.kind)&&OUTSIDE(v.kind))).length>=n);
-  const anchors=cands(filled[ai].cat,new Set());
+     the only thing on foot from it is the next park along. Per item, open at
+     that item's time; two of a kind need two places. */
+  const hasCompany=m=>{const by={};
+    for(let i=0;i<filled.length;i++){ if(i===ai) continue;
+      const near=cands(filled[i].cat,i,new Set([m.id])).filter(v=>travelFor(kmBetween(m.c,v.c)).foot
+        &&!(OUTSIDE(m.kind)&&OUTSIDE(v.kind)));
+      if(!near.length) return false;
+      const b=by[filled[i].cat]=by[filled[i].cat]||{n:0,ids:new Set()}; b.n++; near.forEach(v=>b.ids.add(v.id)); }
+    return Object.values(by).every(b=>b.ids.size>=b.n);};
+  const anchors=cands(filled[ai].cat,ai,new Set());
   const reachable=fit.walkable&&filled.length>1?anchors.filter(hasCompany):anchors;
   const anchorPool=reachable.length?reachable:anchors;
   const anchor=pick(anchorPool,filled[ai].skips,v=>liking(v)-between(v));
@@ -1538,7 +1571,7 @@ function planDate(you,them,time,items,day){
     .forEach(i=>{ const it=filled[i];
       const ref=chosen[i<ai?i+1:i-1]||anchor; refOf[i]=ref;
       const used=new Set(Object.values(chosen).map(v=>v.id));
-      const pool=notBesideAWalk(inReach(cands(it.cat,used),ref),i);
+      const pool=notBesideAWalk(inReach(cands(it.cat,i,used),ref),i);
       sizes[i]=pool.length;
       const v=pick(pool,it.skips,nearTo(ref)); if(v) chosen[i]=v; });
 
@@ -1553,7 +1586,9 @@ function planDate(you,them,time,items,day){
        both people read ("Sam wrote ..."). */
     stops.push({id:it.id,cat:it.cat,v,start:clock,minutes:it.hours*60,leg,
       reason:reason(v,near,"You"),shared:reason(v,near,you.name),canSwap:sizes[i]>1,isAnchor:i===ai,
-      nearName:near?near.name:null});
+      nearName:near?near.name:null,
+      /* Open for the stop as it actually falls, walks and all. */
+      openThroughout:(h=>clock>=h.o&&clock+it.hours*60<=h.c)(hoursOf(v))});
     clock+=it.hours*60; prev=v;
   });
 
@@ -1748,7 +1783,7 @@ function plannerRoot(){
       return;
     }
     if(!st){
-      h+=`<div class="pcard spread" style="align-items:center"><div class="footnote mortar">Nowhere fits for ${CAT_TITLE[it.cat].toLowerCase()} here, on this day.</div>
+      h+=`<div class="pcard spread" style="align-items:center"><div class="footnote mortar">Nowhere fits for ${CAT_TITLE[it.cat].toLowerCase()} here, open at that time on this day.</div>
         <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button></div>`;
       return;
     }
@@ -1759,6 +1794,9 @@ function plannerRoot(){
         <div class="caption mortar">${CAT_TITLE[st.cat]}</div>
         <div class="subhead">${esc(st.v.name)}</div>
         <div class="footnote mortar">${KINDS[st.v.kind][0]} \u00B7 ${esc(st.v.hood)}</div>
+        <div class="caption ${st.openThroughout?"mortar":""}">${(h=>st.openThroughout
+          ?`${h.typical?"Usually open":"Open"} ${clockAt(h.o)} \u2013 ${clockAt(h.c)}`
+          :`Closes at ${clockAt(h.c)}, before this ends. Swap it or shorten the time.`)(hoursOf(st.v))}</div>
         <div class="footnote" style="margin-top:4px">${esc(st.reason)}</div>
         ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}</div>
       ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}"
