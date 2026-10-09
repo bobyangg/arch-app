@@ -125,8 +125,11 @@ struct RootTabView: View {
             send: { conversation, text, plan in
                 store.reply(to: conversation, text: text, plan: plan)
             },
-            change: { conversation, time, day in
-                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time, day: day)
+            change: { conversation, plan in
+                plannerPreset = PlannerPreset(personID: conversation.person.id,
+                                              time: plan.timeOfDay ?? .afternoon,
+                                              day: plan.planDay,
+                                              items: plan.planItems)
                 selection = .planner
             }
         ))
