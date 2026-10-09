@@ -19,6 +19,11 @@ struct SharedPlan: Codable, Hashable {
         /// shared with somebody other than the person it was made with -- see
         /// `init(_:sharedWith:plannedWith:)`.
         let reason: String?
+        /// The block it was given, in minutes, and what kind of item it was:
+        /// so the card can say how long, and "Change it" can start from the
+        /// same shape of date. Nil on plans sent before items had either.
+        var minutes: Int? = nil
+        var category: String? = nil
     }
 
     /// "afternoon" or "evening", on a plan.
@@ -33,6 +38,17 @@ struct SharedPlan: Codable, Hashable {
     var isPlan: Bool { !(stops ?? []).isEmpty }
     var timeOfDay: DatePlan.TimeOfDay? { time.flatMap(DatePlan.TimeOfDay.init(rawValue:)) }
     var planDay: PlanDay? { day.flatMap(PlanDay.init(iso:)) }
+
+    /// The plan's shape, as items the planner can start again from: each
+    /// stop's kind and hours, and no place -- the planner finds those afresh.
+    var planItems: [PlanItem]? {
+        let items = (stops ?? []).compactMap { stop -> PlanItem? in
+            guard let category = stop.category.flatMap(DatePlan.Category.init(rawValue:)) else { return nil }
+            let hours = min(max((stop.minutes ?? 60) / 60, 1), 3)
+            return PlanItem(category: category, hours: hours)
+        }
+        return items.isEmpty ? nil : items
+    }
 
     /// A plan, frozen for sending.
     ///
@@ -51,7 +67,9 @@ struct SharedPlan: Codable, Hashable {
                  kind: stop.venue.kind.label,
                  neighbourhood: stop.venue.neighbourhood,
                  travel: stop.travel?.label,
-                 reason: keepReasons ? stop.sharedReason : nil)
+                 reason: keepReasons ? stop.sharedReason : nil,
+                 minutes: stop.minutes,
+                 category: stop.category.rawValue)
         }
         self.answering = nil
     }
@@ -79,8 +97,9 @@ struct SharedPlan: Codable, Hashable {
 struct PlanActions {
     /// Send words and a plan (or an answer to one) into a conversation.
     var send: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
-    /// Open the Date planner on this person, on this day, at this time of day.
-    var change: (Conversation, DatePlan.TimeOfDay, PlanDay?) -> Void = { _, _, _ in }
+    /// Open the Date planner on this person, from this plan: its day, its
+    /// time of day and its items.
+    var change: (Conversation, SharedPlan) -> Void = { _, _ in }
 }
 
 private struct PlanActionsKey: EnvironmentKey {
@@ -193,7 +212,9 @@ struct PlanCard: View {
                         .archText(.subhead)
                         .foregroundStyle(ArchColor.limestone)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(stop.kind) \u{00B7} \(stop.neighbourhood)")
+                    Text(([stop.kind, stop.neighbourhood]
+                          + (stop.minutes.map { [$0 == 60 ? "1 hr" : "\($0 / 60) hr"] } ?? []))
+                        .joined(separator: " \u{00B7} "))
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
                     if isOpen, let reason = stop.reason {
