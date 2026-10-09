@@ -328,40 +328,57 @@ final class ArchSmokeTests: XCTestCase {
 
     // MARK: The Date planner
 
-    /// The planner lays out a date for the first person in its row.
+    /// The planner opens on one blank item, and a date is built from there:
+    /// an activity, something to eat, and a surprise -- three, and no more.
     ///
-    /// `MockData` has people you are talking to and people in your matches, so
-    /// the planner always has somebody. No stop on screen means the engine found
-    /// nowhere to go, or the tab drew nothing -- either way the tab bar would
-    /// still look fine in a screenshot. Addressed by the Swap buttons, which
-    /// every stop has and nothing else on the screen does.
+    /// No stop on screen means the engine found nowhere to go, or the tab drew
+    /// nothing -- either way the tab bar would still look fine in a screenshot.
+    /// Stops are counted by their cards, not their Swap buttons: a stop that is
+    /// the only place that fits has no Swap, because one would change nothing.
     func testTheDatePlannerLaysOutADate() {
         let app = launch()
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(app.buttons["tab.planner"].isSelected)
         answerDatePreferences(app)
 
-        // Counted by their cards, not their Swap buttons: a stop that is the
-        // only place that fits has no Swap, because one would change nothing.
         let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
-        XCTAssertTrue(
-            stops.firstMatch.waitForExistence(timeout: 5),
-            "The Date planner drew no stops."
-        )
-        XCTAssertEqual(stops.count, 3, "A plan is three stops; found \(stops.count).")
+        XCTAssertTrue(app.buttons["planner.choose.activity"].waitForExistence(timeout: 5),
+                      "The planner should open on a blank item.")
+        XCTAssertEqual(stops.count, 0, "Nothing is planned before anything is chosen.")
 
-        // A week of days, and picking one still leaves a whole plan.
+        // An activity, given three hours.
+        app.buttons["planner.choose.activity"].tap()
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
+        XCTAssertEqual(stops.count, 1)
+        app.buttons["planner.hours.0.3"].tap()
+        XCTAssertTrue(app.buttons["planner.hours.0.3"].isSelected, "The three-hour block did not stick.")
+
+        // Something to eat, then whatever the planner suggests.
+        app.buttons["planner.addItem"].tap()
+        app.buttons["planner.choose.food"].tap()
+        XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
+        app.buttons["planner.addItem"].tap()
+        app.buttons["planner.choose.surprise"].tap()
+        XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
+        XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
+
+        // A week of days, and picking one still leaves the whole plan.
         XCTAssertTrue(app.buttons["planner.day.6"].exists, "The planner should offer seven days.")
         app.buttons["planner.day.6"].tap()
         XCTAssertTrue(app.buttons["planner.day.6"].isSelected, "Tapping a day did not pick it.")
         XCTAssertEqual(stops.count, 3, "Picking a day lost the plan.")
 
         // Swapping a stop has to leave a plan behind, not an empty screen. The
-        // main thing always has a Swap here: more than one place can anchor it.
+        // anchor always has a Swap here: more than one place can anchor it.
         let swaps = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Swap'"))
         XCTAssertGreaterThan(swaps.count, 0, "No stop on this plan can be swapped.")
         swaps.firstMatch.tap()
         XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
+
+        // Removing one leaves room to add again.
+        app.buttons["planner.remove.2"].tap()
+        XCTAssertEqual(stops.count, 2, "Remove did not take the stop off.")
+        XCTAssertTrue(app.buttons["planner.addItem"].exists, "With two items there is room for a third.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
     }
 
@@ -460,6 +477,10 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(bothWrote.firstMatch.waitForExistence(timeout: 5),
                       "The plan did not change after your interests did.")
+        // And the planner says it planned again, so a rerun that lands on the
+        // same places is not mistaken for nothing happening.
+        XCTAssertTrue(app.staticTexts["planner.replanned"].waitForExistence(timeout: 5),
+                      "The planner did not say it replanned after your interests changed.")
     }
 
     // MARK: App Review
