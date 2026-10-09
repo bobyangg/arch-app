@@ -586,7 +586,7 @@ struct DatePlannerView: View {
     /// shut that day, or ruled out by what one of you said.
     private func nothingFits(_ category: DatePlan.Category, index: Int) -> some View {
         HStack(alignment: .firstTextBaseline) {
-            Text("Nowhere fits for \(category.title.lowercased()) here, on this day.")
+            Text("Nowhere fits for \(category.title.lowercased()) here, open at that time on this day.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -640,6 +640,13 @@ struct DatePlannerView: View {
                     Text("\(stop.venue.kind.label) \u{00B7} \(stop.venue.neighbourhood)")
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
+                    // Its hours, and whether they are its own or what places
+                    // like it usually keep. Said, because a guess shown as a
+                    // fact is how two people end up at a locked door.
+                    Text(hoursLine(stop))
+                        .archText(.caption)
+                        .foregroundStyle(stop.isOpenThroughout ? ArchColor.mortar : ArchColor.limestone)
+                        .fixedSize(horizontal: false, vertical: true)
                     Text(stop.reason)
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.limestone)
@@ -703,6 +710,16 @@ struct DatePlannerView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planner.stop")
+    }
+
+    /// "Open 11:00 am – 6:00 pm", "Usually open …", or, when getting there
+    /// took longer than the planner allowed for, that it may be closing.
+    private func hoursLine(_ stop: DatePlan.Stop) -> String {
+        let hours = stop.venue.openingHours
+        guard stop.isOpenThroughout else {
+            return "Closes at \(DatePlanner.clockTime(hours.closes)), before this ends. Swap it or shorten the time."
+        }
+        return (hours.isTypical ? "Usually open " : "Open ") + hours.label
     }
 
     /// Why a stop has no Swap: it is the only place that fits.
@@ -775,7 +792,9 @@ struct DatePlannerView: View {
         if let fairness = plan.fairness { parts.append(fairness) }
         // Apple Maps does not give an app opening hours, so the plan cannot
         // know them. Better said than discovered at a locked door.
-        if isLive { parts.append("Places are from Apple Maps; check they are open before you go.") }
+        if isLive {
+            parts.append("Places are from Apple Maps, which does not share opening hours, so the hours shown are what places like these usually keep. Check before you go.")
+        }
         return parts.joined(separator: " ")
     }
 

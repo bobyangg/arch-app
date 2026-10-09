@@ -122,6 +122,27 @@ struct Venue: Identifiable, Hashable {
         /// A park and a walk are the same kind of afternoon.
         var isOutside: Bool { self == .walk || self == .park }
 
+        /// The hours a place of this kind usually keeps, for a place whose own
+        /// hours nobody has told the app -- every place from Apple Maps, which
+        /// does not give apps opening hours (see `VenueSearch`). Deliberately
+        /// the ordinary day: a café that opens late is rarer than one that
+        /// closes at six.
+        var typicalHours: OpeningHours {
+            switch self {
+            case .coffee:    return OpeningHours(opens: 7 * 60, closes: 18 * 60)
+            case .walk:      return OpeningHours(opens: 6 * 60, closes: 23 * 60)
+            case .park:      return OpeningHours(opens: 6 * 60, closes: 22 * 60)
+            case .museum:    return OpeningHours(opens: 10 * 60, closes: 17 * 60 + 30)
+            case .library:   return OpeningHours(opens: 10 * 60, closes: 18 * 60)
+            case .studio:    return OpeningHours(opens: 11 * 60, closes: 19 * 60)
+            case .listening: return OpeningHours(opens: 17 * 60, closes: 25 * 60)
+            case .show:      return OpeningHours(opens: 18 * 60, closes: 23 * 60 + 30)
+            case .food:      return OpeningHours(opens: 11 * 60 + 30, closes: 22 * 60 + 30)
+            case .bar:       return OpeningHours(opens: 16 * 60, closes: 26 * 60)
+            case .shop:      return OpeningHours(opens: 10 * 60, closes: 20 * 60)
+            }
+        }
+
         /// Which button adds it: something to eat or drink, or something to do.
         var category: DatePlan.Category {
             switch self {
@@ -174,10 +195,40 @@ struct Venue: Identifiable, Hashable {
     let times: Set<DatePlan.TimeOfDay>
     /// Days of the week it is shut, as `Calendar` numbers them: 1 is Sunday.
     var closedOn: Set<Int> = []
+    /// Its own opening hours, when they are known. Nil means nobody has said,
+    /// and the hours its kind usually keeps stand in -- see `openingHours`.
+    var hours: OpeningHours? = nil
+
+    /// What the planner checks a stop against: its own hours, or its kind's.
+    var openingHours: OpeningHours { hours ?? kind.typicalHours.typical }
 
     func isOpen(on day: PlanDay?) -> Bool {
         guard let day else { return true }
         return !closedOn.contains(day.weekday)
+    }
+}
+
+/// When a place is open, in minutes after midnight. A close after midnight is
+/// written past it -- a bar open until two is `closes: 26 * 60` -- so that one
+/// evening is one range and "open until" is a single comparison.
+struct OpeningHours: Hashable {
+    let opens: Int
+    let closes: Int
+    /// True for the hours a place of its kind usually keeps rather than its
+    /// own. Said on the card ("Usually open"), so nobody mistakes a guess for
+    /// a fact.
+    var isTypical: Bool = false
+
+    var typical: OpeningHours { OpeningHours(opens: opens, closes: closes, isTypical: true) }
+
+    /// Open for the whole of a stop, from when you arrive to when you leave.
+    func covers(from start: Int, to end: Int) -> Bool {
+        start >= opens && end <= closes
+    }
+
+    /// "11:00 am – 6:00 pm".
+    var label: String {
+        "\(DatePlanner.clockTime(opens)) \u{2013} \(DatePlanner.clockTime(closes))"
     }
 }
 
@@ -245,6 +296,11 @@ struct DatePlan: Hashable {
         /// The stop this one was placed beside -- the next one in towards the
         /// anchor. Nil for the anchor itself.
         let placedNear: String?
+        /// Whether the place is open for the whole stop, as the stop actually
+        /// falls once the walks between are known. Places are chosen to be
+        /// open with time to spare for getting there, so this is almost always
+        /// true; when a long leg pushes a stop past closing, the card says so.
+        let isOpenThroughout: Bool
 
         var id: UUID { itemID }
         var end: Int { start + minutes }
@@ -326,6 +382,12 @@ enum DatePlanner {
     private static let detour = 1.25
     /// Past this many minutes on foot, a leg is offered as transit instead.
     private static let longestWalk = 25
+    /// What the hours check allows for getting from one stop to the next,
+    /// before the stops are known: a walk at its longest, and the rounding up
+    /// to five minutes. A longer leg is rare, and the card says if it happens.
+    private static let legAllowance = 30
+    /// From when a stop counts as part of the evening.
+    private static let eveningFrom = 17 * 60
 
     /// `items` are what you added, in order. A blank one is skipped; the rest
     /// each become a stop, if anywhere fits.
@@ -384,9 +446,32 @@ enum DatePlanner {
             return cost
         }
 
-        func candidates(_ category: DatePlan.Category, besides used: Set<String>) -> [Venue] {
-            venues.filter {
-                $0.kind.category == category && $0.times.contains(time) && $0.isOpen(on: day)
+        // The items that have been told what they are, in your order.
+        let filled = items.filter { $0.category != nil }
+
+        /// **When each item will happen, before any place is chosen.** The
+        /// earliest it can start is the date's start plus every block before
+        /// it; the latest it can end allows for getting between the stops.
+        /// Checking the time of day alone -- "afternoon" -- was not enough
+        /// once a date could run nine hours: a café that shuts at six could
+        /// land at seven. A place has to be open across the whole window.
+        let windows: [(start: Int, end: Int)] = {
+            var start = time.start
+            return filled.enumerated().map { index, item in
+                defer { start += item.hours * 60 }
+                return (start, start + index * Self.legAllowance + item.hours * 60)
+            }
+        }()
+
+        func candidates(_ category: DatePlan.Category, at index: Int, besides used: Set<String>) -> [Venue] {
+            let window = windows[index]
+            // Afternoon or evening by when this item starts, not when the
+            // date does: the third thing on a long afternoon is an evening
+            // thing, and a bar should be able to be it.
+            let part: DatePlan.TimeOfDay = window.start >= Self.eveningFrom ? .evening : .afternoon
+            return venues.filter {
+                $0.kind.category == category && $0.times.contains(part) && $0.isOpen(on: day)
+                    && $0.openingHours.covers(from: window.start, to: window.end)
                     && !used.contains($0.id) && fit.allows($0)
             }
         }
@@ -400,8 +485,6 @@ enum DatePlanner {
             return ranked[skips % ranked.count]
         }
 
-        // The items that have been told what they are, in your order.
-        let filled = items.filter { $0.category != nil }
         guard let anchorIndex = filled.firstIndex(where: { $0.category == .activity })
                 ?? (filled.isEmpty ? nil : 0),
               let anchorCategory = filled[anchorIndex].category
@@ -420,21 +503,23 @@ enum DatePlanner {
         /// looking for what was near it found, a quarter of the time, an anchor
         /// with nothing near it -- and a walkable date with a train in it.
         func hasCompany(_ anchor: Venue) -> Bool {
-            var needed: [DatePlan.Category: Int] = [:]
+            // Per item, what could fill it on foot from the anchor -- open at
+            // that item's time. Each needs one, and two of a kind need two.
+            var byCategory: [DatePlan.Category: (items: Int, places: Set<String>)] = [:]
             for (index, item) in filled.enumerated() where index != anchorIndex {
-                if let category = item.category { needed[category, default: 0] += 1 }
+                guard let category = item.category else { continue }
+                let near = candidates(category, at: index, besides: [anchor.id]).filter {
+                    travel(km(anchor.coordinate, $0.coordinate)).onFoot
+                        && !(anchor.kind.isOutside && $0.kind.isOutside)
+                }
+                if near.isEmpty { return false }
+                byCategory[category, default: (0, [])].items += 1
+                byCategory[category, default: (0, [])].places.formUnion(near.map(\.id))
             }
-            return needed.allSatisfy { category, count in
-                candidates(category, besides: [anchor.id])
-                    .filter {
-                        travel(km(anchor.coordinate, $0.coordinate)).onFoot
-                            && !(anchor.kind.isOutside && $0.kind.isOutside)
-                    }
-                    .count >= count
-            }
+            return byCategory.values.allSatisfy { $0.places.count >= $0.items }
         }
 
-        let anchors = candidates(anchorCategory, besides: [])
+        let anchors = candidates(anchorCategory, at: anchorIndex, besides: [])
         let reachable = fit.walkable && filled.count > 1 ? anchors.filter(hasCompany) : anchors
         let anchorPool = reachable.isEmpty ? anchors : reachable
         let anchor = pick(anchorPool, skips: filled[anchorIndex].skips) { liking($0) - between($0) }
@@ -482,7 +567,8 @@ enum DatePlanner {
             let reference = chosen[index < anchorIndex ? index + 1 : index - 1] ?? anchor
             placedNear[index] = reference
             let used = Set(chosen.values.map(\.id))
-            let pool = notBesideAWalk(inReach(candidates(category, besides: used), of: reference),
+            let pool = notBesideAWalk(inReach(candidates(category, at: index, besides: used),
+                                              of: reference),
                                       at: index)
             poolSizes[index] = pool.count
             if let venue = pick(pool, skips: filled[index].skips, by: { score($0, near: reference) }) {
@@ -515,7 +601,8 @@ enum DatePlanner {
                                      them: them, theirs: theirs, yourName: you.name),
                 canSwap: (poolSizes[index] ?? 0) > 1,
                 isAnchor: index == anchorIndex,
-                placedNear: near?.name
+                placedNear: near?.name,
+                isOpenThroughout: venue.openingHours.covers(from: clock, to: clock + item.hours * 60)
             ))
             clock += item.hours * 60
             previous = venue
