@@ -11,6 +11,11 @@ import Foundation
 /// distances are honest, and none of them shares a name with anywhere real that
 /// I know of.
 ///
+/// **Opening hours**: a place without its own is checked against the hours
+/// its kind usually keeps (`Venue.Kind.typicalHours`). The real places carry
+/// theirs as they post them as this is written; the invented ones that stay
+/// open late, or open for the evening, say so.
+///
 /// **Some are shut on some days**, so that picking a day changes the plan. For
 /// the real places that is when they say they are closed as this is written --
 /// the museum on Mondays and Tuesdays, the garden on Mondays; for the invented
@@ -30,7 +35,7 @@ enum VenueLibrary {
         venue("prospect-long-meadow", "Prospect Park, the Long Meadow", .walk, "Prospect Park", 40.6650, -73.9700,
               [.outdoors], [.afternoon]),
         venue("botanic-garden", "Brooklyn Botanic Garden", .park, "Prospect Heights", 40.6694, -73.9624,
-              [.outdoors], [.afternoon], closed: [monday]),
+              [.outdoors], [.afternoon], closed: [monday], hours: (10 * 60, 18 * 60)),
         venue("bridge-park-pier-1", "Brooklyn Bridge Park, Pier 1", .walk, "Dumbo", 40.7020, -73.9965,
               [.outdoors, .buildings], [.afternoon, .evening]),
         venue("domino-park", "Domino Park", .walk, "Williamsburg", 40.7145, -73.9682,
@@ -38,23 +43,23 @@ enum VenueLibrary {
         venue("mccarren-park", "McCarren Park", .park, "Greenpoint", 40.7203, -73.9516,
               [.outdoors], [.afternoon]),
         venue("green-wood", "Green-Wood Cemetery", .walk, "Sunset Park", 40.6522, -73.9910,
-              [.outdoors, .buildings, .words], [.afternoon]),
+              [.outdoors, .buildings, .words], [.afternoon], hours: (7 * 60, 19 * 60)),
 
         // MARK: Looking at things
 
         venue("brooklyn-museum", "Brooklyn Museum", .museum, "Prospect Heights", 40.6712, -73.9636,
-              [.craft, .buildings], [.afternoon], closed: [monday, tuesday]),
+              [.craft, .buildings], [.afternoon], closed: [monday, tuesday], hours: (11 * 60, 18 * 60)),
         venue("central-library", "Brooklyn Public Library, Central", .library, "Prospect Heights", 40.6725, -73.9682,
-              [.words, .buildings], [.afternoon]),
+              [.words, .buildings], [.afternoon], hours: (9 * 60, 20 * 60)),
         venue("bam", "BAM", .show, "Fort Greene", 40.6865, -73.9776,
               [.sound, .words], [.evening]),
         venue("pioneer-works", "Pioneer Works", .studio, "Red Hook", 40.6786, -74.0118,
-              [.craft, .sound], [.afternoon, .evening]),
+              [.craft, .sound], [.afternoon, .evening], hours: (12 * 60, 22 * 60)),
 
         // MARK: Invented -- coffee, shops, studios
 
         venue("lowlight-coffee", "Lowlight Coffee", .coffee, "Fort Greene", 40.6889, -73.9725,
-              [.food, .night], [.afternoon, .evening]),
+              [.food, .night], [.afternoon, .evening], hours: (8 * 60, 23 * 60)),
         venue("half-measure", "Half Measure Café", .coffee, "Prospect Heights", 40.6770, -73.9660,
               [.food, .words], [.afternoon]),
         venue("paper-thread", "Paper & Thread", .shop, "Park Slope", 40.6735, -73.9800,
@@ -62,9 +67,9 @@ enum VenueLibrary {
         venue("silver-bath", "Silver Bath Darkroom", .studio, "Gowanus", 40.6760, -73.9880,
               [.craft], [.afternoon], closed: [monday, tuesday]),
         venue("short-fuse", "Short Fuse Coffee", .coffee, "Williamsburg", 40.7160, -73.9590,
-              [.food], [.afternoon, .evening]),
+              [.food], [.afternoon, .evening], hours: (7 * 60, 21 * 60)),
         venue("corner-booth", "Corner Booth", .coffee, "Crown Heights", 40.6705, -73.9480,
-              [.food, .words], [.afternoon, .evening]),
+              [.food, .words], [.afternoon, .evening], hours: (7 * 60, 21 * 60)),
         venue("tidewater", "Tidewater", .bar, "Dumbo", 40.7030, -73.9890,
               [.food, .night], [.evening]),
         venue("bright-lines", "Bright Lines Books", .shop, "Greenpoint", 40.7290, -73.9540,
@@ -75,7 +80,7 @@ enum VenueLibrary {
         // MARK: Invented -- to finish
 
         venue("listening-room", "The Listening Room", .listening, "Clinton Hill", 40.6880, -73.9640,
-              [.sound, .night], [.evening], closed: [sunday, monday]),
+              [.sound, .night], [.evening], closed: [sunday, monday], hours: (18 * 60, 25 * 60)),
         venue("felt-hammer", "Felt & Hammer", .bar, "Prospect Heights", 40.6790, -73.9700,
               [.sound, .night], [.evening], closed: [monday]),
         venue("small-hours", "Small Hours", .bar, "Bed-Stuy", 40.6850, -73.9450,
@@ -102,19 +107,19 @@ enum VenueLibrary {
         // reach, and the stops either side of it could not be swapped at all.
 
         venue("slack-water", "Slack Water Coffee", .coffee, "Williamsburg", 40.7122, -73.9662,
-              [.food], [.afternoon, .evening]),
+              [.food], [.afternoon, .evening], hours: (7 * 60, 20 * 60)),
         venue("little-ladle", "Little Ladle", .food, "Williamsburg", 40.7171, -73.9601,
               [.food], [.afternoon, .evening]),
         venue("ferry-light", "Ferry Light Pizza", .food, "Williamsburg", 40.7103, -73.9638,
               [.food, .night], [.afternoon, .evening]),
         venue("night-kettle", "Night Kettle", .coffee, "Fort Greene", 40.6872, -73.9748,
-              [.food, .night], [.evening]),
+              [.food, .night], [.evening], hours: (16 * 60, 24 * 60)),
         venue("gatehouse-kitchen", "Gatehouse Kitchen", .food, "Prospect Heights", 40.6738, -73.9612,
               [.food], [.afternoon, .evening]),
         venue("meadow-edge", "Meadow Edge", .food, "Park Slope", 40.6668, -73.9752,
               [.food], [.afternoon, .evening]),
         venue("quiet-hours", "Quiet Hours Tea", .coffee, "Clinton Hill", 40.6893, -73.9658,
-              [.food, .words], [.afternoon, .evening]),
+              [.food, .words], [.afternoon, .evening], hours: (10 * 60, 21 * 60)),
 
         // MARK: Something to do after dark
         //
@@ -125,11 +130,11 @@ enum VenueLibrary {
         venue("main-street-park", "Main Street Park", .walk, "Dumbo", 40.7040, -73.9900,
               [.outdoors, .buildings], [.afternoon, .evening]),
         venue("little-reel", "Little Reel Cinema", .show, "Williamsburg", 40.7158, -73.9628,
-              [.words, .sound], [.evening]),
+              [.words, .sound], [.evening], hours: (13 * 60, 24 * 60)),
         venue("back-room-comedy", "Back Room Comedy", .show, "Fort Greene", 40.6893, -73.9762,
               [.words, .night], [.evening]),
         venue("clay-hours", "Clay Hours", .studio, "Prospect Heights", 40.6778, -73.9672,
-              [.craft], [.afternoon, .evening]),
+              [.craft], [.afternoon, .evening], hours: (12 * 60, 22 * 60)),
     ]
 
     // `Calendar`'s numbering.
@@ -139,10 +144,12 @@ enum VenueLibrary {
         _ id: String, _ name: String, _ kind: Venue.Kind, _ neighbourhood: String,
         _ latitude: Double, _ longitude: Double,
         _ themes: Set<DateTheme>, _ times: Set<DatePlan.TimeOfDay>,
-        closed: Set<Int> = []
+        closed: Set<Int> = [],
+        hours: (opens: Int, closes: Int)? = nil
     ) -> Venue {
         Venue(id: id, name: name, kind: kind, neighbourhood: neighbourhood,
               coordinate: Coordinate(latitude: latitude, longitude: longitude),
-              themes: themes, times: times, closedOn: closed)
+              themes: themes, times: times, closedOn: closed,
+              hours: hours.map { OpeningHours(opens: $0.opens, closes: $0.closes) })
     }
 }
