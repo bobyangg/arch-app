@@ -137,3 +137,6 @@ UInt64
 
 # The Date planner's calendar
 DatePicker
+
+# Opening a Date planner stop in Apple Maps
+URLComponents
