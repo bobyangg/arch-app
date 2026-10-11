@@ -131,3 +131,12 @@ Link
 
 # StoreKit prices are Decimal; the per-month figure divides one
 Decimal
+
+# A stable hash for the Date planner, the same on every phone and launch
+UInt64
+
+# The Date planner's calendar
+DatePicker
+
+# Opening a Date planner stop in Apple Maps
+URLComponents

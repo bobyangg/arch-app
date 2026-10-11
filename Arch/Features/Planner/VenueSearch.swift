@@ -13,12 +13,20 @@ import MapKit
 /// category comes back with a name, a position and a category, and nothing about
 /// whether it suits a first date. Each category is mapped once, below, to the
 /// same things `VenueLibrary` writes by hand -- a kind, the themes it speaks to,
-/// the times of day it works for, and which stop it can be -- and the place's own
+/// and the times of day it works for -- and the place's own
 /// name adds any theme it plainly names ("Jazz", "Books"). `DatePlanner` then
 /// ranks them exactly as it ranked the library, and does not know the difference.
 ///
 /// **Opening hours are not something MapKit tells an app**, so a plan can name a
 /// café that is shut on Sundays. The screen says to check, rather than pretend.
+/// Nor are ratings or review counts: Apple keeps both inside Maps.
+///
+/// **Not everything Apple returns is somewhere to go.** A search for bookshops
+/// in the "store" category came back with a ticket office and a shopping mall,
+/// and the planner offered them as the main thing of a date. Every result is
+/// now checked: its own category has to be one that was asked for, a search
+/// by words has to find those words in the name, and names that are never a
+/// date -- box offices, malls, stations -- are left out.
 enum VenueSearch {
 
     /// What the planner needs for one person: where they are, in the only
@@ -55,11 +63,18 @@ enum VenueSearch {
             return Nearby(theirCentre: theirCentre, halfway: nil, venues: [])
         }
 
-        // Close first, then wider. A city has enough within a couple of
-        // kilometres for a date on foot; a small town may need the whole town.
+        // Close first, then wider -- but never wide. A city has enough within
+        // a couple of kilometres; a small town gets its own few places rather
+        // than the next town's. This went to twenty kilometres, and the
+        // planner took what it found.
+        let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        for radius in [2_500.0, 8_000.0, 20_000.0] {
-            guard let venues = await venues(around: middle, radius: radius) else {
+        // Two rings rather than three: there are about twenty searches a ring
+        // now (more with iOS 18's categories), and Apple Maps turns an app away
+        // past about fifty a minute. The second ring runs only when the first
+        // found too little, which in a city it rarely does.
+        for radius in [3_000.0, 8_000.0] {
+            guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
                 if found == nil { return nil }
                 break
@@ -73,10 +88,11 @@ enum VenueSearch {
                       venues: found ?? [])
     }
 
-    /// Enough for a plan of three: somewhere to start, a main thing, and
-    /// somewhere to finish.
+    /// Enough to plan with: somewhere to eat or drink, and something to do.
     private static func isEnough(_ venues: [Venue]) -> Bool {
-        DatePlan.Role.allCases.allSatisfy { role in venues.contains { $0.roles.contains(role) } }
+        DatePlan.Category.allCases.allSatisfy { category in
+            venues.contains { $0.kind.category == category }
+        }
     }
 
     // MARK: Categories
@@ -88,65 +104,172 @@ enum VenueSearch {
         let categories: [MKPointOfInterestCategory]
         /// For the few things with no category of their own, like bookshops.
         var query: String? = nil
+        /// The name has to contain one of these, or it is not what was
+        /// searched for -- a bookshop says "book"; a park worth going to says
+        /// "park", "garden", "trail".
+        var nameHas: [String]? = nil
+        /// Names with one of these are left out, unless they also have one of
+        /// `unlessHas`: "Waterfall Stage" goes, "Stage Theatre" stays.
+        var rejects: [String] = []
+        var unlessHas: [String] = []
         let kind: Venue.Kind
         let themes: Set<DateTheme>
         let times: Set<DatePlan.TimeOfDay>
-        let roles: Set<DatePlan.Role>
+        /// How many to keep. Restaurants all look alike to the planner, so it
+        /// needs more of them to choose between.
+        var keep = 10
     }
 
-    private static var groups: [Group] {
+    /// What kinds of food to search for by name, besides "restaurant": three a
+    /// pair, from this list, so two people do not get the same handful of
+    /// places every time and different pairs get different ones.
+    private static let cuisineQueries = ["ramen", "tacos", "pizza", "dumplings", "brunch",
+                                         "thai", "sushi", "pho", "falafel", "curry"]
+
+    private static func cuisines(for seed: String) -> [String] {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in seed.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
+        let start = Int(hash % UInt64(cuisineQueries.count))
+        return (0..<3).map { cuisineQueries[(start + $0 * 3) % cuisineQueries.count] }
+    }
+
+    /// **Asked for as things to do, not as everything on the map.** "Park" and
+    /// "theater" alone brought back every parkette, every corner plaza named
+    /// for its intersection, and outdoor stages with nothing on -- real places
+    /// in Apple's eyes, and nowhere to take somebody. So the outdoor searches
+    /// keep only places whose names say they are somewhere to go, and the
+    /// rest of the list is made of the things people actually do on a date:
+    /// films, bowling, galleries, comedy, an aquarium.
+    private static func groups(cuisines: [String]) -> [Group] {
+        var shows: [MKPointOfInterestCategory] = [.theater]
+        var dayOut: [MKPointOfInterestCategory] = [.aquarium, .zoo, .amusementPark]
+        if #available(iOS 18.0, *) {
+            shows.append(.musicVenue)
+            dayOut.append(.planetarium)
+        }
         var groups = [
             Group(categories: [.cafe, .bakery], kind: .coffee,
-                  themes: [.food], times: [.afternoon], roles: [.opener]),
-            Group(categories: [.park, .nationalPark], kind: .park,
-                  themes: [.outdoors], times: [.afternoon], roles: [.opener, .main]),
-            Group(categories: [.beach, .marina], kind: .walk,
-                  themes: [.outdoors], times: [.afternoon, .evening], roles: [.opener, .main]),
+                  themes: [.food], times: [.afternoon]),
+            Group(categories: [.park, .nationalPark], nameHas: destinationWords, rejects: notAnOuting,
+                  kind: .park,
+                  themes: [.outdoors], times: [.afternoon]),
+            Group(categories: [.beach, .marina], nameHas: destinationWords, rejects: notAnOuting,
+                  kind: .walk,
+                  themes: [.outdoors], times: [.afternoon, .evening]),
             Group(categories: [.museum], kind: .museum,
-                  themes: [.craft, .buildings], times: [.afternoon], roles: [.main]),
+                  themes: [.craft, .buildings], times: [.afternoon]),
             Group(categories: [.library], kind: .library,
-                  themes: [.words, .buildings], times: [.afternoon], roles: [.opener, .main]),
-            // Dinner is the main thing of an evening, as often as not, so a
-            // restaurant can be the anchor as well as the last stop.
+                  themes: [.words, .buildings], times: [.afternoon]),
             Group(categories: [.restaurant], kind: .food,
-                  themes: [.food], times: [.afternoon, .evening], roles: [.main, .closer]),
+                  themes: [.food], times: [.afternoon, .evening], keep: 25),
             Group(categories: [.brewery, .winery, .nightlife], kind: .bar,
-                  themes: [.food, .night], times: [.evening], roles: [.opener, .closer]),
-            Group(categories: [.store], query: "bookstore", kind: .shop,
-                  themes: [.words], times: [.afternoon], roles: [.opener]),
-            Group(categories: [.store], query: "record store", kind: .shop,
-                  themes: [.sound], times: [.afternoon], roles: [.opener]),
+                  themes: [.food, .night], times: [.evening]),
+            Group(categories: [.store], query: "bookstore", nameHas: ["book", "librair", "librer"],
+                  kind: .shop, themes: [.words], times: [.afternoon]),
+            Group(categories: [.store], query: "record store", nameHas: ["record", "vinyl", "disque"],
+                  kind: .shop, themes: [.sound], times: [.afternoon]),
             // "Something live": a performance rather than a bar, so "I don't
-            // drink" leaves it in.
-            Group(categories: [.theater], kind: .show,
-                  themes: [.words, .sound], times: [.evening], roles: [.main]),
-            // Somewhere to do something together. Arcades and board-game cafés
-            // have no category of their own, so they are asked for by name, with
-            // no category filter at all.
-            Group(categories: [], query: "arcade", kind: .activity,
-                  themes: [.play], times: [.afternoon, .evening], roles: [.opener, .main]),
-            Group(categories: [], query: "board game cafe", kind: .activity,
-                  themes: [.play, .food], times: [.afternoon, .evening], roles: [.opener, .main]),
+            // drink" leaves it in. An outdoor stage is not one unless its
+            // name says theatre -- with nothing on, it is a lawn.
+            Group(categories: shows, rejects: outdoorStageWords, unlessHas: ["theatre", "theater", "playhouse", "hall", "club"],
+                  kind: .show, themes: [.words, .sound], times: [.evening]),
+            Group(categories: [.movieTheater], kind: .cinema,
+                  themes: [.craft], times: [.afternoon, .evening]),
+            Group(categories: dayOut, kind: .attraction,
+                  themes: [.play], times: [.afternoon]),
+            Group(categories: [.museum, .store], query: "art gallery", nameHas: ["gallery", "galerie", "art"],
+                  kind: .museum, themes: [.craft], times: [.afternoon]),
+            Group(categories: [.nightlife, .theater], query: "comedy club",
+                  nameHas: ["comedy", "laugh", "improv", "funny", "comic"],
+                  kind: .show, themes: [.words, .night], times: [.evening]),
+            Group(categories: [.amusementPark, .store, .nightlife], query: "escape room", nameHas: ["escape"],
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            // Games, for the people who write "Gaming" or "arcade" -- among the
+            // commonest interests anybody writes. Held to the same checks as
+            // everything else: Apple's own category, and a name that says so.
+            Group(categories: [.amusementPark, .nightlife, .store], query: "arcade",
+                  nameHas: ["arcade", "barcade", "pinball", "game", "pixel", "token"],
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            Group(categories: [.cafe, .restaurant, .store, .nightlife], query: "board game cafe",
+                  nameHas: ["game", "board", "dice", "meeple", "snakes"],
+                  kind: .play, themes: [.play, .food], times: [.afternoon, .evening]),
         ]
+        // Bowling, mini golf, go-karts, climbing, skating: categories of their
+        // own from iOS 18. Before that, the escape-room search is the one
+        // game on the list.
         if #available(iOS 18.0, *) {
-            groups.append(Group(categories: [.musicVenue], kind: .show,
-                                themes: [.sound, .night], times: [.evening], roles: [.main, .closer]))
-            groups.append(Group(categories: [.bowling, .miniGolf, .goKart], kind: .activity,
-                                themes: [.play, .active], times: [.afternoon, .evening], roles: [.main]))
-            groups.append(Group(categories: [.rockClimbing], kind: .activity,
-                                themes: [.active], times: [.afternoon, .evening], roles: [.main]))
+            groups.append(Group(categories: [.bowling, .miniGolf, .goKart, .rockClimbing, .skating],
+                                kind: .play, themes: [.play, .active], times: [.afternoon, .evening]))
+        }
+        // A restaurant search by cuisine finds places the plain one ranks too
+        // low to return. The name need not say "ramen" -- the category does
+        // the checking.
+        for cuisine in cuisines {
+            groups.append(Group(categories: [.restaurant], query: "\(cuisine) restaurant", kind: .food,
+                                themes: [.food], times: [.afternoon, .evening], keep: 8))
         }
         return groups
     }
 
+    /// What a park, a beach or a waterfront has in its name when it is
+    /// somewhere to spend an afternoon. "Jane and Finch" -- a corner, filed as
+    /// a park -- has none of them.
+    private static let destinationWords = [
+        "park", "garden", "gardens", "trail", "beach", "waterfront", "conservation",
+        "ravine", "island", "pier", "harbour", "harbor", "boardwalk", "lake", "falls",
+        "forest", "woods", "valley", "bluffs", "botanical", "arboretum", "marina", "quay",
+    ]
+
+    /// An outdoor stage, bandshell or pavilion: a place for an event, and
+    /// with no event on, nowhere in particular.
+    private static let outdoorStageWords = [
+        "stage", "bandshell", "band shell", "amphitheatre", "amphitheater", "pavilion", "gazebo",
+    ]
+
+    /// Words in a name that mean it is not somewhere to spend part of a date:
+    /// a ticket seller, a mall, a station, an office. Matched as whole words,
+    /// in every search -- so nothing here may be a word a good café or
+    /// restaurant could have in its name.
+    private static let notAPlace: [String] = [
+        "ticketmaster", "box office", "tickets", "mall", "plaza", "shopping centre",
+        "shopping center", "outlet", "station", "terminal", "parking", "headquarters",
+        "office", "offices", "corporate", "warehouse", "distribution", "wholesale",
+        "gas", "atm", "bank", "clinic", "hospital", "pharmacy", "school", "church",
+    ]
+
+    /// Outdoors only: a park by name that is not an afternoon -- a parkette,
+    /// a playground, a dog run, a square, a statue.
+    private static let notAnOuting = [
+        "parkette", "playground", "splash pad", "dog park", "off leash", "square",
+        "cenotaph", "monument", "statue", "fountain",
+    ]
+
+    /// Somewhere to go, by its name and Apple's own category for it.
+    private static func isAPlace(_ item: MKMapItem, name: String, group: Group) -> Bool {
+        // Apple's category has to be one this search asked for. A result with
+        // none at all is an address or an area -- an intersection, a
+        // neighbourhood -- not a place.
+        guard let category = item.pointOfInterestCategory,
+              group.categories.contains(category) else { return false }
+        let lower = name.lowercased()
+        let wordsInName = " " + lower.split { !$0.isLetter }.joined(separator: " ") + " "
+        func has(_ word: String) -> Bool { wordsInName.contains(" " + word + " ") }
+        if let words = group.nameHas, !words.contains(where: { lower.contains($0) }) { return false }
+        if group.rejects.contains(where: has), !group.unlessHas.contains(where: { lower.contains($0) }) {
+            return false
+        }
+        return !notAPlace.contains(where: has)
+    }
+
     /// Every group at once, around one point. Nil if any search failed outright,
     /// because a plan built from the half that answered would be quietly wrong.
-    private static func venues(around point: Coordinate, radius: Double) async -> [Venue]? {
+    private static func venues(around point: Coordinate, radius: Double,
+                               cuisines: [String]) async -> [Venue]? {
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
             latitudinalMeters: radius * 2, longitudinalMeters: radius * 2
         )
-        let groups = groups
+        let groups = groups(cuisines: cuisines)
         let results = await withTaskGroup(of: (Int, [Venue]?).self) { tasks in
             for (index, group) in groups.enumerated() {
                 tasks.addTask { (index, await search(group, in: region)) }
@@ -159,8 +282,18 @@ enum VenueSearch {
 
         // In group order, each place once: a brewery that is also a restaurant
         // keeps whichever line found it first.
+        //
+        // **And inside the area that was asked about.** A search by name --
+        // "ramen restaurant", "bookstore" -- takes the region as a hint, not a
+        // fence, and answers with the best match in the city: a place sixteen
+        // kilometres away is a fine answer to Apple and a wrong one here. The
+        // planner limits how far a stop may be from either of you, but only
+        // when it knows where you both are; this holds whether it does or not.
+        let limitKm = radius / 1000 * 1.25
         var seen = Set<String>()
-        return results.compactMap { $0 }.joined().filter { seen.insert($0.id).inserted }
+        return results.compactMap { $0 }.joined().filter {
+            DatePlanner.km(point, $0.coordinate) <= limitKm && seen.insert($0.id).inserted
+        }
     }
 
     private static func search(_ group: Group, in region: MKCoordinateRegion) async -> [Venue]? {
@@ -171,11 +304,7 @@ enum VenueSearch {
                 let request = MKLocalSearch.Request()
                 request.naturalLanguageQuery = query
                 request.resultTypes = .pointOfInterest
-                // No categories means the name is the whole search: a filter
-                // including nothing would find nothing.
-                if !group.categories.isEmpty {
-                    request.pointOfInterestFilter = filter
-                }
+                request.pointOfInterestFilter = filter
                 request.region = region
                 items = try await MKLocalSearch(request: request).start().mapItems
             } else {
@@ -189,14 +318,14 @@ enum VenueSearch {
         } catch {
             return nil
         }
-        // Ten of each is plenty to rank, and keeps one kind from outnumbering
-        // the rest in a big city.
-        return items.prefix(10).compactMap { venue(from: $0, group: group) }
+        // Checked first, then counted: ten real places of each kind (more
+        // restaurants) keeps one kind from outnumbering the rest in a big city.
+        return Array(items.compactMap { venue(from: $0, group: group) }.prefix(group.keep))
     }
 
     private static func venue(from item: MKMapItem, group: Group) -> Venue? {
         guard let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else { return nil }
+              !name.isEmpty, isAPlace(item, name: name, group: group) else { return nil }
         let mark = item.placemark
         let point = Coordinate(latitude: mark.coordinate.latitude,
                                longitude: mark.coordinate.longitude)
@@ -210,8 +339,7 @@ enum VenueSearch {
             // "Jazz Bar", "Paper & Ink Books": the name says what the category
             // cannot.
             themes: group.themes.union(DateTheme.themes(in: name)),
-            times: group.times,
-            roles: group.roles
+            times: group.times
         )
     }
 

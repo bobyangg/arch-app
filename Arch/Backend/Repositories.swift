@@ -846,6 +846,47 @@ enum ArchBackend {
         return byID
     }
 
+    // MARK: Places not to offer
+
+    /// The places you said were "Not for us", and the ones taken off for
+    /// everybody (`backend/032`), as one set of keys. Never fails the planner:
+    /// an empty set plans as before, which is also what a database without
+    /// 032 gives.
+    static func placesNotToOffer() async -> Set<String> {
+        struct Row: Decodable { let placeKey: String }
+        guard let session = await SupabaseClient.shared.restore() else { return [] }
+        async let mine: [Row]? = try? SupabaseClient.shared.select(
+            "hidden_places", columns: "place_key",
+            filters: ["account_id": "eq.\(session.userID)"]
+        )
+        async let everyone: [Row]? = try? SupabaseClient.shared.select(
+            "place_blocklist", columns: "place_key"
+        )
+        return Set(((await mine) ?? []).map(\.placeKey) + ((await everyone) ?? []).map(\.placeKey))
+    }
+
+    /// "Not for us": this place, never again, on any of your phones.
+    static func hidePlace(key: String, name: String) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        struct Write: Encodable { let accountId: String; let placeKey: String; let name: String }
+        try await SupabaseClient.shared.upsert("hidden_places", [Write(
+            accountId: session.userID, placeKey: key, name: String(name.prefix(200))
+        )])
+    }
+
+    /// Undo.
+    static func unhidePlace(key: String) async throws {
+        guard let session = await SupabaseClient.shared.restore() else {
+            throw ArchAPIError.notSignedIn
+        }
+        try await SupabaseClient.shared.delete(
+            "hidden_places",
+            filters: ["account_id": "eq.\(session.userID)", "place_key": "eq.\(key)"]
+        )
+    }
+
     /// Yours, whole. An upsert, because answering again replaces what you said.
     static func saveDatePreferences(_ preferences: DatePreferences, at time: Date = .now) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
