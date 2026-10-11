@@ -1303,13 +1303,19 @@ enum MockData {
                                      stops: [
                         .init(start: 18 * 60 + 30, name: "Short Fuse Coffee", kind: "Coffee",
                               neighbourhood: "Williamsburg", travel: nil,
-                              reason: "A short walk from Domino Park."),
+                              reason: "A short walk from Domino Park.",
+                              minutes: 60, category: "food", placeID: "short-fuse",
+                              latitude: 40.7160, longitude: -73.9590, kindKey: "coffee"),
                         .init(start: 19 * 60 + 30, name: "Domino Park", kind: "A walk",
                               neighbourhood: "Williamsburg", travel: "12 min walk",
-                              reason: "You both like being outside."),
+                              reason: "You both like being outside.",
+                              minutes: 60, category: "activity", placeID: "domino-park",
+                              latitude: 40.7145, longitude: -73.9682, kindKey: "walk"),
                         .init(start: 20 * 60 + 40, name: "Wide Bowl Noodles", kind: "Something to eat",
                               neighbourhood: "Williamsburg", travel: "8 min walk",
-                              reason: "A short walk from Domino Park.")
+                              reason: "A short walk from Domino Park.",
+                              minutes: 60, category: "food", placeID: "wide-bowl",
+                              latitude: 40.7135, longitude: -73.9620, kindKey: "food")
                     ])
                 )
             ],
