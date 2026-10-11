@@ -389,6 +389,29 @@ enum DatePlanner {
     /// From when a stop counts as part of the evening.
     private static let eveningFrom = 17 * 60
 
+    // How far is too far. A shared interest is worth 3; these are per km.
+    private static let kmFromHalfwayCost = 2.0
+    private static let kmFromNeighbourCost = 2.5
+    /// The furthest a place may be from either of you when you live close.
+    private static let nearbyKm = 6.0
+    /// How far past halfway a place may be, for two people further apart.
+    private static let pastHalfwayKm = 2.0
+    /// At most this much, per place, to tell near-equals apart.
+    private static let varietyNudge = 1.0
+    /// What being in a plan you already sent this person costs a place.
+    private static let alreadySharedCost = 2.0
+
+    /// FNV-1a. The same number for the same words on every phone and every
+    /// launch, which Swift's own `hashValue` deliberately is not.
+    private static func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return hash
+    }
+
     /// `items` are what you added, in order. A blank one is skipped; the rest
     /// each become a stop, if anywhere fits.
     ///
@@ -400,6 +423,10 @@ enum DatePlanner {
     /// (see `VenueSearch`): a profile from the server names a neighbourhood but
     /// carries no position, so its centre has to be looked up, and the halfway
     /// point has to be named by something that knows more than New York.
+    ///
+    /// `alreadyShared` is the names of places in plans already sent to this
+    /// person. They are not ruled out -- a favourite is a favourite -- but they
+    /// come after somewhere new.
     static func plan(
         you: Person,
         them: Person,
@@ -408,7 +435,8 @@ enum DatePlanner {
         venues: [Venue],
         items: [PlanItem],
         theirCentre: Coordinate? = nil,
-        halfwayName: String? = nil
+        halfwayName: String? = nil,
+        alreadyShared: Set<String> = []
     ) -> DatePlan {
         // What you each said a date should be like. Either may be missing:
         // somebody who has not answered is planned for from interests alone.
@@ -430,20 +458,54 @@ enum DatePlanner {
         let theirPoint = theirCentre ?? them.place?.centre
         let middle = Self.middle(yourPoint, theirPoint)
 
+        /// **Variety, without a dice roll on every draw.** Apple Maps calls
+        /// every restaurant "restaurant", so to the planner they all score the
+        /// same and the nearest one won every time -- and when two tied, the
+        /// one first in the alphabet did. A small nudge per place, worked out
+        /// from the two of you and the day, spreads the picks: a different
+        /// pair, or another day, gets different places, while the plan on
+        /// screen holds still and a Swap is still the next one along.
+        let seed = "\(you.id)|\(them.id)|\(day?.iso ?? "")"
+        func nudge(_ venue: Venue) -> Double {
+            Double(stableHash(seed + "|" + venue.id) % 1000) / 1000 * Self.varietyNudge
+        }
+
         func liking(_ venue: Venue) -> Double {
             3.0 * Double(venue.themes.intersection(shared).count)
                 + 1.0 * Double(venue.themes.intersection(oneSided).count)
                 + fit.score(venue)
+                + nudge(venue)
+                - (alreadyShared.contains(venue.name) ? Self.alreadySharedCost : 0)
         }
 
         /// Near halfway, and about as far for one of you as for the other.
+        /// Weighed so that distance can win: at the old weights a shared
+        /// interest was worth four kilometres, and a place across town that
+        /// matched one beat everything round the corner.
         func between(_ venue: Venue) -> Double {
             var cost = 0.0
-            if let middle { cost += 0.8 * km(middle, venue.coordinate) }
+            if let middle { cost += Self.kmFromHalfwayCost * km(middle, venue.coordinate) }
             if let yourPoint, let theirPoint {
-                cost += 0.5 * abs(km(yourPoint, venue.coordinate) - km(theirPoint, venue.coordinate))
+                cost += 1.0 * abs(km(yourPoint, venue.coordinate) - km(theirPoint, venue.coordinate))
             }
             return cost
+        }
+
+        /// **Never far from either of you.** No further from the one it is
+        /// further from than halfway plus a little -- or, for two people who
+        /// live close, than a short trip. Without it a plan reached as far as
+        /// the search did, which in a quiet place was twenty kilometres.
+        let reachLimit: Double? = {
+            switch (yourPoint, theirPoint) {
+            case let (a?, b?): return max(Self.nearbyKm, km(a, b) / 2 + Self.pastHalfwayKm)
+            case (_?, nil), (nil, _?): return Self.nearbyKm
+            default: return nil
+            }
+        }()
+        func withinReach(_ venue: Venue) -> Bool {
+            guard let reachLimit else { return true }
+            return [yourPoint, theirPoint].compactMap { $0 }
+                .allSatisfy { km($0, venue.coordinate) <= reachLimit }
         }
 
         // The items that have been told what they are, in your order.
@@ -471,6 +533,7 @@ enum DatePlanner {
             let part: DatePlan.TimeOfDay = window.start >= Self.eveningFrom ? .evening : .afternoon
             return venues.filter {
                 $0.kind.category == category && $0.times.contains(part) && $0.isOpen(on: day)
+                    && withinReach($0)
                     && $0.openingHours.covers(from: window.start, to: window.end)
                     && !used.contains($0.id) && fit.allows($0)
             }
@@ -479,7 +542,7 @@ enum DatePlanner {
         func pick(_ pool: [Venue], skips: Int, by score: (Venue) -> Double) -> Venue? {
             let ranked = pool.sorted {
                 let a = score($0), b = score($1)
-                return a == b ? $0.id < $1.id : a > b
+                return a == b ? stableHash($0.id) < stableHash($1.id) : a > b
             }
             guard !ranked.isEmpty else { return nil }
             return ranked[skips % ranked.count]
@@ -531,7 +594,7 @@ enum DatePlanner {
         /// any order a walkable date had a train in it.
         func score(_ venue: Venue, near reference: Venue?) -> Double {
             guard let reference else { return liking(venue) - between(venue) }
-            return liking(venue) - 1.5 * km(reference.coordinate, venue.coordinate)
+            return liking(venue) - Self.kmFromNeighbourCost * km(reference.coordinate, venue.coordinate)
         }
 
         /// "Keep it walkable": only what is a walk from that stop. It gives way

@@ -163,7 +163,8 @@ struct DatePlannerView: View {
                                                     day: day, venues: found?.venues ?? venues,
                                                     items: items,
                                                     theirCentre: found?.theirCentre,
-                                                    halfwayName: found?.halfway)
+                                                    halfwayName: found?.halfway,
+                                                    alreadyShared: alreadyShared(with: chosen))
                         if isLive && (found?.venues.isEmpty ?? true) {
                             preferencesRow
                             dayRow
@@ -249,6 +250,17 @@ struct DatePlannerView: View {
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+    }
+
+    /// The places in plans you have already sent this person, so the planner
+    /// can offer somewhere new first. Read off the conversation, which already
+    /// holds every plan sent in it.
+    private func alreadyShared(with candidate: PlannerCandidate) -> Set<String> {
+        Set(candidate.conversation.messages
+            .filter(\.isOutgoing)
+            .compactMap(\.plan?.stops)
+            .joined()
+            .map(\.name))
     }
 
     /// Every item back to the best place in its ranking.
