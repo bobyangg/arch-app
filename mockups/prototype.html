@@ -238,13 +238,13 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
               font-size:15px; font-weight:600; color:var(--mortar); text-align:center;}
 .ptime button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
 /* The next seven days, tomorrow first: weekday over date. */
-.pday{display:flex; gap:4px;}
-.pday button{flex:1; min-width:0; height:56px; border-radius:var(--r-control); background:var(--stone);
-             display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
-             color:var(--mortar);}
-.pday button .wd{font-size:12px;}
-.pday button .dn{font-size:15px; font-weight:600;}
-.pday button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+/* The day: a button drawn in the app's own style that opens the calendar. The
+   input underneath is the browser's, kept out of sight but not out of reach,
+   so its calendar opens from the button. */
+.pdate{position:relative; display:flex; align-items:center; width:100%; min-height:56px; padding:0 16px;
+       border-radius:var(--r-control); background:var(--stone); text-align:left;}
+.pdate .chg{margin-left:auto; font-size:13px; color:var(--lamp);}
+.pdate input{position:absolute; inset:0; opacity:0; pointer-events:none;}
 /* Items: a blank one is a dashed outline with the choice of what it is; a
    filled one is a stop with its hours under it. */
 .pblank{padding:16px; border-radius:var(--r-card); border:1px dashed var(--quiet);}
@@ -1615,6 +1615,12 @@ function planDate(you,them,time,items,day,alreadyShared){
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
+/* The days the planner offers: tomorrow, to three months ahead. */
+const DAYS_AHEAD=90;
+const firstDay=()=>upcomingDays()[0];
+const lastDay=()=>{const t=new Date(); t.setHours(12,0,0,0); t.setDate(t.getDate()+DAYS_AHEAD); return isoDay(t);};
+const plannerDay=d=>d&&d>=firstDay()&&d<=lastDay()?d:firstDay();
+
 /* Places in plans you have already sent this person. */
 const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
 
@@ -1754,8 +1760,7 @@ function plannerRoot(){
       <button class="btn quiet mt-s" data-a="tab" data-k="daily">See your matches</button></div></div></div>`;
   }
   const cur=cands.find(c=>c.p.id===P_.with)||cands[0];
-  const time=plannerTime(cur), days=upcomingDays();
-  const day=days.includes(P_.day)?P_.day:days[0];
+  const time=plannerTime(cur), day=plannerDay(P_.day);
   const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo));
 
   h+=`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>
@@ -1770,11 +1775,13 @@ function plannerRoot(){
   if(plan.halfway) h+=`<div class="footnote mortar mt-s">About halfway: ${esc(plan.halfway)}</div>`;
   h+=prefRow;
 
-  /* The next seven days, tomorrow first. */
-  h+=`<div class="subhead mt-l">When</div><div class="pday mt-s">`+days.map((d,i)=>
-    `<button data-a="planDay" data-k="${d}" aria-pressed="${d===day}"
-      aria-label="${i===0?"Tomorrow, ":""}${esc(dayLong(d))}">
-      <span class="wd">${esc(dayShort(d))}</span><span class="dn">${dayDate(d).getDate()}</span></button>`).join("")+`</div>`;
+  /* The day, as a button that opens a calendar: tomorrow to three months on. */
+  h+=`<div class="subhead mt-l">When</div>
+    <button class="pdate mt-s" data-a="planDateOpen" aria-label="Date, ${esc(dayLong(day))}">
+      <div class="v"><div class="subhead">${esc(dayLong(day))}</div>
+        ${day===firstDay()?`<div class="caption mortar">Tomorrow</div>`:""}</div>
+      <span class="chg">Change</span>
+      <input type="date" id="planDateInput" value="${day}" min="${firstDay()}" max="${lastDay()}" tabindex="-1" aria-hidden="true"></button>`;
 
   h+=`<div class="ptime mt-s">`+["afternoon","evening"].map(t=>
     `<button data-a="planTime" data-k="${t}" aria-pressed="${time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")+`</div>`;
@@ -3158,7 +3165,8 @@ document.addEventListener("click",e=>{
     introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
       S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,items:restartSwaps(),sent:null}; render();},
-    planDay:()=>{S.planner={...S.planner,day:el.dataset.k,items:restartSwaps(),sent:null}; render();},
+    planDateOpen:()=>{const i=document.getElementById("planDateInput"); if(!i) return;
+      try{ i.showPicker(); }catch(e){ i.style.pointerEvents="auto"; i.focus(); i.click(); }},
     planSwap:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice();
       items[i]={...items[i],skips:items[i].skips+1}; S.planner={...P_,items,sent:null,replanned:null}; render();},
     planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
@@ -3186,7 +3194,7 @@ document.addEventListener("click",e=>{
     planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         to=cands.find(c=>c.p.id===id);
       if(!cur||!to) return;
-      const days=upcomingDays(), day=days.includes(S.planner.day)?S.planner.day:days[0];
+      const day=plannerDay(S.planner.day);
       const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.items,day,sharedPlaces(cur.convo));
       to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
         {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
@@ -3528,6 +3536,7 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
+  if(t.id==="planDateInput"){ if(t.value){ S.planner={...S.planner,day:plannerDay(t.value),items:restartSwaps(),sent:null}; render(); } return; }
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
   if(t.dataset.s==="email"){ S.set.email=t.value; return; }
