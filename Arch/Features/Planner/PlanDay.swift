@@ -8,10 +8,11 @@ import Foundation
 /// Saturday on both phones, so what travels is the day itself, and each phone
 /// reads it in its own calendar.
 ///
-/// **From tomorrow, for a week.** Not today: Arch is deliberately unhurried,
-/// and a plan made with somebody you have only been writing to is not a plan
-/// for tonight. Not further than a week, because past that a plan is a promise
-/// about a week neither of you can see yet.
+/// **From tomorrow, up to three months ahead.** Not today: Arch is
+/// deliberately unhurried, and a plan made with somebody you have only been
+/// writing to is not a plan for tonight. It was a week, offered as a row of
+/// seven; a calendar lets a date be planned around a concert or a holiday, and
+/// three months is as far as anybody plans a date with somebody new.
 struct PlanDay: Hashable, Identifiable, Comparable {
     let year: Int
     let month: Int
@@ -47,13 +48,33 @@ struct PlanDay: Hashable, Identifiable, Comparable {
 
     static var today: PlanDay { PlanDay(.now) }
 
-    /// The days the planner offers: tomorrow and the six after it.
-    static func upcoming(from now: Date = .now, calendar: Calendar = .current) -> [PlanDay] {
+    /// How far ahead a date can be planned, in days.
+    static let daysAhead = 90
+
+    /// The first day the planner offers: tomorrow.
+    static func earliest(from now: Date = .now, calendar: Calendar = .current) -> PlanDay {
+        PlanDay(calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now,
+                calendar: calendar)
+    }
+
+    /// The last day the planner offers.
+    static func latest(from now: Date = .now, calendar: Calendar = .current) -> PlanDay {
+        PlanDay(calendar.date(byAdding: .day, value: daysAhead, to: calendar.startOfDay(for: now)) ?? now,
+                calendar: calendar)
+    }
+
+    /// The days from tomorrow, for as many as are asked for. Used where a few
+    /// upcoming days are wanted by weekday, such as the design build's plans.
+    static func upcoming(_ count: Int = 7, from now: Date = .now,
+                         calendar: Calendar = .current) -> [PlanDay] {
         let start = calendar.startOfDay(for: now)
-        return (1...7).compactMap { offset in
+        return (1...max(count, 1)).compactMap { offset in
             calendar.date(byAdding: .day, value: offset, to: start).map { PlanDay($0, calendar: calendar) }
         }
     }
+
+    /// Whether this day can be planned for now: from tomorrow, within range.
+    var isPlannable: Bool { self >= Self.earliest() && self <= Self.latest() }
 
     static func < (a: PlanDay, b: PlanDay) -> Bool { a.iso < b.iso }
 

@@ -362,11 +362,16 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
         XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
 
-        // A week of days, and picking one still leaves the whole plan.
-        XCTAssertTrue(app.buttons["planner.day.6"].exists, "The planner should offer seven days.")
-        app.buttons["planner.day.6"].tap()
-        XCTAssertTrue(app.buttons["planner.day.6"].isSelected, "Tapping a day did not pick it.")
-        XCTAssertEqual(stops.count, 3, "Picking a day lost the plan.")
+        // The date opens a calendar, and closing it still leaves the whole
+        // plan. Which day is tapped is left alone: a calendar shows the month
+        // of the date it opens on, and tomorrow may be its last day.
+        app.buttons["planner.date"].tap()
+        XCTAssertTrue(app.datePickers["planner.calendar"].waitForExistence(timeout: 5),
+                      "The date did not open a calendar.")
+        app.buttons["planner.dateDone"].tap()
+        XCTAssertTrue(app.buttons["planner.date"].waitForExistence(timeout: 5),
+                      "Done did not close the calendar.")
+        XCTAssertEqual(stops.count, 3, "Opening the calendar lost the plan.")
 
         // Swapping a stop has to leave a plan behind, not an empty screen. The
         // anchor always has a Swap here: more than one place can anchor it.
