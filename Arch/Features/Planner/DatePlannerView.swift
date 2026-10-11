@@ -107,15 +107,16 @@ struct DatePlannerView: View {
         candidates.first { $0.id == chosenID } ?? candidates.first
     }
 
-    /// The days on offer, worked out each time the screen is drawn so that a
-    /// planner left open overnight moves on with the calendar.
-    private var days: [PlanDay] { PlanDay.upcoming() }
-
-    /// The day you picked, if it is still on offer; otherwise tomorrow.
+    /// The day you picked, if it can still be planned for; otherwise
+    /// tomorrow. Worked out on every draw, so a planner left open overnight
+    /// moves on with the calendar.
     private var day: PlanDay? {
-        if let pickedDay, days.contains(pickedDay) { return pickedDay }
-        return days.first
+        if let pickedDay, pickedDay.isPlannable { return pickedDay }
+        return PlanDay.earliest()
     }
+
+    /// The calendar, while it is open.
+    @State private var choosingDate = false
 
     /// What the rankings are built from that can change under you: your
     /// interests, and the interests of the person you are planning with.
@@ -163,7 +164,8 @@ struct DatePlannerView: View {
                                                     day: day, venues: found?.venues ?? venues,
                                                     items: items,
                                                     theirCentre: found?.theirCentre,
-                                                    halfwayName: found?.halfway)
+                                                    halfwayName: found?.halfway,
+                                                    alreadyShared: alreadyShared(with: chosen))
                         if isLive && (found?.venues.isEmpty ?? true) {
                             preferencesRow
                             dayRow
@@ -249,6 +251,17 @@ struct DatePlannerView: View {
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+    }
+
+    /// The places in plans you have already sent this person, so the planner
+    /// can offer somewhere new first. Read off the conversation, which already
+    /// holds every plan sent in it.
+    private func alreadyShared(with candidate: PlannerCandidate) -> Set<String> {
+        Set(candidate.conversation.messages
+            .filter(\.isOutgoing)
+            .compactMap(\.plan?.stops)
+            .joined()
+            .map(\.name))
     }
 
     /// Every item back to the best place in its ranking.
@@ -444,44 +457,57 @@ struct DatePlannerView: View {
         }
     }
 
-    /// The next seven days, tomorrow first. A row of their own rather than a
-    /// calendar: a week is all the planner offers, and seven things fit on a
-    /// phone without a second screen to choose between them.
+    /// The day, as a button that opens a calendar. The button is drawn here
+    /// rather than being the system's compact date picker, because the app
+    /// draws its own controls and a stock grey capsule would be the only one
+    /// on the screen; the calendar itself is the system's, which is the one
+    /// people already know how to use.
     private var dayRow: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Text("When")
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
 
-            HStack(spacing: ArchSpacing.xxs) {
-                ForEach(Array(days.enumerated()), id: \.element) { index, option in
-                    let isOn = option == day
-                    Button { pickedDay = option } label: {
-                        VStack(spacing: 2) {
-                            Text(option.shortWeekday)
+            Button { choosingDate = true } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(day?.long ?? "Pick a day")
+                            .archText(.subhead)
+                            .foregroundStyle(ArchColor.limestone)
+                        if day == PlanDay.earliest() {
+                            Text("Tomorrow")
                                 .archText(.caption)
-                                .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
-                            Text(option.dayNumber)
-                                .archText(.subhead)
-                                .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                                .foregroundStyle(ArchColor.mortar)
                         }
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 56)
-                        .background(
-                            RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                                .fill(isOn ? ArchColor.stoneRaised : ArchColor.stone)
-                        )
                     }
-                    .buttonStyle(PressScaleStyle(scale: 0.97))
-                    .accessibilityLabel(index == 0 ? "Tomorrow, \(option.long)" : option.long)
-                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityIdentifier("planner.day.\(index)")
+                    Spacer(minLength: ArchSpacing.s)
+                    Text("Change")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.lamp)
                 }
+                .padding(.horizontal, ArchSpacing.m)
+                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                        .fill(ArchColor.stone)
+                )
+                .contentShape(Rectangle())
             }
+            .buttonStyle(PressScaleStyle(scale: 0.99))
+            .accessibilityLabel("Date, \(day?.long ?? "not chosen")")
+            .accessibilityHint("Opens a calendar")
+            .accessibilityIdentifier("planner.date")
         }
         .padding(.bottom, ArchSpacing.s)
+        .sheet(isPresented: $choosingDate) {
+            PlanDatePicker(
+                selection: Binding(
+                    get: { day ?? PlanDay.earliest() },
+                    set: { pickedDay = $0 }
+                ),
+                onDone: { choosingDate = false }
+            )
+        }
     }
 
     /// Two choices, so two buttons rather than a system segmented control: the
@@ -920,6 +946,46 @@ struct ShareWithSheet: View {
         .padding(.bottom, ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .archSheetBackground()
+    }
+}
+
+/// Choosing the day of the date: the system calendar, from tomorrow to three
+/// months ahead, in the app's accent. The choice takes effect as it is made,
+/// so the plan behind the sheet is already for the new day when it closes.
+struct PlanDatePicker: View {
+    @Binding var selection: PlanDay
+    let onDone: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.m) {
+            Text("When is the date?")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+                .padding(.top, ArchSpacing.xl)
+
+            DatePicker(
+                "Date",
+                selection: Binding(
+                    get: { selection.date },
+                    set: { selection = PlanDay($0) }
+                ),
+                in: PlanDay.earliest().date...PlanDay.latest().date,
+                displayedComponents: .date
+            )
+            .datePickerStyle(.graphical)
+            .labelsHidden()
+            .tint(ArchColor.lamp)
+            .accessibilityIdentifier("planner.calendar")
+
+            ArchButton(title: "Done", action: onDone)
+                .accessibilityIdentifier("planner.dateDone")
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .archSheetBackground()
     }

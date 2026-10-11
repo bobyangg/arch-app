@@ -19,6 +19,14 @@ import MapKit
 ///
 /// **Opening hours are not something MapKit tells an app**, so a plan can name a
 /// café that is shut on Sundays. The screen says to check, rather than pretend.
+/// Nor are ratings or review counts: Apple keeps both inside Maps.
+///
+/// **Not everything Apple returns is somewhere to go.** A search for bookshops
+/// in the "store" category came back with a ticket office and a shopping mall,
+/// and the planner offered them as the main thing of a date. Every result is
+/// now checked: its own category has to be one that was asked for, a search
+/// by words has to find those words in the name, and names that are never a
+/// date -- box offices, malls, stations -- are left out.
 enum VenueSearch {
 
     /// What the planner needs for one person: where they are, in the only
@@ -55,11 +63,14 @@ enum VenueSearch {
             return Nearby(theirCentre: theirCentre, halfway: nil, venues: [])
         }
 
-        // Close first, then wider. A city has enough within a couple of
-        // kilometres for a date on foot; a small town may need the whole town.
+        // Close first, then wider -- but never wide. A city has enough within
+        // a couple of kilometres; a small town gets its own few places rather
+        // than the next town's. This went to twenty kilometres, and the
+        // planner took what it found.
+        let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        for radius in [2_500.0, 8_000.0, 20_000.0] {
-            guard let venues = await venues(around: middle, radius: radius) else {
+        for radius in [2_500.0, 5_000.0, 8_000.0] {
+            guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
                 if found == nil { return nil }
                 break
@@ -89,12 +100,31 @@ enum VenueSearch {
         let categories: [MKPointOfInterestCategory]
         /// For the few things with no category of their own, like bookshops.
         var query: String? = nil
+        /// For a search by words: the name has to contain one of these, or it
+        /// is not what was searched for.
+        var nameHas: [String]? = nil
         let kind: Venue.Kind
         let themes: Set<DateTheme>
         let times: Set<DatePlan.TimeOfDay>
+        /// How many to keep. Restaurants all look alike to the planner, so it
+        /// needs more of them to choose between.
+        var keep = 10
     }
 
-    private static var groups: [Group] {
+    /// What kinds of food to search for by name, besides "restaurant": three a
+    /// pair, from this list, so two people do not get the same handful of
+    /// places every time and different pairs get different ones.
+    private static let cuisineQueries = ["ramen", "tacos", "pizza", "dumplings", "brunch",
+                                         "thai", "sushi", "pho", "falafel", "curry"]
+
+    private static func cuisines(for seed: String) -> [String] {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in seed.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
+        let start = Int(hash % UInt64(cuisineQueries.count))
+        return (0..<3).map { cuisineQueries[(start + $0 * 3) % cuisineQueries.count] }
+    }
+
+    private static func groups(cuisines: [String]) -> [Group] {
         var groups = [
             Group(categories: [.cafe, .bakery], kind: .coffee,
                   themes: [.food], times: [.afternoon]),
@@ -107,13 +137,13 @@ enum VenueSearch {
             Group(categories: [.library], kind: .library,
                   themes: [.words, .buildings], times: [.afternoon]),
             Group(categories: [.restaurant], kind: .food,
-                  themes: [.food], times: [.afternoon, .evening]),
+                  themes: [.food], times: [.afternoon, .evening], keep: 25),
             Group(categories: [.brewery, .winery, .nightlife], kind: .bar,
                   themes: [.food, .night], times: [.evening]),
-            Group(categories: [.store], query: "bookstore", kind: .shop,
-                  themes: [.words], times: [.afternoon]),
-            Group(categories: [.store], query: "record store", kind: .shop,
-                  themes: [.sound], times: [.afternoon]),
+            Group(categories: [.store], query: "bookstore", nameHas: ["book", "librair", "librer"],
+                  kind: .shop, themes: [.words], times: [.afternoon]),
+            Group(categories: [.store], query: "record store", nameHas: ["record", "vinyl", "disque"],
+                  kind: .shop, themes: [.sound], times: [.afternoon]),
             // "Something live": a performance rather than a bar, so "I don't
             // drink" leaves it in.
             Group(categories: [.theater], kind: .show,
@@ -123,17 +153,49 @@ enum VenueSearch {
             groups.append(Group(categories: [.musicVenue], kind: .show,
                                 themes: [.sound, .night], times: [.evening]))
         }
+        // A restaurant search by cuisine finds places the plain one ranks too
+        // low to return. The name need not say "ramen" -- the category does
+        // the checking.
+        for cuisine in cuisines {
+            groups.append(Group(categories: [.restaurant], query: "\(cuisine) restaurant", kind: .food,
+                                themes: [.food], times: [.afternoon, .evening], keep: 8))
+        }
         return groups
+    }
+
+    /// Words in a name that mean it is not somewhere to spend part of a date:
+    /// a ticket seller, a mall, a station, an office. Matched as whole words.
+    private static let notAPlace: [String] = [
+        "ticketmaster", "box office", "tickets", "mall", "plaza", "shopping centre",
+        "shopping center", "outlet", "station", "terminal", "parking", "headquarters",
+        "office", "offices", "corporate", "warehouse", "distribution", "wholesale",
+        "gas", "atm", "bank", "clinic", "hospital", "pharmacy", "school", "church",
+    ]
+
+    /// Somewhere to go, by its name and Apple's own category for it.
+    private static func isAPlace(_ item: MKMapItem, name: String, group: Group) -> Bool {
+        // Apple's category has to be one this search asked for. A result with
+        // none at all is an address or an area -- an intersection, a
+        // neighbourhood -- not a place.
+        guard let category = item.pointOfInterestCategory,
+              group.categories.contains(category) else { return false }
+        let lower = name.lowercased()
+        if let words = group.nameHas, !words.contains(where: { lower.contains($0) }) { return false }
+        let wordsInName = lower.split { !$0.isLetter }.joined(separator: " ")
+        return !notAPlace.contains { banned in
+            (" " + wordsInName + " ").contains(" " + banned + " ")
+        }
     }
 
     /// Every group at once, around one point. Nil if any search failed outright,
     /// because a plan built from the half that answered would be quietly wrong.
-    private static func venues(around point: Coordinate, radius: Double) async -> [Venue]? {
+    private static func venues(around point: Coordinate, radius: Double,
+                               cuisines: [String]) async -> [Venue]? {
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
             latitudinalMeters: radius * 2, longitudinalMeters: radius * 2
         )
-        let groups = groups
+        let groups = groups(cuisines: cuisines)
         let results = await withTaskGroup(of: (Int, [Venue]?).self) { tasks in
             for (index, group) in groups.enumerated() {
                 tasks.addTask { (index, await search(group, in: region)) }
@@ -172,14 +234,14 @@ enum VenueSearch {
         } catch {
             return nil
         }
-        // Ten of each is plenty to rank, and keeps one kind from outnumbering
-        // the rest in a big city.
-        return items.prefix(10).compactMap { venue(from: $0, group: group) }
+        // Checked first, then counted: ten real places of each kind (more
+        // restaurants) keeps one kind from outnumbering the rest in a big city.
+        return Array(items.compactMap { venue(from: $0, group: group) }.prefix(group.keep))
     }
 
     private static func venue(from item: MKMapItem, group: Group) -> Venue? {
         guard let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-              !name.isEmpty else { return nil }
+              !name.isEmpty, isAPlace(item, name: name, group: group) else { return nil }
         let mark = item.placemark
         let point = Coordinate(latitude: mark.coordinate.latitude,
                                longitude: mark.coordinate.longitude)
