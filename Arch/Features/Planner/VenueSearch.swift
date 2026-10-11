@@ -69,7 +69,9 @@ enum VenueSearch {
         // planner took what it found.
         let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        for radius in [2_500.0, 5_000.0, 8_000.0] {
+        // Two rings rather than three: there are seventeen searches a ring now,
+        // and Apple Maps turns an app away past about fifty a minute.
+        for radius in [3_000.0, 8_000.0] {
             guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
                 if found == nil { return nil }
@@ -100,9 +102,14 @@ enum VenueSearch {
         let categories: [MKPointOfInterestCategory]
         /// For the few things with no category of their own, like bookshops.
         var query: String? = nil
-        /// For a search by words: the name has to contain one of these, or it
-        /// is not what was searched for.
+        /// The name has to contain one of these, or it is not what was
+        /// searched for -- a bookshop says "book"; a park worth going to says
+        /// "park", "garden", "trail".
         var nameHas: [String]? = nil
+        /// Names with one of these are left out, unless they also have one of
+        /// `unlessHas`: "Waterfall Stage" goes, "Stage Theatre" stays.
+        var rejects: [String] = []
+        var unlessHas: [String] = []
         let kind: Venue.Kind
         let themes: Set<DateTheme>
         let times: Set<DatePlan.TimeOfDay>
@@ -124,13 +131,28 @@ enum VenueSearch {
         return (0..<3).map { cuisineQueries[(start + $0 * 3) % cuisineQueries.count] }
     }
 
+    /// **Asked for as things to do, not as everything on the map.** "Park" and
+    /// "theater" alone brought back every parkette, every corner plaza named
+    /// for its intersection, and outdoor stages with nothing on -- real places
+    /// in Apple's eyes, and nowhere to take somebody. So the outdoor searches
+    /// keep only places whose names say they are somewhere to go, and the
+    /// rest of the list is made of the things people actually do on a date:
+    /// films, bowling, galleries, comedy, an aquarium.
     private static func groups(cuisines: [String]) -> [Group] {
+        var shows: [MKPointOfInterestCategory] = [.theater]
+        var dayOut: [MKPointOfInterestCategory] = [.aquarium, .zoo, .amusementPark]
+        if #available(iOS 18.0, *) {
+            shows.append(.musicVenue)
+            dayOut.append(.planetarium)
+        }
         var groups = [
             Group(categories: [.cafe, .bakery], kind: .coffee,
                   themes: [.food], times: [.afternoon]),
-            Group(categories: [.park, .nationalPark], kind: .park,
+            Group(categories: [.park, .nationalPark], nameHas: destinationWords, rejects: notAnOuting,
+                  kind: .park,
                   themes: [.outdoors], times: [.afternoon]),
-            Group(categories: [.beach, .marina], kind: .walk,
+            Group(categories: [.beach, .marina], nameHas: destinationWords, rejects: notAnOuting,
+                  kind: .walk,
                   themes: [.outdoors], times: [.afternoon, .evening]),
             Group(categories: [.museum], kind: .museum,
                   themes: [.craft, .buildings], times: [.afternoon]),
@@ -145,13 +167,28 @@ enum VenueSearch {
             Group(categories: [.store], query: "record store", nameHas: ["record", "vinyl", "disque"],
                   kind: .shop, themes: [.sound], times: [.afternoon]),
             // "Something live": a performance rather than a bar, so "I don't
-            // drink" leaves it in.
-            Group(categories: [.theater], kind: .show,
-                  themes: [.words, .sound], times: [.evening]),
+            // drink" leaves it in. An outdoor stage is not one unless its
+            // name says theatre -- with nothing on, it is a lawn.
+            Group(categories: shows, rejects: outdoorStageWords, unlessHas: ["theatre", "theater", "playhouse", "hall", "club"],
+                  kind: .show, themes: [.words, .sound], times: [.evening]),
+            Group(categories: [.movieTheater], kind: .cinema,
+                  themes: [.craft], times: [.afternoon, .evening]),
+            Group(categories: dayOut, kind: .attraction,
+                  themes: [], times: [.afternoon]),
+            Group(categories: [.museum, .store], query: "art gallery", nameHas: ["gallery", "galerie", "art"],
+                  kind: .museum, themes: [.craft], times: [.afternoon]),
+            Group(categories: [.nightlife, .theater], query: "comedy club",
+                  nameHas: ["comedy", "laugh", "improv", "funny", "comic"],
+                  kind: .show, themes: [.words, .night], times: [.evening]),
+            Group(categories: [.amusementPark, .store, .nightlife], query: "escape room", nameHas: ["escape"],
+                  kind: .play, themes: [], times: [.afternoon, .evening]),
         ]
+        // Bowling, mini golf, go-karts, climbing, skating: categories of their
+        // own from iOS 18. Before that, the escape-room search is the one
+        // game on the list.
         if #available(iOS 18.0, *) {
-            groups.append(Group(categories: [.musicVenue], kind: .show,
-                                themes: [.sound, .night], times: [.evening]))
+            groups.append(Group(categories: [.bowling, .miniGolf, .goKart, .rockClimbing, .skating],
+                                kind: .play, themes: [], times: [.afternoon, .evening]))
         }
         // A restaurant search by cuisine finds places the plain one ranks too
         // low to return. The name need not say "ramen" -- the category does
@@ -163,13 +200,37 @@ enum VenueSearch {
         return groups
     }
 
+    /// What a park, a beach or a waterfront has in its name when it is
+    /// somewhere to spend an afternoon. "Jane and Finch" -- a corner, filed as
+    /// a park -- has none of them.
+    private static let destinationWords = [
+        "park", "garden", "gardens", "trail", "beach", "waterfront", "conservation",
+        "ravine", "island", "pier", "harbour", "harbor", "boardwalk", "lake", "falls",
+        "forest", "woods", "valley", "bluffs", "botanical", "arboretum", "marina", "quay",
+    ]
+
+    /// An outdoor stage, bandshell or pavilion: a place for an event, and
+    /// with no event on, nowhere in particular.
+    private static let outdoorStageWords = [
+        "stage", "bandshell", "band shell", "amphitheatre", "amphitheater", "pavilion", "gazebo",
+    ]
+
     /// Words in a name that mean it is not somewhere to spend part of a date:
-    /// a ticket seller, a mall, a station, an office. Matched as whole words.
+    /// a ticket seller, a mall, a station, an office. Matched as whole words,
+    /// in every search -- so nothing here may be a word a good café or
+    /// restaurant could have in its name.
     private static let notAPlace: [String] = [
         "ticketmaster", "box office", "tickets", "mall", "plaza", "shopping centre",
         "shopping center", "outlet", "station", "terminal", "parking", "headquarters",
         "office", "offices", "corporate", "warehouse", "distribution", "wholesale",
         "gas", "atm", "bank", "clinic", "hospital", "pharmacy", "school", "church",
+    ]
+
+    /// Outdoors only: a park by name that is not an afternoon -- a parkette,
+    /// a playground, a dog run, a square, a statue.
+    private static let notAnOuting = [
+        "parkette", "playground", "splash pad", "dog park", "off leash", "square",
+        "cenotaph", "monument", "statue", "fountain",
     ]
 
     /// Somewhere to go, by its name and Apple's own category for it.
@@ -180,11 +241,13 @@ enum VenueSearch {
         guard let category = item.pointOfInterestCategory,
               group.categories.contains(category) else { return false }
         let lower = name.lowercased()
+        let wordsInName = " " + lower.split { !$0.isLetter }.joined(separator: " ") + " "
+        func has(_ word: String) -> Bool { wordsInName.contains(" " + word + " ") }
         if let words = group.nameHas, !words.contains(where: { lower.contains($0) }) { return false }
-        let wordsInName = lower.split { !$0.isLetter }.joined(separator: " ")
-        return !notAPlace.contains { banned in
-            (" " + wordsInName + " ").contains(" " + banned + " ")
+        if group.rejects.contains(where: has), !group.unlessHas.contains(where: { lower.contains($0) }) {
+            return false
         }
+        return !notAPlace.contains(where: has)
     }
 
     /// Every group at once, around one point. Nil if any search failed outright,

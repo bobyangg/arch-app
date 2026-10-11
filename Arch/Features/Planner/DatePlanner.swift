@@ -102,6 +102,13 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
 struct Venue: Identifiable, Hashable {
     enum Kind: String, Hashable {
         case coffee, walk, park, museum, library, studio, listening, show, food, bar, shop
+        /// Bowling, mini golf, climbing, skating: something you do together
+        /// rather than look at.
+        case play
+        /// A film.
+        case cinema
+        /// An aquarium, a zoo, a planetarium, an amusement park.
+        case attraction
 
         var label: String {
             switch self {
@@ -116,6 +123,9 @@ struct Venue: Identifiable, Hashable {
             case .food:      return "Something to eat"
             case .bar:       return "Drinks"
             case .shop:      return "Shop"
+            case .play:       return "Something to play"
+            case .cinema:     return "A film"
+            case .attraction: return "A day out"
             }
         }
 
@@ -140,6 +150,9 @@ struct Venue: Identifiable, Hashable {
             case .food:      return OpeningHours(opens: 11 * 60 + 30, closes: 22 * 60 + 30)
             case .bar:       return OpeningHours(opens: 16 * 60, closes: 26 * 60)
             case .shop:      return OpeningHours(opens: 10 * 60, closes: 20 * 60)
+            case .play:       return OpeningHours(opens: 11 * 60, closes: 23 * 60)
+            case .cinema:     return OpeningHours(opens: 12 * 60, closes: 24 * 60)
+            case .attraction: return OpeningHours(opens: 10 * 60, closes: 18 * 60)
             }
         }
 
@@ -161,9 +174,9 @@ struct Venue: Identifiable, Hashable {
         /// worth. Read against the lower of two budgets, never shown as a price.
         var price: Int {
             switch self {
-            case .walk, .park, .library, .shop:  return 0
-            case .coffee, .museum, .studio:      return 1
-            case .listening, .show, .food, .bar: return 2
+            case .walk, .park, .library, .shop:          return 0
+            case .coffee, .museum, .studio, .play, .cinema: return 1
+            case .listening, .show, .food, .bar, .attraction: return 2
             }
         }
 
@@ -181,6 +194,9 @@ struct Venue: Identifiable, Hashable {
             case .show:      return 90
             case .food:      return 75
             case .bar:       return 60
+            case .play:       return 90
+            case .cinema:     return 120
+            case .attraction: return 120
             case .shop:      return 40
             }
         }
@@ -340,12 +356,26 @@ struct PlanItem: Identifiable, Hashable {
     /// How many times it has been swapped: the next-best place along its
     /// ranking, wrapping round.
     var skips: Int
+    /// A particular place, kept as it is rather than chosen: what "Change it"
+    /// on a plan in a thread fills the planner with, so the plan on screen is
+    /// the plan that was sent -- the same places, not ones like them. Swapping
+    /// it lets the planner choose again.
+    var pinned: Venue?
+    /// Where a kept place came from, said under it: "From Hana's plan."
+    var pinnedFrom: String?
+    /// Places swapped away from a kept one, so a swap moves on rather than
+    /// landing on the place it just left.
+    var passed: Set<String>
 
-    init(category: DatePlan.Category? = nil, hours: Int? = nil) {
+    init(category: DatePlan.Category? = nil, hours: Int? = nil,
+         pinned: Venue? = nil, pinnedFrom: String? = nil) {
         id = UUID()
         self.category = category
         self.hours = hours ?? category?.defaultHours ?? 1
         skips = 0
+        self.pinned = pinned
+        self.pinnedFrom = pinned == nil ? nil : pinnedFrom
+        passed = []
     }
 
     /// Three, because a first date that is one thing is an interview and one
@@ -427,6 +457,9 @@ enum DatePlanner {
     /// `alreadyShared` is the names of places in plans already sent to this
     /// person. They are not ruled out -- a favourite is a favourite -- but they
     /// come after somewhere new.
+    ///
+    /// `excluded` is places never to offer: the ones you said were "Not for
+    /// us", and the ones taken off for everybody (`backend/032`).
     static func plan(
         you: Person,
         them: Person,
@@ -436,7 +469,8 @@ enum DatePlanner {
         items: [PlanItem],
         theirCentre: Coordinate? = nil,
         halfwayName: String? = nil,
-        alreadyShared: Set<String> = []
+        alreadyShared: Set<String> = [],
+        excluded: Set<String> = []
     ) -> DatePlan {
         // What you each said a date should be like. Either may be missing:
         // somebody who has not answered is planned for from interests alone.
@@ -535,12 +569,14 @@ enum DatePlanner {
                 $0.kind.category == category && $0.times.contains(part) && $0.isOpen(on: day)
                     && withinReach($0)
                     && $0.openingHours.covers(from: window.start, to: window.end)
-                    && !used.contains($0.id) && fit.allows($0)
+                    && !used.contains($0.id) && !excluded.contains($0.id) && fit.allows($0)
             }
         }
 
-        func pick(_ pool: [Venue], skips: Int, by score: (Venue) -> Double) -> Venue? {
-            let ranked = pool.sorted {
+        func pick(_ pool: [Venue], skips: Int, passing passed: Set<String> = [],
+                  by score: (Venue) -> Double) -> Venue? {
+            let fresh = pool.filter { !passed.contains($0.id) }
+            let ranked = (fresh.isEmpty ? pool : fresh).sorted {
                 let a = score($0), b = score($1)
                 return a == b ? stableHash($0.id) < stableHash($1.id) : a > b
             }
@@ -569,7 +605,7 @@ enum DatePlanner {
             // Per item, what could fill it on foot from the anchor -- open at
             // that item's time. Each needs one, and two of a kind need two.
             var byCategory: [DatePlan.Category: (items: Int, places: Set<String>)] = [:]
-            for (index, item) in filled.enumerated() where index != anchorIndex {
+            for (index, item) in filled.enumerated() where index != anchorIndex && item.pinned == nil {
                 guard let category = item.category else { continue }
                 let near = candidates(category, at: index, besides: [anchor.id]).filter {
                     travel(km(anchor.coordinate, $0.coordinate)).onFoot
@@ -582,10 +618,21 @@ enum DatePlanner {
             return byCategory.values.allSatisfy { $0.places.count >= $0.items }
         }
 
-        let anchors = candidates(anchorCategory, at: anchorIndex, besides: [])
+        // Kept places first: they are where they are, and the rest is placed
+        // around them.
+        var chosen: [Int: Venue] = [:]
+        for (index, item) in filled.enumerated() {
+            if let pinned = item.pinned, !excluded.contains(pinned.id) { chosen[index] = pinned }
+        }
+        let keptIDs = Set(chosen.values.map(\.id))
+
+        let anchors = candidates(anchorCategory, at: anchorIndex, besides: keptIDs)
         let reachable = fit.walkable && filled.count > 1 ? anchors.filter(hasCompany) : anchors
         let anchorPool = reachable.isEmpty ? anchors : reachable
-        let anchor = pick(anchorPool, skips: filled[anchorIndex].skips) { liking($0) - between($0) }
+        let anchor = chosen[anchorIndex]
+            ?? pick(anchorPool, skips: filled[anchorIndex].skips, passing: filled[anchorIndex].passed) {
+                liking($0) - between($0)
+            }
 
         /// Every other stop is placed beside one already placed: outward from
         /// the anchor, each near the stop on the anchor's side of it. Near the
@@ -606,9 +653,11 @@ enum DatePlanner {
             return near.isEmpty ? pool : near
         }
 
-        var chosen: [Int: Venue] = [:]
         var placedNear: [Int: Venue] = [:]
-        var poolSizes: [Int: Int] = [anchorIndex: anchorPool.count]
+        /// How many other places each stop could swap to.
+        var alternatives: [Int: Int] = [
+            anchorIndex: anchorPool.filter { $0.id != anchor?.id }.count
+        ]
         if let anchor { chosen[anchorIndex] = anchor }
 
         /// Not a second walk next to a walk. A rule rather than a penalty: as a
@@ -629,13 +678,19 @@ enum DatePlanner {
             guard let category = filled[index].category else { continue }
             let reference = chosen[index < anchorIndex ? index + 1 : index - 1] ?? anchor
             placedNear[index] = reference
-            let used = Set(chosen.values.map(\.id))
+            let kept = filled[index].pinned != nil && chosen[index] != nil
+            let used = Set(chosen.filter { $0.key != index }.values.map(\.id))
             let pool = notBesideAWalk(inReach(candidates(category, at: index, besides: used),
                                               of: reference),
                                       at: index)
-            poolSizes[index] = pool.count
-            if let venue = pick(pool, skips: filled[index].skips, by: { score($0, near: reference) }) {
+            if kept {
+                alternatives[index] = pool.filter { $0.id != chosen[index]?.id }.count
+                continue
+            }
+            if let venue = pick(pool, skips: filled[index].skips, passing: filled[index].passed,
+                                by: { score($0, near: reference) }) {
                 chosen[index] = venue
+                alternatives[index] = pool.filter { $0.id != venue.id }.count
             }
         }
 
@@ -656,13 +711,16 @@ enum DatePlanner {
                 start: clock,
                 minutes: item.hours * 60,
                 travel: leg,
-                reason: reason(for: venue, near: near,
-                               shared: shared, you: you, yours: yours,
-                               them: them, theirs: theirs, yourName: "You"),
+                // A kept place says where it came from; it was not chosen here.
+                reason: item.pinned?.id == venue.id
+                    ? (item.pinnedFrom ?? "From the plan that was sent.")
+                    : reason(for: venue, near: near,
+                             shared: shared, you: you, yours: yours,
+                             them: them, theirs: theirs, yourName: "You"),
                 sharedReason: reason(for: venue, near: near,
                                      shared: shared, you: you, yours: yours,
                                      them: them, theirs: theirs, yourName: you.name),
-                canSwap: (poolSizes[index] ?? 0) > 1,
+                canSwap: (alternatives[index] ?? 0) > 0,
                 isAnchor: index == anchorIndex,
                 placedNear: near?.name,
                 isOpenThroughout: venue.openingHours.covers(from: clock, to: clock + item.hours * 60)

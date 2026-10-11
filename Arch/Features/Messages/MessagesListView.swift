@@ -117,6 +117,7 @@ struct MessagesListView: View {
                         ConversationRow(conversation: conversation)
                     }
                     .buttonStyle(PressScaleStyle(scale: 1))
+                    .accessibilityIdentifier("messages.thread.\(conversation.person.id)")
 
                     if index < conversations.count - 1 {
                         Rectangle()

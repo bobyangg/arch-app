@@ -226,7 +226,10 @@ struct MessageThreadView: View {
                                                  SharedPlan(answering: message.id))
                             },
                             onChange: {
-                                planActions.change(conversation, plan)
+                                // Theirs or yours: the planner opens on these
+                                // places either way, and says whose they were.
+                                planActions.change(conversation, plan,
+                                                   message.isOutgoing ? nil : conversation.person.name)
                             }
                         )
                     } else {
