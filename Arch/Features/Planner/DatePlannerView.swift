@@ -71,6 +71,8 @@ struct DatePlannerView: View {
     var startQuestions: Int = 0
     var onSavePreferences: (DatePreferences) -> Void = { _ in }
 
+    @Environment(\.openURL) private var openURL
+
     @State private var chosenID: String?
     /// The time of day you chose with the toggle, or nil to use what your
     /// answers (and theirs) prefer. Picking another person goes back to nil.
@@ -786,9 +788,17 @@ struct DatePlannerView: View {
             }
             .padding(.leading, 64 + ArchSpacing.s)
 
-            // What to do about the place: never again, or not in this plan.
+            // What to do about the place: look it up, never again, or not in
+            // this plan.
             HStack(spacing: ArchSpacing.m) {
                 Spacer(minLength: 0)
+                // The place in Apple Maps: its hours, its photos, how to get
+                // there. One word, because three of these share a line.
+                if let url = stop.venue.mapsURL {
+                    ArchTextButton(title: "Maps") { openURL(url) }
+                        .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
+                        .accessibilityIdentifier("planner.maps.\(index)")
+                }
                 // Not this place, ever: for the corner Apple Maps calls a park.
                 // Remove is for the item; this is for the place.
                 ArchTextButton(title: "Not for us") {

@@ -218,6 +218,21 @@ struct Venue: Identifiable, Hashable {
     /// What the planner checks a stop against: its own hours, or its kind's.
     var openingHours: OpeningHours { hours ?? kind.typicalHours.typical }
 
+    /// This place in Apple Maps. A search for its name around where it is,
+    /// rather than a pin at its coordinates: a pin is a point on a map, and
+    /// the search lands on the place itself -- its hours, photos, phone and
+    /// directions, which the planner cannot show.
+    var mapsURL: URL? {
+        var parts = URLComponents(string: "https://maps.apple.com/")
+        parts?.queryItems = [
+            URLQueryItem(name: "q", value: name),
+            URLQueryItem(name: "sll", value: String(format: "%.6f,%.6f",
+                                                     coordinate.latitude, coordinate.longitude)),
+            URLQueryItem(name: "z", value: "17"),
+        ]
+        return parts?.url
+    }
+
     func isOpen(on day: PlanDay?) -> Bool {
         guard let day else { return true }
         return !closedOn.contains(day.weekday)

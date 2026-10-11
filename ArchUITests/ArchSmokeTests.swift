@@ -380,6 +380,10 @@ final class ArchSmokeTests: XCTestCase {
         swaps.firstMatch.tap()
         XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
 
+        // Every stop can be looked up in Apple Maps. Not tapped: that would
+        // leave the app.
+        XCTAssertTrue(app.buttons["planner.maps.0"].exists, "A stop has no way to open it in Maps.")
+
         // "Not for us": the place goes, another takes the item, and the
         // planner offers to undo it.
         app.buttons["planner.hide.0"].tap()
