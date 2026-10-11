@@ -134,3 +134,6 @@ Decimal
 
 # A stable hash for the Date planner, the same on every phone and launch
 UInt64
+
+# The Date planner's calendar
+DatePicker
