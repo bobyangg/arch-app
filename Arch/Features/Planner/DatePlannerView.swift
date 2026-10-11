@@ -117,6 +117,12 @@ struct DatePlannerView: View {
 
     /// The calendar, while it is open.
     @State private var choosingDate = false
+    /// Places never to offer: what you said was "Not for us", and what the
+    /// team has taken off for everybody. Loaded once; a design build keeps
+    /// yours for as long as the app is open.
+    @State private var notToOffer: Set<String> = []
+    /// The place just hidden, for the line that offers to undo it.
+    @State private var justHidden: (id: String, name: String)?
 
     /// What the rankings are built from that can change under you: your
     /// interests, and the interests of the person you are planning with.
@@ -165,7 +171,8 @@ struct DatePlannerView: View {
                                                     items: items,
                                                     theirCentre: found?.theirCentre,
                                                     halfwayName: found?.halfway,
-                                                    alreadyShared: alreadyShared(with: chosen))
+                                                    alreadyShared: alreadyShared(with: chosen),
+                                                    excluded: notToOffer)
                         if isLive && (found?.venues.isEmpty ?? true) {
                             preferencesRow
                             dayRow
@@ -176,6 +183,18 @@ struct DatePlannerView: View {
                             preferencesRow
                             dayRow
                             timeToggle(time)
+                            if let justHidden {
+                                HStack(alignment: .firstTextBaseline) {
+                                    Text("\(justHidden.name) will not be suggested again.")
+                                        .archText(.footnote)
+                                        .foregroundStyle(ArchColor.mortar)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Spacer(minLength: ArchSpacing.s)
+                                    ArchTextButton(title: "Undo") { unhide() }
+                                        .accessibilityIdentifier("planner.undoHide")
+                                }
+                                .padding(.bottom, ArchSpacing.s)
+                            }
                             if let replanned {
                                 Text(replanned)
                                     .archText(.footnote)
@@ -199,6 +218,10 @@ struct DatePlannerView: View {
         }
         .background(ArchColor.night)
         .task(id: "\(chosen?.id ?? "")#\(attempt)") { await findPlaces() }
+        .task {
+            guard isLive else { return }
+            notToOffer.formUnion(await ArchBackend.placesNotToOffer())
+        }
         // Somebody else, another time or another day: the rankings underneath
         // have changed, so every item starts again from its best place. What
         // you added -- the kinds and the hours -- stays.
@@ -264,13 +287,54 @@ struct DatePlannerView: View {
             .map(\.name))
     }
 
-    /// Every item back to the best place in its ranking.
+    /// Every item back to the best place in its ranking. Places kept from a
+    /// plan that was sent stay kept.
     private func restartSwaps() {
         items = items.map { item in
             var item = item
             item.skips = 0
+            item.passed = []
             return item
         }
+    }
+
+    /// Swap: the next place along. A kept place -- from a plan that was sent
+    /// -- is let go, and the planner chooses, starting past it.
+    private func swap(_ index: Int, from venue: Venue) {
+        guard items.indices.contains(index) else { return }
+        if items[index].pinned != nil {
+            items[index].pinned = nil
+            items[index].pinnedFrom = nil
+            items[index].passed.insert(venue.id)
+        } else {
+            items[index].skips += 1
+        }
+        replanned = nil
+        justHidden = nil
+        sentTo = nil
+    }
+
+    /// "Not for us": never this place again, and the item moves on at once.
+    /// Saved for your account in a real build, so it holds on every phone.
+    private func hide(_ venue: Venue, at index: Int) {
+        notToOffer.insert(venue.id)
+        if items.indices.contains(index), items[index].pinned?.id == venue.id {
+            items[index].pinned = nil
+            items[index].pinnedFrom = nil
+        }
+        justHidden = (venue.id, venue.name)
+        replanned = nil
+        sentTo = nil
+        guard isLive else { return }
+        Task { try? await ArchBackend.hidePlace(key: venue.id, name: venue.name) }
+    }
+
+    private func unhide() {
+        guard let hidden = justHidden else { return }
+        notToOffer.remove(hidden.id)
+        justHidden = nil
+        guard isLive else { return }
+        Task { try? await ArchBackend.unhidePlace(key: hidden.id) }
     }
 
     // MARK: Items
@@ -691,11 +755,7 @@ struct DatePlannerView: View {
                 // Only where there is somewhere else to go. A Swap that lands on
                 // the same place looks like a button that does not work.
                 if stop.canSwap {
-                    ArchTextButton(title: "Swap") {
-                        if items.indices.contains(index) { items[index].skips += 1 }
-                        replanned = nil
-                        sentTo = nil
-                    }
+                    ArchTextButton(title: "Swap") { swap(index, from: stop.venue) }
                     .accessibilityLabel("Swap \(stop.venue.name)")
                 }
             }
@@ -723,6 +783,19 @@ struct DatePlannerView: View {
                     .accessibilityIdentifier("planner.hours.\(index).\(hours)")
                 }
                 Spacer(minLength: 0)
+            }
+            .padding(.leading, 64 + ArchSpacing.s)
+
+            // What to do about the place: never again, or not in this plan.
+            HStack(spacing: ArchSpacing.m) {
+                Spacer(minLength: 0)
+                // Not this place, ever: for the corner Apple Maps calls a park.
+                // Remove is for the item; this is for the place.
+                ArchTextButton(title: "Not for us") {
+                    withAnimation(ArchMotion.standard) { hide(stop.venue, at: index) }
+                }
+                .accessibilityLabel("Never suggest \(stop.venue.name)")
+                .accessibilityIdentifier("planner.hide.\(index)")
                 ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
                     .accessibilityLabel("Remove \(stop.venue.name)")
                     .accessibilityIdentifier("planner.remove.\(index)")

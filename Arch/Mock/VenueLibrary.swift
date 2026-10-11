@@ -129,12 +129,22 @@ enum VenueLibrary {
 
         venue("main-street-park", "Main Street Park", .walk, "Dumbo", 40.7040, -73.9900,
               [.outdoors, .buildings], [.afternoon, .evening]),
-        venue("little-reel", "Little Reel Cinema", .show, "Williamsburg", 40.7158, -73.9628,
+        venue("little-reel", "Little Reel Cinema", .cinema, "Williamsburg", 40.7158, -73.9628,
               [.words, .sound], [.evening], hours: (13 * 60, 24 * 60)),
         venue("back-room-comedy", "Back Room Comedy", .show, "Fort Greene", 40.6893, -73.9762,
               [.words, .night], [.evening]),
         venue("clay-hours", "Clay Hours", .studio, "Prospect Heights", 40.6778, -73.9672,
               [.craft], [.afternoon, .evening], hours: (12 * 60, 22 * 60)),
+
+        // MARK: Something to play
+        //
+        // What Apple Maps files as bowling, climbing and the like: something
+        // you do together rather than look at.
+
+        venue("pin-lane", "Pin & Lane", .play, "Williamsburg", 40.7180, -73.9575,
+              [], [.afternoon, .evening]),
+        venue("rope-rock", "Rope & Rock Climbing", .play, "Gowanus", 40.6745, -73.9905,
+              [], [.afternoon, .evening]),
     ]
 
     // `Calendar`'s numbering.
