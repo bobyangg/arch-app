@@ -4,7 +4,9 @@ import SwiftUI
 ///
 /// Stored in `messages.plan` beside the message's words, which stay readable on
 /// their own -- see `backend/024`. A plan is what the planner laid out, frozen:
-/// names, times and the way between, never a coordinate.
+/// names, times and the way between, and where each *place* is -- so that
+/// "Change it" can open the planner on these places rather than ones like them.
+/// A café's position is on every map; neither person's is here.
 struct SharedPlan: Codable, Hashable {
 
     struct Stop: Codable, Hashable {
@@ -24,6 +26,23 @@ struct SharedPlan: Codable, Hashable {
         /// same shape of date. Nil on plans sent before items had either.
         var minutes: Int? = nil
         var category: String? = nil
+        /// The place itself: its id in the planner (Apple Maps' or the
+        /// library's), where it is, and what kind of place it is. Nil on plans
+        /// sent before "Change it" kept the places.
+        var placeID: String? = nil
+        var latitude: Double? = nil
+        var longitude: Double? = nil
+        var kindKey: String? = nil
+
+        /// The place, rebuilt -- for the planner to keep as it is.
+        var venue: Venue? {
+            guard let placeID, let latitude, let longitude else { return nil }
+            let kind = kindKey.flatMap(Venue.Kind.init(rawValue:))
+                ?? (category == DatePlan.Category.food.rawValue ? .food : .show)
+            return Venue(id: placeID, name: name, kind: kind, neighbourhood: neighbourhood,
+                         coordinate: Coordinate(latitude: latitude, longitude: longitude),
+                         themes: DateTheme.themes(in: name), times: [.afternoon, .evening])
+        }
     }
 
     /// "afternoon" or "evening", on a plan.
@@ -39,13 +58,15 @@ struct SharedPlan: Codable, Hashable {
     var timeOfDay: DatePlan.TimeOfDay? { time.flatMap(DatePlan.TimeOfDay.init(rawValue:)) }
     var planDay: PlanDay? { day.flatMap(PlanDay.init(iso:)) }
 
-    /// The plan's shape, as items the planner can start again from: each
-    /// stop's kind and hours, and no place -- the planner finds those afresh.
-    var planItems: [PlanItem]? {
+    /// The plan, as items the planner can open on: each stop's kind and
+    /// hours, and -- when the plan says where -- the place itself, kept, so the
+    /// planner shows the plan that was sent. `from` is said under each kept
+    /// place: "From Hana's plan."
+    func planItems(from: String?) -> [PlanItem]? {
         let items = (stops ?? []).compactMap { stop -> PlanItem? in
             guard let category = stop.category.flatMap(DatePlan.Category.init(rawValue:)) else { return nil }
             let hours = min(max((stop.minutes ?? 60) / 60, 1), 3)
-            return PlanItem(category: category, hours: hours)
+            return PlanItem(category: category, hours: hours, pinned: stop.venue, pinnedFrom: from)
         }
         return items.isEmpty ? nil : items
     }
@@ -69,7 +90,11 @@ struct SharedPlan: Codable, Hashable {
                  travel: stop.travel?.label,
                  reason: keepReasons ? stop.sharedReason : nil,
                  minutes: stop.minutes,
-                 category: stop.category.rawValue)
+                 category: stop.category.rawValue,
+                 placeID: stop.venue.id,
+                 latitude: stop.venue.coordinate.latitude,
+                 longitude: stop.venue.coordinate.longitude,
+                 kindKey: stop.venue.kind.rawValue)
         }
         self.answering = nil
     }
@@ -98,8 +123,10 @@ struct PlanActions {
     /// Send words and a plan (or an answer to one) into a conversation.
     var send: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
     /// Open the Date planner on this person, from this plan: its day, its
-    /// time of day and its items.
-    var change: (Conversation, SharedPlan) -> Void = { _, _ in }
+    /// time of day, and its places. The last part is who sent it -- their
+    /// name, or nil for a plan you sent -- so the planner can say where the
+    /// places came from.
+    var change: (Conversation, SharedPlan, String?) -> Void = { _, _, _ in }
 }
 
 private struct PlanActionsKey: EnvironmentKey {
@@ -253,11 +280,13 @@ struct PlanCard: View {
                         .foregroundStyle(ArchColor.mortar)
                     Spacer(minLength: ArchSpacing.s)
                     ArchTextButton(title: "Change it", action: onChange)
+                        .accessibilityIdentifier("thread.plan.change")
                 }
             } else {
                 HStack(spacing: ArchSpacing.xs) {
                     ArchButton(title: "I\u{2019}m in", action: onYes)
                     ArchButton(title: "Change it", kind: .quiet, action: onChange)
+                        .accessibilityIdentifier("thread.plan.change")
                 }
                 .padding(.top, ArchSpacing.xxs)
             }

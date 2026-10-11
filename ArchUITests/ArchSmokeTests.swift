@@ -380,6 +380,14 @@ final class ArchSmokeTests: XCTestCase {
         swaps.firstMatch.tap()
         XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
 
+        // "Not for us": the place goes, another takes the item, and the
+        // planner offers to undo it.
+        app.buttons["planner.hide.0"].tap()
+        XCTAssertTrue(app.buttons["planner.undoHide"].waitForExistence(timeout: 5),
+                      "Hiding a place did not offer to undo it.")
+        XCTAssertEqual(stops.count, 3, "Hiding a place lost the stop instead of replacing it.")
+        app.buttons["planner.undoHide"].tap()
+
         // Removing one leaves room to add again.
         app.buttons["planner.remove.2"].tap()
         XCTAssertEqual(stops.count, 2, "Remove did not take the stop off.")
@@ -486,6 +494,36 @@ final class ArchSmokeTests: XCTestCase {
         // same places is not mistaken for nothing happening.
         XCTAssertTrue(app.staticTexts["planner.replanned"].waitForExistence(timeout: 5),
                       "The planner did not say it replanned after your interests changed.")
+    }
+
+    /// "Change it" on a plan somebody sent opens your planner on *their*
+    /// plan: the same places, not ones like them, each saying where it came
+    /// from. Hana's plan in the design build carries its places.
+    func testChangeItOpensTheirPlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["tab.messages"].tap()
+        let hana = app.buttons["messages.thread.hana"]
+        XCTAssertTrue(hana.waitForExistence(timeout: 5), "No conversation with Hana in Messages.")
+        hana.tap()
+
+        let change = app.buttons["thread.plan.change"]
+        XCTAssertTrue(change.waitForExistence(timeout: 5), "Hana's plan has no Change it.")
+        var tries = 0
+        while !change.isHittable && tries < 4 { app.swipeUp(); tries += 1 }
+        change.tap()
+
+        XCTAssertTrue(app.buttons["tab.planner"].waitForExistence(timeout: 5),
+                      "Change it did not come back to the tab bar.")
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected, "Change it did not open the planner.")
+        for place in ["Short Fuse Coffee", "Domino Park", "Wide Bowl Noodles"] {
+            XCTAssertTrue(app.staticTexts[place].waitForExistence(timeout: 5),
+                          "The planner did not open on Hana's \(place).")
+        }
+        let fromHana = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From Hana'"))
+        XCTAssertGreaterThan(fromHana.count, 0, "The kept places do not say they came from Hana's plan.")
     }
 
     // MARK: App Review
