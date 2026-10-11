@@ -69,8 +69,10 @@ enum VenueSearch {
         // planner took what it found.
         let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        // Two rings rather than three: there are seventeen searches a ring now,
-        // and Apple Maps turns an app away past about fifty a minute.
+        // Two rings rather than three: there are about twenty searches a ring
+        // now (more with iOS 18's categories), and Apple Maps turns an app away
+        // past about fifty a minute. The second ring runs only when the first
+        // found too little, which in a city it rarely does.
         for radius in [3_000.0, 8_000.0] {
             guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
@@ -174,21 +176,30 @@ enum VenueSearch {
             Group(categories: [.movieTheater], kind: .cinema,
                   themes: [.craft], times: [.afternoon, .evening]),
             Group(categories: dayOut, kind: .attraction,
-                  themes: [], times: [.afternoon]),
+                  themes: [.play], times: [.afternoon]),
             Group(categories: [.museum, .store], query: "art gallery", nameHas: ["gallery", "galerie", "art"],
                   kind: .museum, themes: [.craft], times: [.afternoon]),
             Group(categories: [.nightlife, .theater], query: "comedy club",
                   nameHas: ["comedy", "laugh", "improv", "funny", "comic"],
                   kind: .show, themes: [.words, .night], times: [.evening]),
             Group(categories: [.amusementPark, .store, .nightlife], query: "escape room", nameHas: ["escape"],
-                  kind: .play, themes: [], times: [.afternoon, .evening]),
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            // Games, for the people who write "Gaming" or "arcade" -- among the
+            // commonest interests anybody writes. Held to the same checks as
+            // everything else: Apple's own category, and a name that says so.
+            Group(categories: [.amusementPark, .nightlife, .store], query: "arcade",
+                  nameHas: ["arcade", "barcade", "pinball", "game", "pixel", "token"],
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            Group(categories: [.cafe, .restaurant, .store, .nightlife], query: "board game cafe",
+                  nameHas: ["game", "board", "dice", "meeple", "snakes"],
+                  kind: .play, themes: [.play, .food], times: [.afternoon, .evening]),
         ]
         // Bowling, mini golf, go-karts, climbing, skating: categories of their
         // own from iOS 18. Before that, the escape-room search is the one
         // game on the list.
         if #available(iOS 18.0, *) {
             groups.append(Group(categories: [.bowling, .miniGolf, .goKart, .rockClimbing, .skating],
-                                kind: .play, themes: [], times: [.afternoon, .evening]))
+                                kind: .play, themes: [.play, .active], times: [.afternoon, .evening]))
         }
         // A restaurant search by cuisine finds places the plain one ranks too
         // low to return. The name need not say "ramen" -- the category does
@@ -271,8 +282,18 @@ enum VenueSearch {
 
         // In group order, each place once: a brewery that is also a restaurant
         // keeps whichever line found it first.
+        //
+        // **And inside the area that was asked about.** A search by name --
+        // "ramen restaurant", "bookstore" -- takes the region as a hint, not a
+        // fence, and answers with the best match in the city: a place sixteen
+        // kilometres away is a fine answer to Apple and a wrong one here. The
+        // planner limits how far a stop may be from either of you, but only
+        // when it knows where you both are; this holds whether it does or not.
+        let limitKm = radius / 1000 * 1.25
         var seen = Set<String>()
-        return results.compactMap { $0 }.joined().filter { seen.insert($0.id).inserted }
+        return results.compactMap { $0 }.joined().filter {
+            DatePlanner.km(point, $0.coordinate) <= limitKm && seen.insert($0.id).inserted
+        }
     }
 
     private static func search(_ group: Group, in region: MKCoordinateRegion) async -> [Venue]? {
