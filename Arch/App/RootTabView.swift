@@ -125,8 +125,17 @@ struct RootTabView: View {
             send: { conversation, text, plan in
                 store.reply(to: conversation, text: text, plan: plan)
             },
-            change: { conversation, time, day in
-                plannerPreset = PlannerPreset(personID: conversation.person.id, time: time, day: day)
+            change: { conversation, plan, sender in
+                // **Their plan becomes yours to change.** The planner opens on
+                // the places they sent, kept as they are; swapping one lets the
+                // planner choose again, and sharing sends it back -- where
+                // "Change it" opens their planner on your version.
+                plannerPreset = PlannerPreset(personID: conversation.person.id,
+                                              time: plan.timeOfDay ?? .afternoon,
+                                              day: plan.planDay,
+                                              items: plan.planItems(
+                                                  from: sender.map { "From \($0)\u{2019}s plan." }
+                                                      ?? "From the plan you sent."))
                 selection = .planner
             }
         ))
