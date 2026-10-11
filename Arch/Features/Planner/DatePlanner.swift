@@ -102,6 +102,13 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
 struct Venue: Identifiable, Hashable {
     enum Kind: String, Hashable {
         case coffee, walk, park, museum, library, studio, listening, show, food, bar, shop
+        /// Bowling, mini golf, climbing, skating: something you do together
+        /// rather than look at.
+        case play
+        /// A film.
+        case cinema
+        /// An aquarium, a zoo, a planetarium, an amusement park.
+        case attraction
 
         var label: String {
             switch self {
@@ -116,11 +123,46 @@ struct Venue: Identifiable, Hashable {
             case .food:      return "Something to eat"
             case .bar:       return "Drinks"
             case .shop:      return "Shop"
+            case .play:       return "Something to play"
+            case .cinema:     return "A film"
+            case .attraction: return "A day out"
             }
         }
 
         /// A park and a walk are the same kind of afternoon.
         var isOutside: Bool { self == .walk || self == .park }
+
+        /// The hours a place of this kind usually keeps, for a place whose own
+        /// hours nobody has told the app -- every place from Apple Maps, which
+        /// does not give apps opening hours (see `VenueSearch`). Deliberately
+        /// the ordinary day: a café that opens late is rarer than one that
+        /// closes at six.
+        var typicalHours: OpeningHours {
+            switch self {
+            case .coffee:    return OpeningHours(opens: 7 * 60, closes: 18 * 60)
+            case .walk:      return OpeningHours(opens: 6 * 60, closes: 23 * 60)
+            case .park:      return OpeningHours(opens: 6 * 60, closes: 22 * 60)
+            case .museum:    return OpeningHours(opens: 10 * 60, closes: 17 * 60 + 30)
+            case .library:   return OpeningHours(opens: 10 * 60, closes: 18 * 60)
+            case .studio:    return OpeningHours(opens: 11 * 60, closes: 19 * 60)
+            case .listening: return OpeningHours(opens: 17 * 60, closes: 25 * 60)
+            case .show:      return OpeningHours(opens: 18 * 60, closes: 23 * 60 + 30)
+            case .food:      return OpeningHours(opens: 11 * 60 + 30, closes: 22 * 60 + 30)
+            case .bar:       return OpeningHours(opens: 16 * 60, closes: 26 * 60)
+            case .shop:      return OpeningHours(opens: 10 * 60, closes: 20 * 60)
+            case .play:       return OpeningHours(opens: 11 * 60, closes: 23 * 60)
+            case .cinema:     return OpeningHours(opens: 12 * 60, closes: 24 * 60)
+            case .attraction: return OpeningHours(opens: 10 * 60, closes: 18 * 60)
+            }
+        }
+
+        /// Which button adds it: something to eat or drink, or something to do.
+        var category: DatePlan.Category {
+            switch self {
+            case .coffee, .food, .bar: return .food
+            default:                   return .activity
+            }
+        }
 
         /// A place you go *for* a drink. Somewhere live that also has a bar is
         /// not, which is why a performance is its own kind rather than a
@@ -132,9 +174,9 @@ struct Venue: Identifiable, Hashable {
         /// worth. Read against the lower of two budgets, never shown as a price.
         var price: Int {
             switch self {
-            case .walk, .park, .library, .shop:  return 0
-            case .coffee, .museum, .studio:      return 1
-            case .listening, .show, .food, .bar: return 2
+            case .walk, .park, .library, .shop:          return 0
+            case .coffee, .museum, .studio, .play, .cinema: return 1
+            case .listening, .show, .food, .bar, .attraction: return 2
             }
         }
 
@@ -152,6 +194,9 @@ struct Venue: Identifiable, Hashable {
             case .show:      return 90
             case .food:      return 75
             case .bar:       return 60
+            case .play:       return 90
+            case .cinema:     return 120
+            case .attraction: return 120
             case .shop:      return 40
             }
         }
@@ -164,13 +209,57 @@ struct Venue: Identifiable, Hashable {
     let coordinate: Coordinate
     let themes: Set<DateTheme>
     let times: Set<DatePlan.TimeOfDay>
-    let roles: Set<DatePlan.Role>
     /// Days of the week it is shut, as `Calendar` numbers them: 1 is Sunday.
     var closedOn: Set<Int> = []
+    /// Its own opening hours, when they are known. Nil means nobody has said,
+    /// and the hours its kind usually keeps stand in -- see `openingHours`.
+    var hours: OpeningHours? = nil
+
+    /// What the planner checks a stop against: its own hours, or its kind's.
+    var openingHours: OpeningHours { hours ?? kind.typicalHours.typical }
+
+    /// This place in Apple Maps. A search for its name around where it is,
+    /// rather than a pin at its coordinates: a pin is a point on a map, and
+    /// the search lands on the place itself -- its hours, photos, phone and
+    /// directions, which the planner cannot show.
+    var mapsURL: URL? {
+        var parts = URLComponents(string: "https://maps.apple.com/")
+        parts?.queryItems = [
+            URLQueryItem(name: "q", value: name),
+            URLQueryItem(name: "sll", value: String(format: "%.6f,%.6f",
+                                                     coordinate.latitude, coordinate.longitude)),
+            URLQueryItem(name: "z", value: "17"),
+        ]
+        return parts?.url
+    }
 
     func isOpen(on day: PlanDay?) -> Bool {
         guard let day else { return true }
         return !closedOn.contains(day.weekday)
+    }
+}
+
+/// When a place is open, in minutes after midnight. A close after midnight is
+/// written past it -- a bar open until two is `closes: 26 * 60` -- so that one
+/// evening is one range and "open until" is a single comparison.
+struct OpeningHours: Hashable {
+    let opens: Int
+    let closes: Int
+    /// True for the hours a place of its kind usually keeps rather than its
+    /// own. Said on the card ("Usually open"), so nobody mistakes a guess for
+    /// a fact.
+    var isTypical: Bool = false
+
+    var typical: OpeningHours { OpeningHours(opens: opens, closes: closes, isTypical: true) }
+
+    /// Open for the whole of a stop, from when you arrive to when you leave.
+    func covers(from start: Int, to end: Int) -> Bool {
+        start >= opens && end <= closes
+    }
+
+    /// "11:00 am – 6:00 pm".
+    var label: String {
+        "\(DatePlanner.clockTime(opens)) \u{2013} \(DatePlanner.clockTime(closes))"
     }
 }
 
@@ -187,18 +276,17 @@ struct DatePlan: Hashable {
         var start: Int { self == .afternoon ? 14 * 60 : 18 * 60 + 30 }
     }
 
-    /// What a stop is for. Three, because a first date that is one thing is an
-    /// interview and a first date that is five things is a commute.
-    enum Role: Int, CaseIterable, Hashable {
-        case opener, main, closer
+    /// What an item on the plan is. Two, because that is the choice two people
+    /// actually make -- "get something to eat" or "do something" -- and the
+    /// planner can find the particular place.
+    enum Category: String, CaseIterable, Codable, Hashable, Identifiable {
+        case food, activity
 
-        var title: String {
-            switch self {
-            case .opener: return "To start"
-            case .main:   return "The main thing"
-            case .closer: return "To finish"
-            }
-        }
+        var id: String { rawValue }
+        var title: String { self == .food ? "Food & drink" : "Activity" }
+
+        /// How long one usually runs, until it is changed.
+        var defaultHours: Int { self == .food ? 1 : 2 }
     }
 
     /// Getting from one stop to the next.
@@ -212,10 +300,14 @@ struct DatePlan: Hashable {
     }
 
     struct Stop: Identifiable, Hashable {
-        let role: Role
+        /// The item this fills: one stop per item you added and chose for.
+        let itemID: UUID
+        let category: Category
         let venue: Venue
         /// Minutes after midnight.
         let start: Int
+        /// The block you gave it: one, two or three hours.
+        let minutes: Int
         /// How you get here from the stop before. Nil for the first.
         let travel: Travel?
         /// Why this one, in a sentence, for the screen you are looking at:
@@ -226,13 +318,23 @@ struct DatePlan: Hashable {
         /// from either side.
         let sharedReason: String
         /// Whether Swap has anywhere else to go. False when this is the only
-        /// place that can play this part -- under "keep it walkable" and "I
-        /// don't drink", next to some main things, that is often -- and then
-        /// the screen offers no Swap rather than one that changes nothing.
+        /// place that fits -- under "keep it walkable" and "I don't drink",
+        /// near some anchors, that happens -- and then the screen offers no
+        /// Swap rather than one that changes nothing.
         let canSwap: Bool
+        /// The stop the rest of the date is built around.
+        let isAnchor: Bool
+        /// The stop this one was placed beside -- the next one in towards the
+        /// anchor. Nil for the anchor itself.
+        let placedNear: String?
+        /// Whether the place is open for the whole stop, as the stop actually
+        /// falls once the walks between are known. Places are chosen to be
+        /// open with time to spare for getting there, so this is almost always
+        /// true; when a long leg pushes a stop past closing, the card says so.
+        let isOpenThroughout: Bool
 
-        var id: String { "\(role.rawValue)-\(venue.id)" }
-        var end: Int { start + venue.kind.minutes }
+        var id: UUID { itemID }
+        var end: Int { start + minutes }
     }
 
     let time: TimeOfDay
@@ -255,23 +357,66 @@ struct DatePlan: Hashable {
     var endsAt: Int { stops.last?.end ?? time.start }
 }
 
-/// Builds a plan for two people from somewhere to go.
+/// One thing on the plan, as you set it up: what kind of thing, how long, and
+/// how many times it has been swapped. Which *place* it is, the planner works
+/// out -- every time it is drawn, from both of you as you are now.
 ///
-/// **The main thing anchors the date.** It is chosen first, for what you share
-/// and for being about halfway; the stop before it and the stop after are then
-/// chosen for being near it. Choosing the three in order instead -- best first
-/// stop, then best second near that, and so on -- was tried first, and a good
-/// first stop on the wrong side of the borough stranded the rest an hour away.
+/// A plan opens with one blank item and holds at most three.
+struct PlanItem: Identifiable, Hashable {
+    let id: UUID
+    /// Nil while blank: added, and not yet told what it is.
+    var category: DatePlan.Category?
+    /// One, two or three.
+    var hours: Int
+    /// How many times it has been swapped: the next-best place along its
+    /// ranking, wrapping round.
+    var skips: Int
+    /// A particular place, kept as it is rather than chosen: what "Change it"
+    /// on a plan in a thread fills the planner with, so the plan on screen is
+    /// the plan that was sent -- the same places, not ones like them. Swapping
+    /// it lets the planner choose again.
+    var pinned: Venue?
+    /// Where a kept place came from, said under it: "From Hana's plan."
+    var pinnedFrom: String?
+    /// Places swapped away from a kept one, so a swap moves on rather than
+    /// landing on the place it just left.
+    var passed: Set<String>
+
+    init(category: DatePlan.Category? = nil, hours: Int? = nil,
+         pinned: Venue? = nil, pinnedFrom: String? = nil) {
+        id = UUID()
+        self.category = category
+        self.hours = hours ?? category?.defaultHours ?? 1
+        skips = 0
+        self.pinned = pinned
+        self.pinnedFrom = pinned == nil ? nil : pinnedFrom
+        passed = []
+    }
+
+    /// Three, because a first date that is one thing is an interview and one
+    /// that is five things is a commute.
+    static let maximum = 3
+    static let hourChoices = [1, 2, 3]
+}
+
+/// Builds a plan for two people from the items they asked for.
 ///
-/// Ranked rather than optimised, so a swap is predictable: swapping the first or
-/// last stop changes that stop and nothing else, and swapping the main thing
-/// moves the date to wherever the next-best main thing is.
+/// **One stop anchors the date**: the first activity, or the first item if
+/// there is no activity. It is chosen first, for what you share and for being
+/// about halfway; every other stop is then chosen for being near it. Choosing
+/// in order instead -- best first stop, then the best near that -- was tried
+/// first, and a good first stop on the wrong side of the borough stranded the
+/// rest an hour away.
+///
+/// Ranked rather than optimised, so a swap is predictable: swapping a stop
+/// changes that stop and nothing else, except the anchor, which moves the date
+/// to wherever the next-best anchor is.
 ///
 /// What a place scores for:
 /// - something you both like, worth three;
 /// - something only one of you likes, worth one;
-/// - for the main thing, being near halfway and about as far for both of you;
-/// - for the others, being near the main thing, and not being a second walk;
+/// - for the anchor, being near halfway and about as far for both of you;
+/// - for the others, being near the anchor, and not being a second walk;
 /// - and, for every stop, how well it fits what you each said a date should be
 ///   (`DateFit`) -- with "I don't drink" and "keep it walkable" applied as
 ///   rules rather than weighed, whichever of you said them.
@@ -282,9 +427,38 @@ enum DatePlanner {
     private static let detour = 1.25
     /// Past this many minutes on foot, a leg is offered as transit instead.
     private static let longestWalk = 25
+    /// What the hours check allows for getting from one stop to the next,
+    /// before the stops are known: a walk at its longest, and the rounding up
+    /// to five minutes. A longer leg is rare, and the card says if it happens.
+    private static let legAllowance = 30
+    /// From when a stop counts as part of the evening.
+    private static let eveningFrom = 17 * 60
 
-    /// `skips` says, per role, how many times its stop has been swapped: the
-    /// stop is the next-best place along the ranking, wrapping round.
+    // How far is too far. A shared interest is worth 3; these are per km.
+    private static let kmFromHalfwayCost = 2.0
+    private static let kmFromNeighbourCost = 2.5
+    /// The furthest a place may be from either of you when you live close.
+    private static let nearbyKm = 6.0
+    /// How far past halfway a place may be, for two people further apart.
+    private static let pastHalfwayKm = 2.0
+    /// At most this much, per place, to tell near-equals apart.
+    private static let varietyNudge = 1.0
+    /// What being in a plan you already sent this person costs a place.
+    private static let alreadySharedCost = 2.0
+
+    /// FNV-1a. The same number for the same words on every phone and every
+    /// launch, which Swift's own `hashValue` deliberately is not.
+    private static func stableHash(_ text: String) -> UInt64 {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in text.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x100000001b3
+        }
+        return hash
+    }
+
+    /// `items` are what you added, in order. A blank one is skipped; the rest
+    /// each become a stop, if anywhere fits.
     ///
     /// `day` takes out anywhere shut that day. A plan that sent two people to
     /// a museum on the day it is closed would be the planner being wrong about
@@ -294,15 +468,24 @@ enum DatePlanner {
     /// (see `VenueSearch`): a profile from the server names a neighbourhood but
     /// carries no position, so its centre has to be looked up, and the halfway
     /// point has to be named by something that knows more than New York.
+    ///
+    /// `alreadyShared` is the names of places in plans already sent to this
+    /// person. They are not ruled out -- a favourite is a favourite -- but they
+    /// come after somewhere new.
+    ///
+    /// `excluded` is places never to offer: the ones you said were "Not for
+    /// us", and the ones taken off for everybody (`backend/032`).
     static func plan(
         you: Person,
         them: Person,
         time: DatePlan.TimeOfDay,
         day: PlanDay? = nil,
         venues: [Venue],
-        skips: [DatePlan.Role: Int] = [:],
+        items: [PlanItem],
         theirCentre: Coordinate? = nil,
-        halfwayName: String? = nil
+        halfwayName: String? = nil,
+        alreadyShared: Set<String> = [],
+        excluded: Set<String> = []
     ) -> DatePlan {
         // What you each said a date should be like. Either may be missing:
         // somebody who has not answered is planned for from interests alone.
@@ -324,122 +507,240 @@ enum DatePlanner {
         let theirPoint = theirCentre ?? them.place?.centre
         let middle = Self.middle(yourPoint, theirPoint)
 
+        /// **Variety, without a dice roll on every draw.** Apple Maps calls
+        /// every restaurant "restaurant", so to the planner they all score the
+        /// same and the nearest one won every time -- and when two tied, the
+        /// one first in the alphabet did. A small nudge per place, worked out
+        /// from the two of you and the day, spreads the picks: a different
+        /// pair, or another day, gets different places, while the plan on
+        /// screen holds still and a Swap is still the next one along.
+        let seed = "\(you.id)|\(them.id)|\(day?.iso ?? "")"
+        func nudge(_ venue: Venue) -> Double {
+            Double(stableHash(seed + "|" + venue.id) % 1000) / 1000 * Self.varietyNudge
+        }
+
         func liking(_ venue: Venue) -> Double {
             3.0 * Double(venue.themes.intersection(shared).count)
                 + 1.0 * Double(venue.themes.intersection(oneSided).count)
                 + fit.score(venue)
+                + nudge(venue)
+                - (alreadyShared.contains(venue.name) ? Self.alreadySharedCost : 0)
         }
 
         /// Near halfway, and about as far for one of you as for the other.
+        /// Weighed so that distance can win: at the old weights a shared
+        /// interest was worth four kilometres, and a place across town that
+        /// matched one beat everything round the corner.
         func between(_ venue: Venue) -> Double {
             var cost = 0.0
-            if let middle { cost += 0.8 * km(middle, venue.coordinate) }
+            if let middle { cost += Self.kmFromHalfwayCost * km(middle, venue.coordinate) }
             if let yourPoint, let theirPoint {
-                cost += 0.5 * abs(km(yourPoint, venue.coordinate) - km(theirPoint, venue.coordinate))
+                cost += 1.0 * abs(km(yourPoint, venue.coordinate) - km(theirPoint, venue.coordinate))
             }
             return cost
         }
 
-        func candidates(_ role: DatePlan.Role, besides used: Set<String>) -> [Venue] {
-            venues.filter {
-                $0.roles.contains(role) && $0.times.contains(time) && $0.isOpen(on: day)
-                    && !used.contains($0.id) && fit.allows($0)
+        /// **Never far from either of you.** No further from the one it is
+        /// further from than halfway plus a little -- or, for two people who
+        /// live close, than a short trip. Without it a plan reached as far as
+        /// the search did, which in a quiet place was twenty kilometres.
+        let reachLimit: Double? = {
+            switch (yourPoint, theirPoint) {
+            case let (a?, b?): return max(Self.nearbyKm, km(a, b) / 2 + Self.pastHalfwayKm)
+            case (_?, nil), (nil, _?): return Self.nearbyKm
+            default: return nil
+            }
+        }()
+        func withinReach(_ venue: Venue) -> Bool {
+            guard let reachLimit else { return true }
+            return [yourPoint, theirPoint].compactMap { $0 }
+                .allSatisfy { km($0, venue.coordinate) <= reachLimit }
+        }
+
+        // The items that have been told what they are, in your order.
+        let filled = items.filter { $0.category != nil }
+
+        /// **When each item will happen, before any place is chosen.** The
+        /// earliest it can start is the date's start plus every block before
+        /// it; the latest it can end allows for getting between the stops.
+        /// Checking the time of day alone -- "afternoon" -- was not enough
+        /// once a date could run nine hours: a café that shuts at six could
+        /// land at seven. A place has to be open across the whole window.
+        let windows: [(start: Int, end: Int)] = {
+            var start = time.start
+            return filled.enumerated().map { index, item in
+                defer { start += item.hours * 60 }
+                return (start, start + index * Self.legAllowance + item.hours * 60)
+            }
+        }()
+
+        func candidates(_ category: DatePlan.Category, at index: Int, besides used: Set<String>) -> [Venue] {
+            let window = windows[index]
+            // Afternoon or evening by when this item starts, not when the
+            // date does: the third thing on a long afternoon is an evening
+            // thing, and a bar should be able to be it.
+            let part: DatePlan.TimeOfDay = window.start >= Self.eveningFrom ? .evening : .afternoon
+            return venues.filter {
+                $0.kind.category == category && $0.times.contains(part) && $0.isOpen(on: day)
+                    && withinReach($0)
+                    && $0.openingHours.covers(from: window.start, to: window.end)
+                    && !used.contains($0.id) && !excluded.contains($0.id) && fit.allows($0)
             }
         }
 
-        func pick(_ role: DatePlan.Role, from pool: [Venue], by score: (Venue) -> Double) -> Venue? {
-            let ranked = pool.sorted {
+        func pick(_ pool: [Venue], skips: Int, passing passed: Set<String> = [],
+                  by score: (Venue) -> Double) -> Venue? {
+            let fresh = pool.filter { !passed.contains($0.id) }
+            let ranked = (fresh.isEmpty ? pool : fresh).sorted {
                 let a = score($0), b = score($1)
-                return a == b ? $0.id < $1.id : a > b
+                return a == b ? stableHash($0.id) < stableHash($1.id) : a > b
             }
             guard !ranked.isEmpty else { return nil }
-            return ranked[(skips[role] ?? 0) % ranked.count]
+            return ranked[skips % ranked.count]
         }
 
-        /// What could stand either side of a main thing, on foot from it -- and
-        /// not a second walk beside a walk.
-        func onFoot(from main: Venue, _ role: DatePlan.Role) -> [Venue] {
-            candidates(role, besides: [main.id]).filter {
-                travel(km(main.coordinate, $0.coordinate)).onFoot
-                    && !(main.kind.isOutside && $0.kind.isOutside)
+        guard let anchorIndex = filled.firstIndex(where: { $0.category == .activity })
+                ?? (filled.isEmpty ? nil : 0),
+              let anchorCategory = filled[anchorIndex].category
+        else {
+            return DatePlan(time: time, day: day,
+                            shared: DateTheme.allCases.filter { shared.contains($0) },
+                            sameWords: sameWordsShown,
+                            halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
+                            fromYou: nil, fairness: nil, stops: [])
+        }
+
+        /// "Keep it walkable" starts with the anchor: it has to be somewhere
+        /// with enough of every other item you asked for on foot from it --
+        /// and, for an anchor outdoors, indoors, or the only thing on foot from
+        /// a park is the next park along. Choosing the anchor as usual and then
+        /// looking for what was near it found, a quarter of the time, an anchor
+        /// with nothing near it -- and a walkable date with a train in it.
+        func hasCompany(_ anchor: Venue) -> Bool {
+            // Per item, what could fill it on foot from the anchor -- open at
+            // that item's time. Each needs one, and two of a kind need two.
+            var byCategory: [DatePlan.Category: (items: Int, places: Set<String>)] = [:]
+            for (index, item) in filled.enumerated() where index != anchorIndex && item.pinned == nil {
+                guard let category = item.category else { continue }
+                let near = candidates(category, at: index, besides: [anchor.id]).filter {
+                    travel(km(anchor.coordinate, $0.coordinate)).onFoot
+                        && !(anchor.kind.isOutside && $0.kind.isOutside)
+                }
+                if near.isEmpty { return false }
+                byCategory[category, default: (0, [])].items += 1
+                byCategory[category, default: (0, [])].places.formUnion(near.map(\.id))
             }
+            return byCategory.values.allSatisfy { $0.places.count >= $0.items }
         }
 
-        /// "Keep it walkable" starts with the main thing: it has to be somewhere
-        /// with a first and a last stop on foot from it. Choosing the main thing
-        /// as usual and then looking for what was near it found, a quarter of
-        /// the time, a main thing with nothing near it at all -- and a walkable
-        /// date with a train in it.
-        func hasCompany(_ main: Venue) -> Bool {
-            let openers = onFoot(from: main, .opener), closers = onFoot(from: main, .closer)
-            guard let opener = openers.first, let closer = closers.first else { return false }
-            return openers.count > 1 || closers.count > 1 || opener.id != closer.id
+        // Kept places first: they are where they are, and the rest is placed
+        // around them.
+        var chosen: [Int: Venue] = [:]
+        for (index, item) in filled.enumerated() {
+            if let pinned = item.pinned, !excluded.contains(pinned.id) { chosen[index] = pinned }
+        }
+        let keptIDs = Set(chosen.values.map(\.id))
+
+        let anchors = candidates(anchorCategory, at: anchorIndex, besides: keptIDs)
+        let reachable = fit.walkable && filled.count > 1 ? anchors.filter(hasCompany) : anchors
+        let anchorPool = reachable.isEmpty ? anchors : reachable
+        let anchor = chosen[anchorIndex]
+            ?? pick(anchorPool, skips: filled[anchorIndex].skips, passing: filled[anchorIndex].passed) {
+                liking($0) - between($0)
+            }
+
+        /// Every other stop is placed beside one already placed: outward from
+        /// the anchor, each near the stop on the anchor's side of it. Near the
+        /// anchor alone was not enough -- two cafés either side of a park are
+        /// each a walk from the park and not from each other, and with items in
+        /// any order a walkable date had a train in it.
+        func score(_ venue: Venue, near reference: Venue?) -> Double {
+            guard let reference else { return liking(venue) - between(venue) }
+            return liking(venue) - Self.kmFromNeighbourCost * km(reference.coordinate, venue.coordinate)
         }
 
-        // The anchor.
-        let mains = candidates(.main, besides: [])
-        let reachable = fit.walkable ? mains.filter(hasCompany) : mains
-        let mainPool = reachable.isEmpty ? mains : reachable
-        let main = pick(.main, from: mainPool) { liking($0) - between($0) }
-
-        /// For the stops either side: near the main thing. With no main thing,
-        /// halfway stands in for it.
-        func nearMain(_ venue: Venue) -> Double {
-            guard let main else { return liking(venue) - between(venue) }
-            return liking(venue) - 1.5 * km(main.coordinate, venue.coordinate)
+        /// "Keep it walkable": only what is a walk from that stop. It gives way
+        /// only when nothing at all is in reach -- and then the leg says "by
+        /// transit", so the plan never pretends.
+        func inReach(_ pool: [Venue], of reference: Venue?) -> [Venue] {
+            guard fit.walkable, let reference else { return pool }
+            let near = pool.filter { travel(km(reference.coordinate, $0.coordinate)).onFoot }
+            return near.isEmpty ? pool : near
         }
+
+        var placedNear: [Int: Venue] = [:]
+        /// How many other places each stop could swap to.
+        var alternatives: [Int: Int] = [
+            anchorIndex: anchorPool.filter { $0.id != anchor?.id }.count
+        ]
+        if let anchor { chosen[anchorIndex] = anchor }
 
         /// Not a second walk next to a walk. A rule rather than a penalty: as a
         /// penalty it lost to a park that two people both liked, and the plan
-        /// became one long walk with a name change halfway. It gives way only if
-        /// there is nothing else at all.
-        func besideMain(_ pool: [Venue]) -> [Venue] {
-            guard let main, main.kind.isOutside else { return pool }
+        /// became one long walk with a name change halfway. It gives way only
+        /// if there is nothing else at all.
+        func notBesideAWalk(_ pool: [Venue], at index: Int) -> [Venue] {
+            let neighbours = [index - 1, index + 1].compactMap { chosen[$0] }
+            guard neighbours.contains(where: { $0.kind.isOutside }) else { return pool }
             let indoors = pool.filter { !$0.kind.isOutside }
             return indoors.isEmpty ? pool : indoors
         }
 
-        /// "Keep it walkable": only what is a walk from the main thing. Like
-        /// `besideMain`, it gives way only when nothing at all is in reach --
-        /// and then the leg says "by transit", so the plan never pretends.
-        func inReach(_ pool: [Venue]) -> [Venue] {
-            guard fit.walkable, let main else { return pool }
-            let near = pool.filter { travel(km(main.coordinate, $0.coordinate)).onFoot }
-            return near.isEmpty ? pool : near
+        let outward = filled.indices
+            .filter { $0 != anchorIndex }
+            .sorted { (abs($0 - anchorIndex), $0) < (abs($1 - anchorIndex), $1) }
+        for index in outward {
+            guard let category = filled[index].category else { continue }
+            let reference = chosen[index < anchorIndex ? index + 1 : index - 1] ?? anchor
+            placedNear[index] = reference
+            let kept = filled[index].pinned != nil && chosen[index] != nil
+            let used = Set(chosen.filter { $0.key != index }.values.map(\.id))
+            let pool = notBesideAWalk(inReach(candidates(category, at: index, besides: used),
+                                              of: reference),
+                                      at: index)
+            if kept {
+                alternatives[index] = pool.filter { $0.id != chosen[index]?.id }.count
+                continue
+            }
+            if let venue = pick(pool, skips: filled[index].skips, passing: filled[index].passed,
+                                by: { score($0, near: reference) }) {
+                chosen[index] = venue
+                alternatives[index] = pool.filter { $0.id != venue.id }.count
+            }
         }
-
-        var used = Set(main.map { [$0.id] } ?? [])
-        let openerPool = besideMain(inReach(candidates(.opener, besides: used)))
-        let opener = pick(.opener, from: openerPool, by: nearMain)
-        if let opener { used.insert(opener.id) }
-        let closerPool = besideMain(inReach(candidates(.closer, besides: used)))
-        let closer = pick(.closer, from: closerPool, by: nearMain)
-        let choices: [DatePlan.Role: Int] = [.opener: openerPool.count, .main: mainPool.count,
-                                             .closer: closerPool.count]
 
         var stops: [DatePlan.Stop] = []
         var clock = time.start
         var previous: Venue?
-        for (role, chosen) in [(DatePlan.Role.opener, opener), (.main, main), (.closer, closer)] {
-            guard let venue = chosen else { continue }
+        for (index, item) in filled.enumerated() {
+            guard let venue = chosen[index], let category = item.category else { continue }
             let leg = previous.map { travel(km($0.coordinate, venue.coordinate)) }
             // Rounded up to the next five minutes. "3:33" reads as computed; a
             // plan two people make reads "3:35".
             clock = ((clock + (leg?.minutes ?? 0) + 4) / 5) * 5
+            let near = index == anchorIndex ? nil : placedNear[index]
             stops.append(DatePlan.Stop(
-                role: role,
+                itemID: item.id,
+                category: category,
                 venue: venue,
                 start: clock,
+                minutes: item.hours * 60,
                 travel: leg,
-                reason: reason(for: venue, near: role == .main ? nil : main,
-                               shared: shared, you: you, yours: yours,
-                               them: them, theirs: theirs, yourName: "You"),
-                sharedReason: reason(for: venue, near: role == .main ? nil : main,
+                // A kept place says where it came from; it was not chosen here.
+                reason: item.pinned?.id == venue.id
+                    ? (item.pinnedFrom ?? "From the plan that was sent.")
+                    : reason(for: venue, near: near,
+                             shared: shared, you: you, yours: yours,
+                             them: them, theirs: theirs, yourName: "You"),
+                sharedReason: reason(for: venue, near: near,
                                      shared: shared, you: you, yours: yours,
                                      them: them, theirs: theirs, yourName: you.name),
-                canSwap: (choices[role] ?? 0) > 1
+                canSwap: (alternatives[index] ?? 0) > 0,
+                isAnchor: index == anchorIndex,
+                placedNear: near?.name,
+                isOpenThroughout: venue.openingHours.covers(from: clock, to: clock + item.hours * 60)
             ))
-            clock += venue.kind.minutes
+            clock += item.hours * 60
             previous = venue
         }
 
