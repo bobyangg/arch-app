@@ -1851,6 +1851,9 @@ function plannerRoot(){
         aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}
         </div>
       <div class="spread" style="justify-content:flex-end; gap:16px; padding-left:70px; margin-top:4px">
+        <a class="btntext" style="width:auto; padding:0 4px; text-decoration:none" target="_blank" rel="noopener"
+          href="https://maps.apple.com/?q=${encodeURIComponent(st.v.name)}&sll=${st.v.c.lat},${st.v.c.lon}&z=17"
+          aria-label="Open ${esc(st.v.name)} in Apple Maps">Maps</a>
         <button class="btntext" style="width:auto; padding:0 4px" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
           aria-label="Never suggest ${esc(st.v.name)}">Not for us</button>
         <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}"
