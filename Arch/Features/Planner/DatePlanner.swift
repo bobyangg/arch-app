@@ -8,10 +8,18 @@ import Foundation
 /// words are *about* finds a lot: somebody who likes bridge inspections and
 /// somebody who likes above-ground platforms both like how cities are built.
 ///
-/// Seven themes, deliberately broad. A narrower set would split people who would
+/// Nine themes, deliberately broad. A narrower set would split people who would
 /// enjoy the same afternoon; a broader one would stop saying anything.
+///
+/// **The words were the mock people's, and real people do not write like them.**
+/// The first lists were built from "Darkroom printing" and "Brutalist car parks",
+/// and the first two real profiles -- "Gaming", "Gym", "Cooking"; "wood
+/// shopping", "arcade", "drinking" -- matched one theme between them, so the
+/// planner planned for one person's cooking and nothing of the other's. The lists
+/// now carry everyday words too, and `play` and `active` exist because games and
+/// staying active are two of the commonest things anybody writes.
 enum DateTheme: String, CaseIterable, Hashable, Identifiable {
-    case outdoors, buildings, craft, food, words, sound, night
+    case outdoors, buildings, craft, food, words, sound, night, play, active
 
     var id: String { rawValue }
 
@@ -25,6 +33,8 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         case .words:     return "Words"
         case .sound:     return "Sound"
         case .night:     return "Late hours"
+        case .play:      return "Games"
+        case .active:    return "Staying active"
         }
     }
 
@@ -38,6 +48,8 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         case .words:     return "books and language"
         case .sound:     return "how things sound"
         case .night:     return "the late hours"
+        case .play:      return "playing games"
+        case .active:    return "staying active"
         }
     }
 
@@ -47,28 +59,64 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
     /// because "late" is inside "articulated", and an interest in buses is not an
     /// interest in staying up. An interest can point at more than one theme:
     /// "Walking at night" is both outdoors and night, which is right.
+    ///
+    /// A fragment starting with `=` matches only the whole word, for the short
+    /// ones whose starts are everywhere: "=bar" is a bar and not a barber or a
+    /// barbecue, "=tea" is tea and not teaching, "=run" is running and not a
+    /// runway.
     private var fragments: [String] {
         switch self {
         case .outdoors:
             return ["walk", "park", "tree", "dawn", "garden", "outdoor", "hike", "hiking",
-                    "river", "beach", "swim", "climb", "cycl", "bike", "bird"]
+                    "river", "beach", "swim", "climb", "cycl", "bike", "bird",
+                    "camp", "fishing", "kayak", "canoe", "sail", "lake", "mountain", "nature",
+                    "picnic", "trail", "ocean", "=sea", "snow", "stargaz", "dog", "sunset",
+                    "sunrise", "island", "boat"]
         case .buildings:
             return ["bridge", "brutalis", "car park", "platform", "bus", "train", "subway",
-                    "drainage", "architect", "street", "tower", "building", "transit"]
+                    "drainage", "architect", "street", "tower", "building", "transit",
+                    "city", "urban", "skyline", "interior", "history", "historic", "museum"]
         case .craft:
             return ["darkroom", "rolleiflex", "camera", "photo", "print", "paper", "repair",
-                    "pottery", "ceramic", "knit", "sew", "woodwork", "spines", "felt", "film"]
+                    "pottery", "ceramic", "knit", "sew", "woodwork", "spines", "felt", "film",
+                    "wood", "diy", "paint", "draw", "sketch", "=art", "=arts", "artist", "artwork",
+                    "sculpt", "crochet", "embroider", "quilt", "carpent", "craft", "maker",
+                    "candle", "jewel", "leather", "design", "illustrat", "lego"]
         case .food:
             return ["bak", "bread", "dulce", "cook", "food", "coffee", "dumpling", "market",
-                    "noodle", "pastry", "wine", "tea", "cheese", "taco", "pizza"]
+                    "noodle", "pastry", "wine", "=tea", "cheese", "taco", "pizza",
+                    "=eat", "eating", "restaurant", "brunch", "sushi", "ramen", "bbq",
+                    "barbecue", "grill", "chef", "foodie", "dessert", "ice cream", "chocolate",
+                    "curry", "dim sum", "boba", "matcha", "latte", "espresso", "dining",
+                    "cuisine", "recipe", "kitchen", "burger", "pho", "spicy", "cafe", "café"]
         case .words:
             return ["poet", "tense", "book", "read", "manual", "spines", "novel", "language",
-                    "translat", "writing", "library", "essay"]
+                    "translat", "writing", "library", "essay",
+                    "writer", "journal", "comic", "manga", "literat", "philosoph", "podcast",
+                    "debate", "story", "stories", "learn"]
         case .sound:
             return ["sound", "room tone", "click track", "music", "jazz", "vinyl", "record",
-                    "hammer", "piano", "noise", "engine", "choir", "concert", "synth"]
+                    "hammer", "piano", "noise", "engine", "choir", "concert", "synth",
+                    "singing", "singer", "guitar", "drum", "=band", "=bands", "=dj", "song", "opera",
+                    "orchestra", "violin", "=rap", "hip hop", "festival", "=gig", "=gigs",
+                    "karaoke", "spotify"]
         case .night:
-            return ["night", "four in the morning", "late", "laundromat", "midnight", "insomnia"]
+            return ["night", "four in the morning", "late", "laundromat", "midnight", "insomnia",
+                    "drink", "=bar", "=bars", "bar hopping", "=pub", "=pubs", "cocktail", "beer",
+                    "brew", "whisk", "=club", "clubs", "clubbing", "party", "partying",
+                    "danc", "rave", "karaoke", "comedy", "stand up", "stand-up"]
+        case .play:
+            return ["gam", "arcade", "board game", "video game", "puzzle", "trivia", "bowling",
+                    "billiard", "=pool", "dart", "chess", "poker", "escape room", "mini golf",
+                    "minigolf", "pinball", "nintendo", "playstation", "xbox", "=cards",
+                    "card game", "go kart", "karting", "lego"]
+        case .active:
+            return ["=gym", "fitness", "workout", "working out", "lifting", "weightlift",
+                    "=weights", "=run", "running", "runner", "jog", "marathon", "yoga",
+                    "pilates", "sport", "basketball", "soccer", "football", "tennis",
+                    "volleyball", "badminton", "hockey", "skat", "skiing", "snowboard",
+                    "surf", "boxing", "martial", "climb", "bouldering", "golf", "crossfit",
+                    "cycl", "swim", "hike", "hiking"]
         }
     }
 
@@ -78,7 +126,10 @@ enum DateTheme: String, CaseIterable, Hashable, Identifiable {
         let words = lowered.split { !$0.isLetter }.map(String.init)
         return Set(allCases.filter { theme in
             theme.fragments.contains { fragment in
-                fragment.contains(" ")
+                if fragment.hasPrefix("=") {
+                    return words.contains(String(fragment.dropFirst()))
+                }
+                return fragment.contains(" ") || fragment.contains("-")
                     ? lowered.contains(fragment)
                     : words.contains { $0.hasPrefix(fragment) }
             }
@@ -445,6 +496,10 @@ enum DatePlanner {
     private static let varietyNudge = 1.0
     /// What being in a plan you already sent this person costs a place.
     private static let alreadySharedCost = 2.0
+    /// What a stop earns for speaking to whichever of you the plan has not yet
+    /// spoken to. About a kilometre's worth: enough to choose the bowling alley
+    /// over the next café along, not enough to cross town for it.
+    private static let otherPersonBonus = 2.0
 
     /// FNV-1a. The same number for the same words on every phone and every
     /// launch, which Swift's own `hashValue` deliberately is not.
@@ -668,6 +723,29 @@ enum DatePlanner {
             return near.isEmpty ? pool : near
         }
 
+        /// **Both of you, not whoever's interests the map happens to suit.**
+        /// Scoring each place alone -- three for something you share, one for
+        /// something either of you likes -- let a whole plan be about one
+        /// person: one of a real pair wrote "Cooking", the restaurants all
+        /// matched it, and nothing the other wrote got a stop. So once the plan speaks to one of
+        /// you, the next stop earns `otherPersonBonus` for speaking to the
+        /// other. Something you share speaks to both.
+        let yoursOnly = Set(yours.keys).subtracting(shared)
+        let theirsOnly = Set(theirs.keys).subtracting(shared)
+        func speaksTo(_ venue: Venue) -> (you: Bool, them: Bool) {
+            let both = !venue.themes.isDisjoint(with: shared)
+            return (both || !venue.themes.isDisjoint(with: yoursOnly),
+                    both || !venue.themes.isDisjoint(with: theirsOnly))
+        }
+        func balance(_ venue: Venue) -> Double {
+            let placed = chosen.values
+            let youHeard = placed.contains { speaksTo($0).you }
+            let theyHeard = placed.contains { speaksTo($0).them }
+            let this = speaksTo(venue)
+            return (this.you && !youHeard ? Self.otherPersonBonus : 0)
+                + (this.them && !theyHeard ? Self.otherPersonBonus : 0)
+        }
+
         var placedNear: [Int: Venue] = [:]
         /// How many other places each stop could swap to.
         var alternatives: [Int: Int] = [
@@ -703,7 +781,7 @@ enum DatePlanner {
                 continue
             }
             if let venue = pick(pool, skips: filled[index].skips, passing: filled[index].passed,
-                                by: { score($0, near: reference) }) {
+                                by: { score($0, near: reference) + balance($0) }) {
                 chosen[index] = venue
                 alternatives[index] = pool.filter { $0.id != venue.id }.count
             }
