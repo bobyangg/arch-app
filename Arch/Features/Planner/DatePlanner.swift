@@ -269,16 +269,29 @@ struct Venue: Identifiable, Hashable {
     /// What the planner checks a stop against: its own hours, or its kind's.
     var openingHours: OpeningHours { hours ?? kind.typicalHours.typical }
 
-    /// This place in Apple Maps. A search for its name around where it is,
-    /// rather than a pin at its coordinates: a pin is a point on a map, and
-    /// the search lands on the place itself -- its hours, photos, phone and
-    /// directions, which the planner cannot show.
+    /// Apple Maps' own identifier for this place, from iOS 18. The Maps
+    /// button opens exactly this place with it (`VenueSearch.openInMaps`).
+    var mapsID: String? = nil
+
+    /// How near the top of Apple's answer it came, 1 for first and towards 0
+    /// for last. Apple puts the places people actually go to first, and this is
+    /// the nearest thing to a review count MapKit gives an app.
+    var prominence: Double = 0
+
+    /// This place in Apple Maps, as a pin at its own coordinates with its name
+    /// on it -- for an iPhone without `mapsID`.
+    ///
+    /// **This used to search for the name near the place, and that was wrong
+    /// twice.** "Outdoor" landed on whichever of six places called something
+    /// Outdoor Apple liked best; "Lake Devo", which Apple's search could not
+    /// find by name, landed on the address at that spot -- a street corner.
+    /// The name is now only the pin's label; the coordinates say where.
     var mapsURL: URL? {
         var parts = URLComponents(string: "https://maps.apple.com/")
         parts?.queryItems = [
+            URLQueryItem(name: "ll", value: String(format: "%.6f,%.6f",
+                                                    coordinate.latitude, coordinate.longitude)),
             URLQueryItem(name: "q", value: name),
-            URLQueryItem(name: "sll", value: String(format: "%.6f,%.6f",
-                                                     coordinate.latitude, coordinate.longitude)),
             URLQueryItem(name: "z", value: "17"),
         ]
         return parts?.url
@@ -496,6 +509,11 @@ enum DatePlanner {
     private static let varietyNudge = 1.0
     /// What being in a plan you already sent this person costs a place.
     private static let alreadySharedCost = 2.0
+    /// What coming first in Apple's answer is worth, falling to nothing for
+    /// last: as much as an interest only one of you has. Enough to choose the
+    /// place people go to over the one nobody does, not enough to outweigh
+    /// what you both like.
+    private static let prominenceWeight = 1.0
     /// What a stop earns for speaking to whichever of you the plan has not yet
     /// spoken to. About a kilometre's worth: enough to choose the bowling alley
     /// over the next café along, not enough to cross town for it.
@@ -578,6 +596,7 @@ enum DatePlanner {
             3.0 * Double(venue.themes.intersection(shared).count)
                 + 1.0 * Double(venue.themes.intersection(oneSided).count)
                 + fit.score(venue)
+                + Self.prominenceWeight * venue.prominence
                 + nudge(venue)
                 - (alreadyShared.contains(venue.name) ? Self.alreadySharedCost : 0)
         }
