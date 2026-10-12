@@ -276,6 +276,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .pcwalk{display:flex; align-items:center; gap:12px; padding:2px 0;}
 .pcwalk i{display:block; width:2px; height:18px; margin-left:26px; background:var(--quiet); border-radius:1px;}
 .plancard .btn{height:40px;}
+/* The plan you both said yes to. */
+.agreed{padding:16px; border-radius:var(--r-card); background:var(--stone);}
+.agreed .astop{display:flex; gap:12px; align-items:flex-start;}
+.agreed .astop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
+.agreed .astop .btntext{width:auto; flex:none; padding:0 0 0 8px; min-height:32px; margin-top:-6px; text-decoration:none;}
+.pwho .ok{font-size:11px; line-height:14px; font-weight:600; color:var(--lamp); margin-top:-6px;}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
 /* ---- bubbles ---- */
@@ -1675,7 +1681,13 @@ function planCard(c,m,i){
         ${open&&st.reason?`<div class="footnote" style="margin-top:2px">${esc(st.reason)}</div>`:""}</div></button>`;
   });
   h+=`</div>`;
-  if(ans>=0) h+=`<div class="subhead mt-s">${c.msgs[ans][0]==="in"?esc(c.person.name)+" is in.":"You are in."}</div>`;
+  const off=cancelledBy(c,i);
+  if(off) h+=`<div class="footnote mortar mt-s">${off==="in"?esc(c.person.name)+" cancelled it.":"You cancelled it."}</div>`;
+  else if(ans>=0){
+    const ag=agreedPlan(c);
+    h+=`<div class="spread mt-s" style="align-items:center"><div class="subhead">${c.msgs[ans][0]==="in"?esc(c.person.name)+" is in.":"You are in."}</div>
+      ${ag&&ag.i===i?`<button class="btntext" style="width:auto; padding:0 4px" data-a="planSee" data-id="${c.id}">See the plan</button>`:""}</div>`;
+  }
   else if(past) h+=`<div class="footnote mortar mt-s">This day has been and gone.</div>`;
   else if(!hasEnded(c)&&!isRequest(c)){
     h+=out
@@ -1686,6 +1698,45 @@ function planCard(c,m,i){
           <button class="btn quiet" style="flex:1" data-a="planChange" data-id="${c.id}" data-i="${i}">Change it</button></div>`;
   }
   return h+`</div>`;
+}
+
+/* The plan the two of you agreed on: the latest one somebody said "I'm in" to,
+   while its day is still to come. Read off the conversation, so it is the same
+   on both phones and needs nothing stored. `newer` is a later plan still
+   waiting on somebody -- "them" or "you" -- so the screen can say so. */
+function agreedPlan(c){
+  if(!c) return null;
+  const today=isoDay(new Date()), past=pl=>!!pl.day&&pl.day<today;
+  const answered=k=>c.msgs.find(x=>x[4]&&x[4].answering===k);
+  for(let i=c.msgs.length-1;i>=0;i--){
+    const m=c.msgs[i]; if(!(m[4]&&m[4].plan)) continue;
+    const ans=answered(i); if(!ans) continue;
+    /* Once its day has gone, or it has been called off, so has any plan before it. */
+    if(past(m[4].plan)||cancelledBy(c,i)) return null;
+    let newer=null;
+    for(let k=i+1;k<c.msgs.length;k++){const x=c.msgs[k];
+      if(x[4]&&x[4].plan&&!answered(k)&&!past(x[4].plan)) newer=x[0]==="out"?"them":"you";}
+    return {i,key:`${c.id}:${i}`,plan:m[4].plan,saidYes:ans[0]==="in"?"them":"you",newer};
+  }
+  return null;
+}
+/* Who called off the plan in message i: "in" for them, "out" for you, or null. */
+const cancelledBy=(c,i)=>{const x=c.msgs.find(y=>y[4]&&y[4].cancelling===i); return x?x[0]:null;};
+const untilDay=iso=>{const n=Math.round((dayDate(iso)-dayDate(isoDay(new Date())))/864e5);
+  return n<=0?"Today":n===1?"Tomorrow":`In ${n} days`;};
+
+/* The planner, opened on a plan from a thread: its day, its time of day and its
+   places, kept as they are. `from` is said under each kept place. `editing` is
+   the agreed plan being changed, when it is one. */
+function openPlanIn(c,i,from,editing){
+  const m=c.msgs[i];
+  const placeOf=x=>x.placeID&&x.lat!=null?(VENUES.find(v=>v.id===x.placeID)
+    ||VN(x.placeID,x.name,x.kindKey||(x.category==="food"?"food":"show"),x.hood,x.lat,x.lon,[],["afternoon","evening"],[])):null;
+  const shape=(m[4].plan.stops||[]).filter(x=>x.category).map(x=>newItem(x.category,
+    Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),from));
+  S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,
+    items:shape.length?shape:[newItem()],sent:null,q:null,draft:[],replanned:null,editing:editing||null};
+  S.stacks.planner=[]; S.tab="planner"; render();
 }
 
 /* Hana's thread ends on a plan she sent, so there is a card to answer. Built at
@@ -1761,6 +1812,50 @@ function plannerQuestion(){
 /* The toggle's choice, or else the time your answers (and theirs) prefer. */
 const plannerTime=cur=>S.planner.time||dateFit(S.you.prefs,cur&&cur.p.prefs).time;
 
+/* The people you are talking to, as faces. Somebody you have a plan with says so. */
+const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>{
+  const ok=!!agreedPlan(c.convo);
+  return `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${c.p.id===cur.p.id}"
+      aria-label="${esc(c.p.name)}${ok?", plan agreed":""}">
+    <div class="face" style="${tone(c.p.photos[0])}"></div><div class="nm">${esc(c.p.name)}</div>
+    ${ok?`<div class="ok">Agreed</div>`:""}</button>`;}).join("")+`</div>`;
+
+/* The plan you both said yes to: when, where, for how long, each place a tap
+   from Apple Maps -- and the way into changing it. A change is a new plan sent
+   into the conversation; this one stands until they say yes to that. */
+function agreedScreen(cur,ag){
+  const pl=ag.plan, part=pl.time==="evening"?"evening":"afternoon", name=esc(cur.p.name);
+  const last=pl.stops[pl.stops.length-1], ends=last?last.start+(last.minutes||60):null;
+  let h=`<div class="agreed mt-l" data-k="agreed">
+    <div class="caption" style="color:var(--lamp)">You are both in</div>
+    <div class="titleM" style="margin-top:4px">${pl.day?esc(dayName(pl.day))+" "+part:"An "+part} with ${name}</div>
+    ${pl.day?`<div class="footnote mortar" style="margin-top:2px">${esc(dayLong(pl.day))} \u00B7 ${untilDay(pl.day)}</div>`:""}
+    <div class="v mt-m">`;
+  pl.stops.forEach((st,k)=>{
+    if(st.leg) h+=`<div class="pwalk"><i></i><div class="footnote mortar">${esc(st.leg)}</div></div>`;
+    else if(k>0) h+=`<div style="height:12px"></div>`;
+    h+=`<div class="astop"><div class="at">${clockAt(st.start)}</div>
+      <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(st.name)}</div>
+        <div class="footnote mortar">${[st.kind,st.hood].concat(st.minutes?[`${st.minutes/60} hr`]:[]).map(esc).join(" \u00B7 ")}</div></div>
+      ${st.lat!=null?`<a class="btntext" target="_blank" rel="noopener"
+        href="https://maps.apple.com/?q=${encodeURIComponent(st.name)}&sll=${st.lat},${st.lon}&z=17"
+        aria-label="Open ${esc(st.name)} in Apple Maps">Maps</a>`:""}</div>`;
+  });
+  h+=`</div><div class="footnote mortar mt-m">${[ends!=null?`Done by about ${clockAt(ends)}.`:"",
+    ag.saidYes==="them"?`${name} said yes.`:"You said yes."].join(" ")}</div></div>`;
+  if(ag.newer) h+=`<div class="footnote mt-m">${ag.newer==="them"?`You sent ${name} a newer plan. It is waiting on them.`
+    :`${name} sent a newer plan. It is waiting on you in your conversation.`}</div>`;
+  h+=`<button class="btn quiet mt-m" data-a="agreedEdit">Make changes</button>
+    <div class="footnote mortar center mt-s">Changes go to ${name} as a new plan. This one stands until they say yes.</div>
+    <button class="btntext mt-m" data-a="agreedCancelAsk">Cancel the date</button>`;
+  return h;
+}
+
+const editingBanner=(cur,ag)=>{const part=ag.plan.time==="evening"?"evening":"afternoon";
+  return `<div class="pcard mt-l" data-k="agreedEditing"><div class="subhead">Changing your plan for ${ag.plan.day?esc(dayName(ag.plan.day))+" "+part:"the "+part}</div>
+    <div class="footnote mortar" style="margin-top:4px">Share it to send ${esc(cur.p.name)} the new version. The plan you agreed stands until they say yes.</div>
+    <button class="btntext mt-s" style="width:auto; padding:0 4px" data-a="agreedBack">Back to the agreed plan</button></div>`;};
+
 function plannerRoot(){
   const cands=plannerCandidates(), P_=S.planner;
   let h=`<div class="screen"><div class="pad pb-xxxl">
@@ -1768,9 +1863,21 @@ function plannerRoot(){
       <div class="titleL">Date planner</div>
       <div class="body mortar">Somewhere you would both actually like, about halfway between you.</div></div>`;
   if(P_.q!=null) return h+plannerQuestion()+`</div></div>`;
-  if(!S.you.prefs) return h+`<div class="mt-xl">${plannerGetStarted("planStart")}</div></div></div>`;
+  /* **The plan you agreed on comes first.** Picking somebody you have said
+     yes with -- or saying "I'm in" in a thread -- opens on that plan, as it
+     was agreed, with the way into changing it. Nothing here needs your answers
+     to the questions: the plan is already made. */
+  const cands0=plannerCandidates(), cur0=cands0.find(c=>c.p.id===P_.with)||cands0[0];
+  const agreed=cur0&&agreedPlan(cur0.convo);
+  if(agreed&&P_.editing!==agreed.key) return h+pickerRow(cands0,cur0)+agreedScreen(cur0,agreed)+`</div></div>`;
+  /* Places kept from a plan show without the questions: "Change it" on
+     somebody's plan opens on their places, whatever else is not ready yet. */
+  const kept=P_.items.some(it=>it.pin);
+  const cancelledLine=P_.cancelled?`<div class="footnote mt-l">${esc(P_.cancelled)}</div>`:"";
+  if(!S.you.prefs&&!kept) return h+(cands0.some(c=>agreedPlan(c.convo))||P_.cancelled?pickerRow(cands0,cur0):"")
+    +cancelledLine+(agreed?editingBanner(cur0,agreed):"")+`<div class="mt-xl">${plannerGetStarted("planStart")}</div></div></div>`;
   /* Your own answers in a line, and the way back into them. Only ever yours. */
-  const prefRow=`<div class="mt-l"><div class="spread" style="align-items:baseline">
+  const prefRow=!S.you.prefs?"":`<div class="mt-l"><div class="spread" style="align-items:baseline">
       <div class="subhead">Your date preferences</div>
       <button class="btntext" data-a="planStart" aria-label="Edit your date preferences" style="width:auto">Edit</button></div>
     <div class="footnote mortar" style="margin-top:4px">${esc(prefsSummary(S.you.prefs))}</div></div>`;
@@ -1783,9 +1890,9 @@ function plannerRoot(){
   const time=plannerTime(cur), day=plannerDay(P_.day);
   const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
 
-  h+=`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>
-    `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${c.p.id===cur.p.id}">
-      <div class="face" style="${tone(c.p.photos[0])}"></div><div class="nm">${esc(c.p.name)}</div></button>`).join("")+`</div>`;
+  h+=pickerRow(cands,cur)+cancelledLine;
+  /* Changing a plan you agreed on: said, with the way back to it. */
+  if(agreed&&cur.p.id===cur0.p.id) h+=editingBanner(cur,agreed);
 
   h+=`<div class="subhead mt-l">What you share</div>`;
   h+=plan.shared.length
@@ -3159,7 +3266,7 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null}; render();},
+    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null}; render();},
     /* What a blank item is: food, an activity, or "Surprise me" -- an
        activity if there is none (a date with nothing to do is a meal), then
        food if there is none, then the other kind from the item before it, so
@@ -3220,20 +3327,44 @@ document.addEventListener("click",e=>{
           ${c.p.id===cur.p.id?'<div class="footnote mortar">You planned this with them</div>':""}</div></button>`).join("")}</div>
         <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
     planStop:()=>{const k=el.dataset.k; S.planOpen=S.planOpen||{}; S.planOpen[k]=!S.planOpen[k]; render();},
+    /* "I'm in": the answer goes into the thread, and the planner opens on the
+       plan you just agreed to. */
     planYes:()=>{const c=S.convos.find(x=>x.id===id), i=+el.dataset.i; if(!c) return;
-      c.msgs.push(["out","I\u2019m in.","Just now",undefined,{answering:i}]); c.when="Just now"; render();},
-    planChange:()=>{const c=S.convos.find(x=>x.id===id), m=c&&c.msgs[+el.dataset.i]; if(!m) return;
+      c.msgs.push(["out","I\u2019m in.","Just now",undefined,{answering:i}]); c.when="Just now";
+      S.planner={...S.planner,with:c.person.id,editing:null,q:null,sent:null,cancelled:null};
+      S.stacks.planner=[]; S.tab="planner"; render();},
+    planSee:()=>{const c=S.convos.find(x=>x.id===id); if(!c) return;
+      S.planner={...S.planner,with:c.person.id,editing:null,q:null,sent:null,cancelled:null};
+      S.stacks.planner=[]; S.tab="planner"; render();},
+    /* Changing the agreed plan opens the planner on it, its places kept. */
+    agreedEdit:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
+        ag=cur&&agreedPlan(cur.convo); if(!ag) return;
+      openPlanIn(cur.convo,ag.i,"From your agreed plan.",ag.key);},
+    agreedBack:()=>{S.planner={...S.planner,editing:null,sent:null}; render();},
+    /* "Cancel the date" asks first: it tells them, and it cannot be taken back. */
+    agreedCancelAsk:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
+        ag=cur&&agreedPlan(cur.convo); if(!ag) return;
+      const part=ag.plan.time==="evening"?"evening":"afternoon", when=ag.plan.day?dayName(ag.plan.day)+" "+part:part;
+      openSheet(`<div class="titleM">Cancel your ${esc(when)} with ${esc(cur.p.name)}?</div>
+        <div class="body mortar mt-s">${esc(cur.p.name)} will see that it is off, in your conversation.</div>
+        <button class="btn primary mt-m" data-a="agreedCancel">Yes, cancel it</button>
+        <button class="btntext mt-s" data-a="closeSheet">Keep the date</button>`);},
+    agreedCancel:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
+        ag=cur&&agreedPlan(cur.convo); if(!ag) return;
+      const part=ag.plan.time==="evening"?"evening":"afternoon", when=ag.plan.day?dayName(ag.plan.day)+" "+part:"the "+part;
+      cur.convo.msgs.push(["out",`I have to cancel our plan for ${when}.`,"Just now",undefined,{cancelling:ag.i}]);
+      cur.convo.when="Just now";
+      S.planner={...S.planner,editing:null,sent:null,
+        cancelled:`Your plan with ${cur.p.name} for ${when} is cancelled. It says so in your conversation.`};
+      closeSheet(); render();},
+    planChange:()=>{const c=S.convos.find(x=>x.id===id), i=+el.dataset.i, m=c&&c.msgs[i]; if(!m) return;
       /* Their plan becomes yours to change: the same places, kept as they are,
          each saying where it came from. Swapping one lets the planner choose;
-         sharing sends it back, where their "Change it" opens yours. */
+         sharing sends it back, where their "Change it" opens yours. With a plan
+         already agreed, this is a change to it, so the planner says so. */
       const from=m[0]==="in"?`From ${c.person.name}\u2019s plan.`:"From the plan you sent.";
-      const placeOf=x=>x.placeID&&x.lat!=null?(VENUES.find(v=>v.id===x.placeID)
-        ||VN(x.placeID,x.name,x.kindKey||(x.category==="food"?"food":"show"),x.hood,x.lat,x.lon,[],["afternoon","evening"],[])):null;
-      const shape=(m[4].plan.stops||[]).filter(x=>x.category).map(x=>newItem(x.category,
-        Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),from));
-      S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,
-        items:shape.length?shape:[newItem()],sent:null,q:null,draft:[],replanned:null};
-      S.stacks.planner=[]; S.tab="planner"; render();},
+      const ag=agreedPlan(c);
+      openPlanIn(c,i,from,ag?ag.key:null);},
     planShareTo:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         to=cands.find(c=>c.p.id===id);
       if(!cur||!to) return;
