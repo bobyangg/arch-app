@@ -59,12 +59,14 @@ struct InterestsBlock: View {
 
 /// Heavier than a vitals chip — `limestone` at 13 rather than `mortar` at 12 —
 /// because an interest is something the person wrote, not metadata about them.
+/// In the semibold cut, so three short words read at a glance among the photos
+/// and paragraphs around them.
 struct InterestChip: View {
     let text: String
 
     var body: some View {
         Text(text)
-            .archText(.footnote)
+            .archText(.footnote, emphasised: true)
             .foregroundStyle(ArchColor.limestone)
             .padding(.horizontal, ArchSpacing.s)
             .padding(.vertical, ArchSpacing.xs)

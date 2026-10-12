@@ -1324,8 +1324,9 @@ enum MockData {
         )
     ]
 
+    /// People with something unread, as the Messages badge counts them.
     static var unreadCount: Int {
-        conversations.reduce(0) { $0 + $1.unreadCount }
+        conversations.filter { $0.unreadCount > 0 }.count
     }
 
     // MARK: Premium
