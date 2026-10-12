@@ -258,8 +258,47 @@ enum VenueSearch {
         if group.rejects.contains(where: has), !group.unlessHas.contains(where: { lower.contains($0) }) {
             return false
         }
+        if isAnArea(item, lower: lower) { return false }
         return !notAPlace.contains(where: has)
     }
+
+    /// **A neighbourhood or a street corner that Apple has filed as a place.**
+    /// "Jane and Finch" is both -- a neighbourhood named for the corner of Jane
+    /// Street and Finch Avenue -- and Apple Maps gives it a category, so it
+    /// came back from a search for things to do. Bob's name check kept it out
+    /// of parks; this keeps it, and anything like it, out of every search:
+    ///
+    /// - named after its own neighbourhood or town ("Jane and Finch" in Jane and
+    ///   Finch, "Liberty Village" in Liberty Village), or
+    /// - named after its own street and another, joined by "and" or "&"
+    ///   ("Jane and Finch" on Jane Street). The street has to be its own, so
+    ///   "Snakes & Lattes" and "Salt and Pepper" -- real places with "and" in
+    ///   their names -- are left alone, and so is anything whose name says
+    ///   what it is ("Bloor & Spadina Café").
+    private static func isAnArea(_ item: MKMapItem, lower: String) -> Bool {
+        let mark = item.placemark
+        let areaNames = [mark.subLocality, mark.locality, mark.subAdministrativeArea]
+            .compactMap { $0?.lowercased() }
+        if areaNames.contains(lower) { return true }
+
+        let words = lower.split { !$0.isLetter }.map(String.init)
+        let isJoined = words.contains("and") || lower.contains("&")
+        guard isJoined, words.count <= 5,
+              !words.contains(where: { businessWords.contains($0) }) else { return false }
+        // The first word of the street it is on: "jane" for Jane Street.
+        guard let street = mark.thoroughfare?.lowercased()
+                .split(whereSeparator: { !$0.isLetter }).first.map(String.init),
+              street.count > 2 else { return false }
+        return words.contains(street)
+    }
+
+    /// Words that say a name belongs to a business, even when it is named for
+    /// the corner it is on.
+    private static let businessWords: Set<String> = [
+        "cafe", "café", "coffee", "bar", "grill", "kitchen", "restaurant", "pub", "bistro",
+        "eatery", "bakery", "diner", "tavern", "brewery", "books", "records", "gallery",
+        "theatre", "theater", "cinema", "lanes", "bowl", "bowling", "arcade", "club", "house",
+    ]
 
     /// Every group at once, around one point. Nil if any search failed outright,
     /// because a plan built from the half that answered would be quietly wrong.
@@ -306,6 +345,13 @@ enum VenueSearch {
                 request.resultTypes = .pointOfInterest
                 request.pointOfInterestFilter = filter
                 request.region = region
+                // A search by name takes the region as a hint and answers with
+                // the best match in the city. From iOS 18 it can be told to
+                // stay inside; before that, `venues(around:)` drops what does
+                // not.
+                if #available(iOS 18.0, *) {
+                    request.regionPriority = .required
+                }
                 items = try await MKLocalSearch(request: request).start().mapItems
             } else {
                 let request = MKLocalPointsOfInterestRequest(coordinateRegion: region)
