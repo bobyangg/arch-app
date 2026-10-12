@@ -137,6 +137,13 @@ struct RootTabView: View {
                                                   from: sender.map { "From \($0)\u{2019}s plan." }
                                                       ?? "From the plan you sent."))
                 selection = .planner
+            },
+            showAgreed: { conversation in
+                // "I'm in" lands on the plan you just said yes to.
+                plannerPreset = PlannerPreset(personID: conversation.person.id,
+                                              time: .afternoon,
+                                              showsAgreed: true)
+                selection = .planner
             }
         ))
         .background(ArchColor.night)

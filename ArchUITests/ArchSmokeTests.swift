@@ -530,6 +530,46 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertGreaterThan(fromHana.count, 0, "The kept places do not say they came from Hana's plan.")
     }
 
+    /// "I'm in" opens the Date planner on the plan just agreed, as it was
+    /// agreed; "Make changes" opens the planner on its places, and the way
+    /// back returns to it.
+    func testImInOpensTheAgreedPlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["tab.messages"].tap()
+        let hana = app.buttons["messages.thread.hana"]
+        XCTAssertTrue(hana.waitForExistence(timeout: 5), "No conversation with Hana in Messages.")
+        hana.tap()
+
+        let yes = app.buttons["thread.plan.yes"]
+        XCTAssertTrue(yes.waitForExistence(timeout: 5), "Hana's plan has no I'm in.")
+        var tries = 0
+        while !yes.isHittable && tries < 4 { app.swipeUp(); tries += 1 }
+        yes.tap()
+
+        XCTAssertTrue(app.buttons["tab.planner"].waitForExistence(timeout: 5),
+                      "I'm in did not come back to the tab bar.")
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected, "I'm in did not open the planner.")
+        let edit = app.buttons["planner.agreed.edit"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "The planner did not open on the agreed plan.")
+        for place in ["Short Fuse Coffee", "Domino Park", "Wide Bowl Noodles"] {
+            XCTAssertTrue(app.staticTexts[place].exists, "The agreed plan does not show \(place).")
+        }
+        XCTAssertTrue(app.buttons["planner.agreed.maps.0"].exists, "An agreed stop has no way to open it in Maps.")
+
+        edit.tap()
+        let back = app.buttons["planner.agreed.back"]
+        XCTAssertTrue(back.waitForExistence(timeout: 5), "Make changes did not open the planner.")
+        let fromAgreed = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From your agreed plan'"))
+        XCTAssertGreaterThan(fromAgreed.count, 0, "The planner did not open on the agreed plan's places.")
+
+        back.tap()
+        XCTAssertTrue(edit.waitForExistence(timeout: 5), "Back did not return to the agreed plan.")
+        XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the agreed plan.")
+    }
+
     // MARK: App Review
 
     /// The Premium screen, photographed for App Store Connect.

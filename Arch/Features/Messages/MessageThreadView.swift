@@ -255,16 +255,20 @@ struct MessageThreadView: View {
                             theirName: conversation.person.name,
                             answeredByThem: answer(to: message),
                             canAct: conversation.state == .open,
+                            isAgreed: conversation.agreedPlan?.messageID == message.id,
                             onYes: {
                                 planActions.send(conversation, "I\u{2019}m in.",
                                                  SharedPlan(answering: message.id))
+                                // Straight to the plan you just agreed to.
+                                planActions.showAgreed(conversation)
                             },
                             onChange: {
                                 // Theirs or yours: the planner opens on these
                                 // places either way, and says whose they were.
                                 planActions.change(conversation, plan,
                                                    message.isOutgoing ? nil : conversation.person.name)
-                            }
+                            },
+                            onSee: { planActions.showAgreed(conversation) }
                         )
                     } else {
                         MessageBubble(
