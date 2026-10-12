@@ -83,9 +83,101 @@ enum VenueSearch {
             if isEnough(venues) { break }
         }
 
+        var kept: [Venue] = []
+        for venue in found ?? [] {
+            if await isNamedForACornerElsewhere(venue, near: middle) { continue }
+            kept.append(venue)
+        }
+
         return Nearby(theirCentre: theirCentre,
                       halfway: await neighbourhood(at: middle),
-                      venues: found ?? [])
+                      venues: kept)
+    }
+
+    // MARK: Places named for somewhere else
+
+    /// What Apple has answered about a name, so each is asked once a launch.
+    @MainActor private static var cornerAnswers: [String: Bool] = [:]
+
+    /// **"Jane N Finch", in the Financial District.** Apple Maps lists a live
+    /// venue downtown under the name of a neighbourhood sixteen kilometres
+    /// north-west -- the corner of Jane Street and Finch Avenue -- and to
+    /// anybody from Toronto a plan that says "Jane N Finch" says the wrong end
+    /// of the city, whatever the address underneath.
+    ///
+    /// No rule about words can tell that name from "Snakes & Lattes", so this
+    /// asks the place it would be confused with. A name shaped like a corner --
+    /// two words joined by "and", "&", "n" or "+", with nothing saying what the
+    /// business is -- is looked up as an address near here. If Apple answers
+    /// with a street corner or a neighbourhood of that name more than a
+    /// kilometre from where the place is listed, the place is named for
+    /// somewhere else and is left out. "Snakes & Lattes" is no corner, and a
+    /// bar called "Jane & Finch" *at* Jane and Finch is where its name says.
+    @MainActor
+    private static func isNamedForACornerElsewhere(_ venue: Venue, near point: Coordinate) async -> Bool {
+        guard let words = cornerWords(venue.name) else { return false }
+        let key = words.joined(separator: "|") + String(format: "|%.2f|%.2f", venue.coordinate.latitude,
+                                                         venue.coordinate.longitude)
+        if let known = cornerAnswers[key] { return known }
+
+        let geocoder = CLGeocoder()
+        defer { withExtendedLifetime(geocoder) {} }
+        let area = CLCircularRegion(
+            center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
+            radius: 50_000, identifier: "arch.planner.corner"
+        )
+        let marks = (try? await geocoder.geocodeAddressString(
+            "\(words[0]) and \(words[1])", in: area, preferredLocale: nil
+        )) ?? []
+
+        let elsewhere = marks.contains { mark in
+            guard let location = mark.location else { return false }
+            let named = [mark.name, mark.thoroughfare, mark.subLocality]
+                .compactMap { $0?.lowercased() }.joined(separator: " ")
+            guard words.allSatisfy({ named.contains($0) }) else { return false }
+            let isCorner = isStreetCorner(mark.name)
+            let isNeighbourhood = mark.subLocality.map { sub in
+                words.allSatisfy { sub.lowercased().contains($0) }
+            } ?? false
+            guard isCorner || isNeighbourhood else { return false }
+            let there = Coordinate(latitude: location.coordinate.latitude,
+                                   longitude: location.coordinate.longitude)
+            return DatePlanner.km(there, venue.coordinate) > 1
+        }
+        cornerAnswers[key] = elsewhere
+        return elsewhere
+    }
+
+    /// "Jane St & Finch Ave W": two streets, each with its kind of street, and
+    /// an "&" between. A business with "&" in its name -- "Snakes & Lattes" --
+    /// has no street on either side.
+    private static func isStreetCorner(_ name: String?) -> Bool {
+        guard let name else { return false }
+        let sides = name.lowercased().components(separatedBy: "&")
+        guard sides.count == 2 else { return false }
+        return sides.allSatisfy { side in
+            side.split { !$0.isLetter }.contains { streetKinds.contains(String($0)) }
+        }
+    }
+
+    private static let streetKinds: Set<String> = [
+        "st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard", "dr", "drive",
+        "cres", "crescent", "pkwy", "parkway", "hwy", "highway", "way", "ln", "lane", "ct",
+        "court", "pl", "place", "line", "trail", "gate", "terrace", "row", "sq", "square",
+    ]
+
+    /// The two words of a name shaped like a corner -- "Jane N Finch", "Yonge &
+    /// Dundas" -- or nil. Three parts, the middle one a joining word, and
+    /// nothing that says what kind of business it is.
+    private static func cornerWords(_ name: String) -> [String]? {
+        let parts = name.lowercased()
+            .split { !$0.isLetter && $0 != "&" && $0 != "+" }
+            .map(String.init)
+        guard parts.count == 3, ["and", "&", "n", "+"].contains(parts[1]),
+              parts[0].count > 2, parts[2].count > 2,
+              !parts.contains(where: { businessWords.contains($0) })
+        else { return nil }
+        return [parts[0], parts[2]]
     }
 
     /// Enough to plan with: somewhere to eat or drink, and something to do.
