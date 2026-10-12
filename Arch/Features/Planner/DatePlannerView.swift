@@ -138,6 +138,15 @@ struct DatePlannerView: View {
     /// the plan agreed with the person on screen, the planner shows, under a
     /// line saying what is being changed; otherwise the agreed plan does.
     @State private var changingAgreed: String?
+    /// The agreed plan "Cancel the date" is asking about.
+    @State private var cancelling: AgreedPlan?
+    /// Said after a date has been called off, until you pick somebody else.
+    @State private var cancelledNote: String?
+
+    /// Whether any item keeps a place from a plan that was sent. Those need no
+    /// search and no answers to the questions to show: "Change it" on
+    /// somebody's plan opens on their places, whatever else is not ready yet.
+    private var hasKept: Bool { items.contains { $0.pinned != nil } }
 
     /// What the rankings are built from that can change under you: your
     /// interests, and the interests of the person you are planning with.
@@ -176,20 +185,22 @@ struct DatePlannerView: View {
                     // plan is already made.
                     picker
                     agreedScreen(agreed, with: chosen)
-                } else if you.datePreferences == nil {
-                    if candidates.contains(where: { $0.conversation.agreedPlan != nil }) {
+                } else if you.datePreferences == nil && !hasKept {
+                    if candidates.contains(where: { $0.conversation.agreedPlan != nil }) || cancelledNote != nil {
                         picker
                     }
+                    cancelledLine
                     if let chosen, let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
                     }
                     PlannerGetStarted { startAsking() }
                 } else if let chosen {
                     picker
+                    cancelledLine
                     if let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
                     }
-                    if isLive && nearby[chosen.id] == nil {
+                    if isLive && nearby[chosen.id] == nil && !hasKept {
                         looking(for: chosen)
                     } else {
                         // Apple Maps' places in a real build, the bundled ones
@@ -197,14 +208,17 @@ struct DatePlannerView: View {
                         // same either way.
                         let found = nearby[chosen.id]
                         let time = openingTime(with: chosen.person)
+                        // Still searching, with places kept from a plan: those
+                        // show at once, and the rest fill in when Apple Maps
+                        // answers. Never the design build's Brooklyn.
                         let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
-                                                    day: day, venues: found?.venues ?? venues,
+                                                    day: day, venues: found?.venues ?? (isLive ? [] : venues),
                                                     items: items,
                                                     theirCentre: found?.theirCentre,
                                                     halfwayName: found?.halfway,
                                                     alreadyShared: alreadyShared(with: chosen),
                                                     excluded: notToOffer)
-                        if isLive && (found?.venues.isEmpty ?? true) {
+                        if isLive && (found?.venues.isEmpty ?? true) && !hasKept {
                             preferencesRow
                             dayRow
                             timeToggle(time)
@@ -260,6 +274,7 @@ struct DatePlannerView: View {
             restartSwaps()
             sentTo = nil
             replanned = nil
+            cancelledNote = nil
         }
         .onChange(of: pickedTime) { _, _ in
             restartSwaps()
@@ -294,6 +309,7 @@ struct DatePlannerView: View {
             questionIndex = nil
             chosenID = preset.personID
             sentTo = nil
+            cancelledNote = nil
             // "I'm in": the agreed plan, as it was agreed.
             if preset.showsAgreed {
                 changingAgreed = nil
@@ -391,12 +407,39 @@ struct DatePlannerView: View {
         sentTo = nil
     }
 
+    /// "Cancel the date": said in the conversation, tied to the plan, so it
+    /// is off on both phones -- the card in the thread says who cancelled it.
+    private func cancel(_ agreed: AgreedPlan, with candidate: PlannerCandidate) {
+        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
+        let when = agreed.plan.planDay.map { "\($0.weekdayName) \(part)" } ?? "the \(part)"
+        onSend(candidate.conversation,
+               "I have to cancel our plan for \(when).",
+               SharedPlan(cancelling: agreed.messageID))
+        cancelledNote = "Your plan with \(candidate.person.name) for \(when) is cancelled. It says so in your conversation."
+        changingAgreed = nil
+        sentTo = nil
+    }
+
+    /// After "Cancel the date".
+    @ViewBuilder
+    private var cancelledLine: some View {
+        if let cancelledNote {
+            Text(cancelledNote)
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.limestone)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, ArchSpacing.l)
+                .accessibilityIdentifier("planner.cancelled")
+        }
+    }
+
     /// The plan you both said yes to: when, where and for how long, each place
     /// a tap from Apple Maps -- and the way into changing it.
     private func agreedScreen(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> some View {
         let name = candidate.person.name
         let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
         let stops = agreed.plan.stops ?? []
+        let when = agreed.plan.planDay.map { "\($0.weekdayName) \(part)" } ?? part
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
                 Text("You are both in")
@@ -473,6 +516,26 @@ struct DatePlannerView: View {
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, ArchSpacing.s)
+
+            // Asked first: it tells them, and it cannot be taken back.
+            ArchTextButton(title: "Cancel the date") { cancelling = agreed }
+                .accessibilityIdentifier("planner.agreed.cancel")
+                .padding(.top, ArchSpacing.m)
+        }
+        .confirmationDialog(
+            "Cancel your \(when) with \(name)?",
+            isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Yes, cancel it", role: .destructive) {
+                if let cancelling {
+                    withAnimation(ArchMotion.standard) { cancel(cancelling, with: candidate) }
+                }
+                cancelling = nil
+            }
+            Button("Keep the date", role: .cancel) { cancelling = nil }
+        } message: {
+            Text("\(name) will see that it is off, in your conversation.")
         }
     }
 
