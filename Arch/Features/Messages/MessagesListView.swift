@@ -214,8 +214,11 @@ struct ConversationRow: View {
                 }
 
                 HStack(alignment: .top, spacing: ArchSpacing.xs) {
+                    // New messages in the heavier cut as well as the brighter
+                    // colour: a colour change alone was too quiet to notice
+                    // when scrolling a list.
                     Text(conversation.preview)
-                        .archText(.footnote)
+                        .archText(.footnote, emphasised: isUnread)
                         .foregroundStyle(isUnread ? ArchColor.limestone : ArchColor.mortar)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

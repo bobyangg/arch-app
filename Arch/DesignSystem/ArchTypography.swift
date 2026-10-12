@@ -149,6 +149,18 @@ enum ArchFace: String, CaseIterable {
         }
     }
 
+    /// The heavier cut of the same family, for text that has to stand out from
+    /// its neighbours at the same size -- an unread message, an interest. The
+    /// serif's text cut has no heavier sibling drawn for small sizes, so it
+    /// stays as it is rather than borrowing the display cut's hairlines.
+    var emphasised: ArchFace {
+        switch self {
+        case .instrumentRegular, .instrumentMedium: return .instrumentSemiBold
+        case .frauncesDisplayMedium:                return .frauncesDisplaySemiBold
+        default:                                    return self
+        }
+    }
+
     /// What the system stands in with when the file is not in the bundle.
     var fallbackWeight: UIFont.Weight {
         switch self {
@@ -163,6 +175,14 @@ enum ArchTypography {
 
     static func font(_ type: ArchType) -> Font {
         Font(UIFontMetrics(forTextStyle: type.metrics).scaledFont(for: uiFont(type)))
+    }
+
+    /// The same step in its heavier cut, scaled the same way. `.bold()` cannot
+    /// do this: the faces are static instances, and a custom font has no bolder
+    /// weight for SwiftUI to find.
+    static func emphasisedFont(_ type: ArchType) -> Font {
+        Font(UIFontMetrics(forTextStyle: type.metrics)
+            .scaledFont(for: face(type.face.emphasised, size: type.size)))
     }
 
     /// The unscaled cut, for the few places that need a `UIFont` rather than a
@@ -232,6 +252,15 @@ extension View {
     func archText(_ type: ArchType) -> some View {
         self
             .font(type.font)
+            .lineSpacing(type.lineSpacing)
+            .tracking(type.tracking)
+    }
+
+    /// The same step, in its heavier cut when `emphasised` -- size, line height
+    /// and Dynamic Type unchanged, so nothing around it moves when it changes.
+    func archText(_ type: ArchType, emphasised: Bool) -> some View {
+        self
+            .font(emphasised ? ArchTypography.emphasisedFont(type) : type.font)
             .lineSpacing(type.lineSpacing)
             .tracking(type.tracking)
     }

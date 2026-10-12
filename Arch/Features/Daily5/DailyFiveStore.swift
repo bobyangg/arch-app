@@ -86,7 +86,7 @@ final class DailyFiveStore {
                         isFirstMorning: people.isEmpty && threads.isEmpty
                             && load.waiting.isEmpty)
         waiting = load.waiting
-        conversations = threads
+        conversations = threads.map(countingUnread)
         lastError = nil
     }
 
@@ -144,8 +144,48 @@ final class DailyFiveStore {
     /// Warn two conversations out, whichever limit applies.
     var warnFrom: Int { conversationLimit - 2 }
 
+    /// How many people have written something you have not read -- one each,
+    /// however many messages they sent -- for the badge on the Messages tab.
+    /// New requests count: somebody new writing to you is the news. Your own
+    /// unanswered request and an ended conversation do not; neither is in the
+    /// list the badge sends you to.
     var unreadCount: Int {
-        conversations.reduce(0) { $0 + $1.unreadCount }
+        conversations.filter { conversation in
+            conversation.unreadCount > 0
+                && conversation.state != .ended
+                && !(conversation.state == .request && conversation.openedByMe)
+        }.count
+    }
+
+    /// What you have read, per conversation, on this phone (see `ReadMarks`).
+    @ObservationIgnored private let readMarks = ReadMarks()
+
+    /// The conversation on screen, if one is. A message that arrives while you
+    /// are reading it is read.
+    @ObservationIgnored private var openThreadID: String?
+
+    /// Read up to the newest message in it.
+    private func markRead(_ conversationID: String) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversationID }) else { return }
+        if let newest = conversations[index].messages.compactMap(\.sentAt).max() {
+            readMarks.markRead(conversationID, through: newest)
+        }
+        conversations[index].unreadCount = 0
+    }
+
+    /// The server's copy of a conversation knows nothing of what you have read;
+    /// this fills it in from the marks. The one on screen is read as it arrives.
+    private func countingUnread(_ conversation: Conversation) -> Conversation {
+        var counted = conversation
+        if conversation.id == openThreadID {
+            if let newest = conversation.messages.compactMap(\.sentAt).max() {
+                readMarks.markRead(conversation.id, through: newest)
+            }
+            counted.unreadCount = 0
+        } else {
+            counted.unreadCount = readMarks.unread(in: conversation)
+        }
+        return counted
     }
 
     /// Conversations you are actually in. A request you have not answered is not
@@ -216,7 +256,7 @@ final class DailyFiveStore {
     func accept(_ conversation: Conversation) {
         guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
         conversations[index].state = .open
-        conversations[index].unreadCount = 0
+        markRead(conversation.id)
         persist { try await ArchBackend.accept(conversation.id) }
     }
 
@@ -402,9 +442,15 @@ final class DailyFiveStore {
     static let threadInterval: Duration = .seconds(3)
     static let listInterval: Duration = .seconds(12)
 
-    /// While a thread is on screen.
+    /// While a thread is on screen. Opening it is reading it.
     func watchThread(_ conversationID: String) {
         stopWatchingThread()
+        openThreadID = conversationID
+        markRead(conversationID)
+        pollThread(conversationID)
+    }
+
+    private func pollThread(_ conversationID: String) {
         guard ArchConfig.isConfigured else { return }
         threadWatch = Task { @MainActor [weak self] in
             while !Task.isCancelled {
@@ -416,11 +462,21 @@ final class DailyFiveStore {
     }
 
     func stopWatchingThread() {
+        openThreadID = nil
+        pausePollingThread()
+    }
+
+    /// Stops asking about the thread without closing it -- for the app going
+    /// into the background with a conversation still on screen, which is still
+    /// open when it comes back.
+    private func pausePollingThread() {
         threadWatch?.cancel()
         threadWatch = nil
     }
 
-    /// While the app is in front.
+    /// While the app is in front. A conversation that was on screen when the
+    /// app went into the background is still on screen, so it is asked about
+    /// again too -- it used to stay quiet until you left and came back.
     func beginLiveUpdates() {
         guard ArchConfig.isConfigured, listWatch == nil else { return }
         listWatch = Task { @MainActor [weak self] in
@@ -430,15 +486,18 @@ final class DailyFiveStore {
                 await self?.refreshConversations()
             }
         }
+        if let open = openThreadID, threadWatch == nil {
+            pollThread(open)
+        }
     }
 
     func endLiveUpdates() {
         listWatch?.cancel()
         listWatch = nil
-        stopWatchingThread()
+        pausePollingThread()
     }
 
-    /// One thread's messages, from the server.
+    /// One thread's messages, from the server. Read if it is the one on screen.
     @MainActor
     func refreshThread(_ conversationID: String) async {
         guard let fresh = try? await ArchBackend.messages(in: conversationID),
@@ -447,6 +506,7 @@ final class DailyFiveStore {
         conversations[index].messages = Self.merge(
             server: fresh, keeping: conversations[index].messages
         )
+        conversations[index] = countingUnread(conversations[index])
     }
 
     /// Every thread, from the server.
@@ -455,11 +515,14 @@ final class DailyFiveStore {
         guard var fresh = try? await ArchBackend.conversations() else { return }
 
         for index in fresh.indices {
-            guard let old = conversations.first(where: { $0.id == fresh[index].id }) else { continue }
-            fresh[index].messages = Self.merge(
-                server: fresh[index].messages, keeping: old.messages
-            )
-            fresh[index].unreadCount = old.unreadCount
+            if let old = conversations.first(where: { $0.id == fresh[index].id }) {
+                fresh[index].messages = Self.merge(
+                    server: fresh[index].messages, keeping: old.messages
+                )
+            }
+            // Counted rather than carried over: carrying the old count was why
+            // nothing was ever new -- the server sends zero, and zero was kept.
+            fresh[index] = countingUnread(fresh[index])
         }
 
         // A conversation this phone has just opened and the server has not
