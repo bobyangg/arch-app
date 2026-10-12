@@ -789,9 +789,10 @@ struct DatePlannerView: View {
             .padding(.leading, 64 + ArchSpacing.s)
 
             // What to do about the place: look it up, never again, or not in
-            // this plan.
-            HStack(spacing: ArchSpacing.m) {
-                Spacer(minLength: 0)
+            // this plan. Across the whole card, a third each: each button
+            // already fills the width it is given, so with no spacing they
+            // share the line equally and each sits in the middle of its third.
+            HStack(spacing: 0) {
                 // The place in Apple Maps: its hours, its photos, how to get
                 // there. One word, because three of these share a line.
                 if let url = stop.venue.mapsURL {
@@ -810,7 +811,6 @@ struct DatePlannerView: View {
                     .accessibilityLabel("Remove \(stop.venue.name)")
                     .accessibilityIdentifier("planner.remove.\(index)")
             }
-            .padding(.leading, 64 + ArchSpacing.s)
         }
         .padding(ArchSpacing.m)
         .background(
