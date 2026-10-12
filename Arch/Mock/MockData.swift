@@ -1316,7 +1316,7 @@ enum MockData {
                               reason: "A short walk from Domino Park.",
                               minutes: 60, category: "food", placeID: "wide-bowl",
                               latitude: 40.7135, longitude: -73.9620, kindKey: "food")
-                    ])
+                    ]).asStored
                 )
             ],
             unreadCount: 0,
