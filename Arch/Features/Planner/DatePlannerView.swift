@@ -132,6 +132,10 @@ struct DatePlannerView: View {
     /// team has taken off for everybody. Loaded once; a design build keeps
     /// yours for as long as the app is open.
     @State private var notToOffer: Set<String> = []
+    /// Places Apple Maps could not find again by their own name where they are
+    /// listed (`VenueSearch.isFoundAgain`). Left out like "Not for us", for as
+    /// long as the app is open.
+    @State private var notFoundAgain: Set<String> = []
     /// The place just hidden, for the line that offers to undo it.
     @State private var justHidden: (id: String, name: String)?
     /// The agreed plan being changed, by its message's id. While it matches
@@ -217,7 +221,7 @@ struct DatePlannerView: View {
                                                     theirCentre: found?.theirCentre,
                                                     halfwayName: found?.halfway,
                                                     alreadyShared: alreadyShared(with: chosen),
-                                                    excluded: notToOffer)
+                                                    excluded: notToOffer.union(notFoundAgain))
                         if isLive && (found?.venues.isEmpty ?? true) && !hasKept {
                             preferencesRow
                             dayRow
@@ -248,6 +252,13 @@ struct DatePlannerView: View {
                                     .accessibilityIdentifier("planner.replanned")
                             }
                             itinerary(plan)
+                                .task(id: plan.stops.map(\.venue.id).joined(separator: "|")) {
+                                    // Not the places kept from a plan that was
+                                    // sent: those are what they chose, and
+                                    // "Change it" opens on them as they are.
+                                    let kept = Set(items.compactMap(\.pinned?.id))
+                                    await checkStops(plan.stops.map(\.venue).filter { !kept.contains($0.id) })
+                                }
                             if !plan.stops.isEmpty {
                                 footer(plan, with: chosen)
                             }
@@ -557,8 +568,10 @@ struct DatePlannerView: View {
                     .foregroundStyle(ArchColor.mortar)
             }
             Spacer(minLength: 0)
-            if let url = stop.venue?.mapsURL {
-                ArchTextButton(title: "Maps") { openURL(url) }
+            if let venue = stop.venue, venue.mapsURL != nil {
+                ArchTextButton(title: "Maps") {
+                    Task { await VenueSearch.openInMaps(venue) { openURL($0) } }
+                }
                     .fixedSize()
                     .frame(height: 32)
                     .accessibilityLabel("Open \(stop.name) in Apple Maps")
@@ -668,6 +681,19 @@ struct DatePlannerView: View {
             nearby[candidate.id] = found
         } else {
             unreachable.insert(candidate.id)
+        }
+    }
+
+    /// Each stop on screen, checked once against Apple Maps the way you would
+    /// check it -- by searching its name where it is (`VenueSearch.isFoundAgain`).
+    /// A stop that is not found there is left out, and the plan redraws with
+    /// the next place in its place; the new stop is checked in turn.
+    private func checkStops(_ venues: [Venue]) async {
+        guard isLive else { return }
+        for venue in venues where !notFoundAgain.contains(venue.id) {
+            let found = await VenueSearch.isFoundAgain(venue)
+            guard !Task.isCancelled else { return }
+            if !found { notFoundAgain.insert(venue.id) }
         }
     }
 
@@ -1072,8 +1098,12 @@ struct DatePlannerView: View {
             HStack(spacing: 0) {
                 // The place in Apple Maps: its hours, its photos, how to get
                 // there. One word, because three of these share a line.
-                if let url = stop.venue.mapsURL {
-                    ArchTextButton(title: "Maps") { openURL(url) }
+                if stop.venue.mapsURL != nil {
+                    // The place itself, by Apple's identifier where there is
+                    // one -- not a search for its name (`VenueSearch.openInMaps`).
+                    ArchTextButton(title: "Maps") {
+                        Task { await VenueSearch.openInMaps(stop.venue) { openURL($0) } }
+                    }
                         .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
                         .accessibilityIdentifier("planner.maps.\(index)")
                 }
