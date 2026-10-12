@@ -117,6 +117,8 @@ CLLocationCoordinate2D
 CLLocation
 CLGeocoder
 CLPlacemark
+# Asking whether a place is named for a street corner somewhere else nearby
+CLCircularRegion
 
 # MapKit, added when the Date planner started finding places in Apple Maps
 MKPointOfInterestFilter

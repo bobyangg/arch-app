@@ -129,7 +129,10 @@ Deno.serve(async (request) => {
     // Apple issued is the key that actually got pasted into the secret.
     try {
       await providerToken();
-      return json({ status: "ok", sent: 0, key: "usable" });
+      // The Key ID is not a secret -- it goes to Apple in the header of every
+      // request -- and naming it is how you tell, after replacing the key, that
+      // the function is signing with the new one and not the old.
+      return json({ status: "ok", sent: 0, key: "usable", keyId: Deno.env.get("APNS_KEY_ID") });
     } catch (problem) {
       console.error("APNs key will not import", problem);
       return json({
@@ -238,5 +241,8 @@ Deno.serve(async (request) => {
     }
   }
 
-  return json({ status: "ok", considered: queued.length, sent, dropped });
+  return json({
+    status: "ok", considered: queued.length, sent, dropped,
+    keyId: Deno.env.get("APNS_KEY_ID"),
+  });
 });

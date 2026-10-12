@@ -69,8 +69,10 @@ enum VenueSearch {
         // planner took what it found.
         let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        // Two rings rather than three: there are seventeen searches a ring now,
-        // and Apple Maps turns an app away past about fifty a minute.
+        // Two rings rather than three: there are about twenty searches a ring
+        // now (more with iOS 18's categories), and Apple Maps turns an app away
+        // past about fifty a minute. The second ring runs only when the first
+        // found too little, which in a city it rarely does.
         for radius in [3_000.0, 8_000.0] {
             guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
@@ -81,9 +83,101 @@ enum VenueSearch {
             if isEnough(venues) { break }
         }
 
+        var kept: [Venue] = []
+        for venue in found ?? [] {
+            if await isNamedForACornerElsewhere(venue, near: middle) { continue }
+            kept.append(venue)
+        }
+
         return Nearby(theirCentre: theirCentre,
                       halfway: await neighbourhood(at: middle),
-                      venues: found ?? [])
+                      venues: kept)
+    }
+
+    // MARK: Places named for somewhere else
+
+    /// What Apple has answered about a name, so each is asked once a launch.
+    @MainActor private static var cornerAnswers: [String: Bool] = [:]
+
+    /// **"Jane N Finch", in the Financial District.** Apple Maps lists a live
+    /// venue downtown under the name of a neighbourhood sixteen kilometres
+    /// north-west -- the corner of Jane Street and Finch Avenue -- and to
+    /// anybody from Toronto a plan that says "Jane N Finch" says the wrong end
+    /// of the city, whatever the address underneath.
+    ///
+    /// No rule about words can tell that name from "Snakes & Lattes", so this
+    /// asks the place it would be confused with. A name shaped like a corner --
+    /// two words joined by "and", "&", "n" or "+", with nothing saying what the
+    /// business is -- is looked up as an address near here. If Apple answers
+    /// with a street corner or a neighbourhood of that name more than a
+    /// kilometre from where the place is listed, the place is named for
+    /// somewhere else and is left out. "Snakes & Lattes" is no corner, and a
+    /// bar called "Jane & Finch" *at* Jane and Finch is where its name says.
+    @MainActor
+    private static func isNamedForACornerElsewhere(_ venue: Venue, near point: Coordinate) async -> Bool {
+        guard let words = cornerWords(venue.name) else { return false }
+        let key = words.joined(separator: "|") + String(format: "|%.2f|%.2f", venue.coordinate.latitude,
+                                                         venue.coordinate.longitude)
+        if let known = cornerAnswers[key] { return known }
+
+        let geocoder = CLGeocoder()
+        defer { withExtendedLifetime(geocoder) {} }
+        let area = CLCircularRegion(
+            center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
+            radius: 50_000, identifier: "arch.planner.corner"
+        )
+        let marks = (try? await geocoder.geocodeAddressString(
+            "\(words[0]) and \(words[1])", in: area, preferredLocale: nil
+        )) ?? []
+
+        let elsewhere = marks.contains { mark in
+            guard let location = mark.location else { return false }
+            let named = [mark.name, mark.thoroughfare, mark.subLocality]
+                .compactMap { $0?.lowercased() }.joined(separator: " ")
+            guard words.allSatisfy({ named.contains($0) }) else { return false }
+            let isCorner = isStreetCorner(mark.name)
+            let isNeighbourhood = mark.subLocality.map { sub in
+                words.allSatisfy { sub.lowercased().contains($0) }
+            } ?? false
+            guard isCorner || isNeighbourhood else { return false }
+            let there = Coordinate(latitude: location.coordinate.latitude,
+                                   longitude: location.coordinate.longitude)
+            return DatePlanner.km(there, venue.coordinate) > 1
+        }
+        cornerAnswers[key] = elsewhere
+        return elsewhere
+    }
+
+    /// "Jane St & Finch Ave W": two streets, each with its kind of street, and
+    /// an "&" between. A business with "&" in its name -- "Snakes & Lattes" --
+    /// has no street on either side.
+    private static func isStreetCorner(_ name: String?) -> Bool {
+        guard let name else { return false }
+        let sides = name.lowercased().components(separatedBy: "&")
+        guard sides.count == 2 else { return false }
+        return sides.allSatisfy { side in
+            side.split { !$0.isLetter }.contains { streetKinds.contains(String($0)) }
+        }
+    }
+
+    private static let streetKinds: Set<String> = [
+        "st", "street", "ave", "avenue", "rd", "road", "blvd", "boulevard", "dr", "drive",
+        "cres", "crescent", "pkwy", "parkway", "hwy", "highway", "way", "ln", "lane", "ct",
+        "court", "pl", "place", "line", "trail", "gate", "terrace", "row", "sq", "square",
+    ]
+
+    /// The two words of a name shaped like a corner -- "Jane N Finch", "Yonge &
+    /// Dundas" -- or nil. Three parts, the middle one a joining word, and
+    /// nothing that says what kind of business it is.
+    private static func cornerWords(_ name: String) -> [String]? {
+        let parts = name.lowercased()
+            .split { !$0.isLetter && $0 != "&" && $0 != "+" }
+            .map(String.init)
+        guard parts.count == 3, ["and", "&", "n", "+"].contains(parts[1]),
+              parts[0].count > 2, parts[2].count > 2,
+              !parts.contains(where: { businessWords.contains($0) })
+        else { return nil }
+        return [parts[0], parts[2]]
     }
 
     /// Enough to plan with: somewhere to eat or drink, and something to do.
@@ -174,21 +268,30 @@ enum VenueSearch {
             Group(categories: [.movieTheater], kind: .cinema,
                   themes: [.craft], times: [.afternoon, .evening]),
             Group(categories: dayOut, kind: .attraction,
-                  themes: [], times: [.afternoon]),
+                  themes: [.play], times: [.afternoon]),
             Group(categories: [.museum, .store], query: "art gallery", nameHas: ["gallery", "galerie", "art"],
                   kind: .museum, themes: [.craft], times: [.afternoon]),
             Group(categories: [.nightlife, .theater], query: "comedy club",
                   nameHas: ["comedy", "laugh", "improv", "funny", "comic"],
                   kind: .show, themes: [.words, .night], times: [.evening]),
             Group(categories: [.amusementPark, .store, .nightlife], query: "escape room", nameHas: ["escape"],
-                  kind: .play, themes: [], times: [.afternoon, .evening]),
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            // Games, for the people who write "Gaming" or "arcade" -- among the
+            // commonest interests anybody writes. Held to the same checks as
+            // everything else: Apple's own category, and a name that says so.
+            Group(categories: [.amusementPark, .nightlife, .store], query: "arcade",
+                  nameHas: ["arcade", "barcade", "pinball", "game", "pixel", "token"],
+                  kind: .play, themes: [.play], times: [.afternoon, .evening]),
+            Group(categories: [.cafe, .restaurant, .store, .nightlife], query: "board game cafe",
+                  nameHas: ["game", "board", "dice", "meeple", "snakes"],
+                  kind: .play, themes: [.play, .food], times: [.afternoon, .evening]),
         ]
         // Bowling, mini golf, go-karts, climbing, skating: categories of their
         // own from iOS 18. Before that, the escape-room search is the one
         // game on the list.
         if #available(iOS 18.0, *) {
             groups.append(Group(categories: [.bowling, .miniGolf, .goKart, .rockClimbing, .skating],
-                                kind: .play, themes: [], times: [.afternoon, .evening]))
+                                kind: .play, themes: [.play, .active], times: [.afternoon, .evening]))
         }
         // A restaurant search by cuisine finds places the plain one ranks too
         // low to return. The name need not say "ramen" -- the category does
@@ -247,8 +350,47 @@ enum VenueSearch {
         if group.rejects.contains(where: has), !group.unlessHas.contains(where: { lower.contains($0) }) {
             return false
         }
+        if isAnArea(item, lower: lower) { return false }
         return !notAPlace.contains(where: has)
     }
+
+    /// **A neighbourhood or a street corner that Apple has filed as a place.**
+    /// "Jane and Finch" is both -- a neighbourhood named for the corner of Jane
+    /// Street and Finch Avenue -- and Apple Maps gives it a category, so it
+    /// came back from a search for things to do. Bob's name check kept it out
+    /// of parks; this keeps it, and anything like it, out of every search:
+    ///
+    /// - named after its own neighbourhood or town ("Jane and Finch" in Jane and
+    ///   Finch, "Liberty Village" in Liberty Village), or
+    /// - named after its own street and another, joined by "and" or "&"
+    ///   ("Jane and Finch" on Jane Street). The street has to be its own, so
+    ///   "Snakes & Lattes" and "Salt and Pepper" -- real places with "and" in
+    ///   their names -- are left alone, and so is anything whose name says
+    ///   what it is ("Bloor & Spadina Café").
+    private static func isAnArea(_ item: MKMapItem, lower: String) -> Bool {
+        let mark = item.placemark
+        let areaNames = [mark.subLocality, mark.locality, mark.subAdministrativeArea]
+            .compactMap { $0?.lowercased() }
+        if areaNames.contains(lower) { return true }
+
+        let words = lower.split { !$0.isLetter }.map(String.init)
+        let isJoined = words.contains("and") || lower.contains("&")
+        guard isJoined, words.count <= 5,
+              !words.contains(where: { businessWords.contains($0) }) else { return false }
+        // The first word of the street it is on: "jane" for Jane Street.
+        guard let street = mark.thoroughfare?.lowercased()
+                .split(whereSeparator: { !$0.isLetter }).first.map(String.init),
+              street.count > 2 else { return false }
+        return words.contains(street)
+    }
+
+    /// Words that say a name belongs to a business, even when it is named for
+    /// the corner it is on.
+    private static let businessWords: Set<String> = [
+        "cafe", "café", "coffee", "bar", "grill", "kitchen", "restaurant", "pub", "bistro",
+        "eatery", "bakery", "diner", "tavern", "brewery", "books", "records", "gallery",
+        "theatre", "theater", "cinema", "lanes", "bowl", "bowling", "arcade", "club", "house",
+    ]
 
     /// Every group at once, around one point. Nil if any search failed outright,
     /// because a plan built from the half that answered would be quietly wrong.
@@ -271,8 +413,18 @@ enum VenueSearch {
 
         // In group order, each place once: a brewery that is also a restaurant
         // keeps whichever line found it first.
+        //
+        // **And inside the area that was asked about.** A search by name --
+        // "ramen restaurant", "bookstore" -- takes the region as a hint, not a
+        // fence, and answers with the best match in the city: a place sixteen
+        // kilometres away is a fine answer to Apple and a wrong one here. The
+        // planner limits how far a stop may be from either of you, but only
+        // when it knows where you both are; this holds whether it does or not.
+        let limitKm = radius / 1000 * 1.25
         var seen = Set<String>()
-        return results.compactMap { $0 }.joined().filter { seen.insert($0.id).inserted }
+        return results.compactMap { $0 }.joined().filter {
+            DatePlanner.km(point, $0.coordinate) <= limitKm && seen.insert($0.id).inserted
+        }
     }
 
     private static func search(_ group: Group, in region: MKCoordinateRegion) async -> [Venue]? {
@@ -285,6 +437,13 @@ enum VenueSearch {
                 request.resultTypes = .pointOfInterest
                 request.pointOfInterestFilter = filter
                 request.region = region
+                // A search by name takes the region as a hint and answers with
+                // the best match in the city. From iOS 18 it can be told to
+                // stay inside; before that, `venues(around:)` drops what does
+                // not.
+                if #available(iOS 18.0, *) {
+                    request.regionPriority = .required
+                }
                 items = try await MKLocalSearch(request: request).start().mapItems
             } else {
                 let request = MKLocalPointsOfInterestRequest(coordinateRegion: region)
