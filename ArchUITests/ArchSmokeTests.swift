@@ -567,6 +567,20 @@ final class ArchSmokeTests: XCTestCase {
 
         back.tap()
         XCTAssertTrue(edit.waitForExistence(timeout: 5), "Back did not return to the agreed plan.")
+
+        // "Cancel the date" asks first, then calls it off on both phones: the
+        // planner says so, and the card in the thread says who cancelled it.
+        app.buttons["planner.agreed.cancel"].tap()
+        let confirm = app.buttons["Yes, cancel it"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Cancel the date did not ask first.")
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["planner.cancelled"].waitForExistence(timeout: 5),
+                      "The planner did not say the date was cancelled.")
+        XCTAssertFalse(edit.exists, "A cancelled plan is still shown as agreed.")
+
+        app.buttons["tab.messages"].tap()
+        XCTAssertTrue(app.staticTexts["thread.plan.cancelled"].waitForExistence(timeout: 5),
+                      "The plan in the thread does not say it was cancelled.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the agreed plan.")
     }
 

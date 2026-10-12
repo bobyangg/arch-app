@@ -256,6 +256,9 @@ struct MessageThreadView: View {
                             answeredByThem: answer(to: message),
                             canAct: conversation.state == .open,
                             isAgreed: conversation.agreedPlan?.messageID == message.id,
+                            cancelledByThem: conversation.messages
+                                .first { $0.plan?.cancelling == message.id }
+                                .map { !$0.isOutgoing },
                             onYes: {
                                 planActions.send(conversation, "I\u{2019}m in.",
                                                  SharedPlan(answering: message.id))

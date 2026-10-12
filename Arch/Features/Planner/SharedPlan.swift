@@ -34,6 +34,18 @@ struct SharedPlan: Codable, Hashable {
         var longitude: Double? = nil
         var kindKey: String? = nil
 
+        /// **`placeID` is written `placeId` here, and has to be.** The API's
+        /// coders turn keys into snake case and back: `placeID` went out as
+        /// `place_id` and came back as `placeId`, which matched nothing -- so
+        /// every plan that reached the other phone had lost its places, and
+        /// "Change it" planned somewhere else. `placeId` goes out as the same
+        /// `place_id`, so plans already stored still read.
+        enum CodingKeys: String, CodingKey {
+            case start, name, kind, neighbourhood, travel, reason, minutes, category
+            case placeID = "placeId"
+            case latitude, longitude, kindKey
+        }
+
         /// The place, rebuilt -- for the planner to keep as it is.
         var venue: Venue? {
             guard let placeID, let latitude, let longitude else { return nil }
@@ -53,6 +65,8 @@ struct SharedPlan: Codable, Hashable {
     var stops: [Stop]?
     /// On an answer: the id of the message whose plan it answers.
     var answering: String?
+    /// On a cancellation: the id of the message whose agreed plan is off.
+    var cancelling: String? = nil
 
     var isPlan: Bool { !(stops ?? []).isEmpty }
     var timeOfDay: DatePlan.TimeOfDay? { time.flatMap(DatePlan.TimeOfDay.init(rawValue:)) }
@@ -107,6 +121,29 @@ struct SharedPlan: Codable, Hashable {
         self.answering = messageID
     }
 
+    /// "Cancel the date", for the plan in a given message.
+    init(cancelling messageID: String) {
+        self.time = nil
+        self.day = nil
+        self.stops = nil
+        self.answering = nil
+        self.cancelling = messageID
+    }
+
+    /// The plan as it comes back from the database: through the same
+    /// snake-case coders the API uses. The design build's plans go through it,
+    /// so a key that does not survive the trip fails the UI tests rather than
+    /// only the real app.
+    var asStored: SharedPlan {
+        let encoder = JSONEncoder()
+        encoder.keyEncodingStrategy = .convertToSnakeCase
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        guard let data = try? encoder.encode(self),
+              let back = try? decoder.decode(SharedPlan.self, from: data) else { return self }
+        return back
+    }
+
     /// For fixtures, written by hand.
     init(time: DatePlan.TimeOfDay, day: PlanDay? = nil, stops: [Stop]) {
         self.time = time.rawValue
@@ -119,7 +156,8 @@ struct SharedPlan: Codable, Hashable {
 /// The plan two people have said yes to.
 ///
 /// Read off the conversation rather than stored: the latest plan somebody
-/// answered "I'm in" to, while its day is still to come. Both phones hold the
+/// answered "I'm in" to, while its day is still to come and nobody has
+/// cancelled it. Both phones hold the
 /// same messages, so both show the same agreed plan, and nothing new has to be
 /// kept anywhere.
 struct AgreedPlan: Hashable {
@@ -144,12 +182,13 @@ extension Conversation {
         let today = PlanDay.today
         func isPast(_ plan: SharedPlan) -> Bool { plan.planDay.map { $0 < today } ?? false }
         func answer(to id: String) -> Message? { messages.first { $0.plan?.answering == id } }
+        func isCancelled(_ id: String) -> Bool { messages.contains { $0.plan?.cancelling == id } }
 
         for (index, message) in messages.enumerated().reversed() {
             guard let plan = message.plan, plan.isPlan, let yes = answer(to: message.id) else { continue }
             // The latest plan agreed is the one that counts; once its day has
-            // gone, so has any plan before it.
-            guard !isPast(plan) else { return nil }
+            // gone, or it has been called off, so has any plan before it.
+            guard !isPast(plan), !isCancelled(message.id) else { return nil }
             let newer = messages[(index + 1)...].last { later in
                 guard let laterPlan = later.plan, laterPlan.isPlan else { return false }
                 return answer(to: later.id) == nil && !isPast(laterPlan)
@@ -215,6 +254,8 @@ struct PlanCard: View {
     /// Whether this is the plan the two of you have agreed on now -- not an
     /// earlier one that a later yes has replaced.
     var isAgreed: Bool = false
+    /// Who called it off, if anybody has: true for them, false for you.
+    var cancelledByThem: Bool? = nil
     let onYes: () -> Void
     let onChange: () -> Void
     var onSee: () -> Void = {}
@@ -319,7 +360,13 @@ struct PlanCard: View {
 
     @ViewBuilder
     private var status: some View {
-        if let byThem = answeredByThem {
+        if let byThem = cancelledByThem {
+            Text(byThem ? "\(theirName) cancelled it." : "You cancelled it.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .padding(.top, ArchSpacing.xxs)
+                .accessibilityIdentifier("thread.plan.cancelled")
+        } else if let byThem = answeredByThem {
             HStack {
                 Text(byThem ? "\(theirName) is in." : "You are in.")
                     .archText(.subhead)
