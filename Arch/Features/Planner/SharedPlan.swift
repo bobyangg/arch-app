@@ -33,6 +33,10 @@ struct SharedPlan: Codable, Hashable {
         var latitude: Double? = nil
         var longitude: Double? = nil
         var kindKey: String? = nil
+        /// Apple Maps' identifier for the place, so Maps on the other phone
+        /// opens the place itself. Nil on plans from before iOS 18 or before
+        /// it was sent.
+        var mapsID: String? = nil
 
         /// **`placeID` is written `placeId` here, and has to be.** The API's
         /// coders turn keys into snake case and back: `placeID` went out as
@@ -44,6 +48,8 @@ struct SharedPlan: Codable, Hashable {
             case start, name, kind, neighbourhood, travel, reason, minutes, category
             case placeID = "placeId"
             case latitude, longitude, kindKey
+            // The same for Apple's identifier: `maps_id` comes back `mapsId`.
+            case mapsID = "mapsId"
         }
 
         /// The place, rebuilt -- for the planner to keep as it is.
@@ -53,7 +59,8 @@ struct SharedPlan: Codable, Hashable {
                 ?? (category == DatePlan.Category.food.rawValue ? .food : .show)
             return Venue(id: placeID, name: name, kind: kind, neighbourhood: neighbourhood,
                          coordinate: Coordinate(latitude: latitude, longitude: longitude),
-                         themes: DateTheme.themes(in: name), times: [.afternoon, .evening])
+                         themes: DateTheme.themes(in: name), times: [.afternoon, .evening],
+                         mapsID: mapsID)
         }
     }
 
@@ -108,7 +115,8 @@ struct SharedPlan: Codable, Hashable {
                  placeID: stop.venue.id,
                  latitude: stop.venue.coordinate.latitude,
                  longitude: stop.venue.coordinate.longitude,
-                 kindKey: stop.venue.kind.rawValue)
+                 kindKey: stop.venue.kind.rawValue,
+                 mapsID: stop.venue.mapsID)
         }
         self.answering = nil
     }

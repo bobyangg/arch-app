@@ -351,8 +351,35 @@ enum VenueSearch {
             return false
         }
         if isAnArea(item, lower: lower) { return false }
+        if isOnlyACategory(lower) { return false }
+        // **A business has a way to reach it.** Apple lists a phone number or
+        // a website for nearly every real café, bar, restaurant, gallery and
+        // venue; the listings left behind -- "Jane N Finch", a stage inside a
+        // tower lobby -- usually have neither. Parks, trails and beaches often
+        // have neither too, and their names are already held to
+        // `destinationWords`, so they are let through.
+        if !group.kind.isOutside, item.phoneNumber == nil, item.url == nil { return false }
         return !notAPlace.contains(where: has)
     }
+
+    /// **"Outdoor" is a word, not a place.** A name made only of what kind of
+    /// thing it is -- "Outdoor", "Patio", "Event Space", "Rooftop Terrace" -- is
+    /// a part of somewhere or a listing nobody named, and searching Apple Maps
+    /// for it finds six other places. A real place has a name of its own.
+    private static func isOnlyACategory(_ lower: String) -> Bool {
+        let words = lower.split { !$0.isLetter }.map(String.init)
+        return words.isEmpty || words.allSatisfy { categoryWords.contains($0) }
+    }
+
+    private static let categoryWords: Set<String> = [
+        "outdoor", "outdoors", "indoor", "patio", "terrace", "rooftop", "courtyard", "garden",
+        "gardens", "park", "parkette", "stage", "theatre", "theater", "cinema", "hall", "lounge",
+        "bar", "pub", "cafe", "café", "coffee", "restaurant", "kitchen", "gym", "studio", "museum",
+        "gallery", "library", "beach", "trail", "pool", "rink", "arena", "court", "field",
+        "playground", "club", "venue", "event", "events", "space", "room", "lobby", "entrance",
+        "plaza", "square", "pavilion", "the", "and", "of", "at", "main", "north", "south",
+        "east", "west", "upper", "lower", "level", "floor",
+    ]
 
     /// **A neighbourhood or a street corner that Apple has filed as a place.**
     /// "Jane and Finch" is both -- a neighbourhood named for the corner of Jane
@@ -458,16 +485,25 @@ enum VenueSearch {
         }
         // Checked first, then counted: ten real places of each kind (more
         // restaurants) keeps one kind from outnumbering the rest in a big city.
-        return Array(items.compactMap { venue(from: $0, group: group) }.prefix(group.keep))
+        // Apple's order is kept as `prominence`: it puts the places people
+        // actually go to first.
+        let count = max(items.count, 1)
+        return Array(items.enumerated().compactMap { index, item in
+            venue(from: item, group: group, prominence: 1 - Double(index) / Double(count))
+        }.prefix(group.keep))
     }
 
-    private static func venue(from item: MKMapItem, group: Group) -> Venue? {
+    private static func venue(from item: MKMapItem, group: Group, prominence: Double) -> Venue? {
         guard let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines),
               !name.isEmpty, isAPlace(item, name: name, group: group) else { return nil }
         let mark = item.placemark
         let point = Coordinate(latitude: mark.coordinate.latitude,
                                longitude: mark.coordinate.longitude)
         let neighbourhood = mark.subLocality ?? mark.locality ?? ""
+        var mapsID: String?
+        if #available(iOS 18.0, *) {
+            mapsID = item.identifier?.rawValue
+        }
         return Venue(
             id: String(format: "mk:%@|%.4f|%.4f", name, point.latitude, point.longitude),
             name: name,
@@ -477,8 +513,86 @@ enum VenueSearch {
             // "Jazz Bar", "Paper & Ink Books": the name says what the category
             // cannot.
             themes: group.themes.union(DateTheme.themes(in: name)),
-            times: group.times
+            times: group.times,
+            mapsID: mapsID,
+            prominence: prominence
         )
+    }
+
+    // MARK: Opening and checking a place
+
+    /// **Opens the place itself**, not a search for its name: from iOS 18 by
+    /// Apple's own identifier, which lands on exactly the card the planner
+    /// chose; before that, or if Apple cannot find it again, as a pin at its
+    /// coordinates (`Venue.mapsURL`).
+    @MainActor
+    static func openInMaps(_ venue: Venue, fallback: (URL) -> Void) async {
+        if #available(iOS 18.0, *), let raw = venue.mapsID,
+           let identifier = MKMapItem.Identifier(rawValue: raw),
+           let item = try? await MKMapItemRequest(mapItemIdentifier: identifier).mapItem {
+            _ = item.openInMaps()
+            return
+        }
+        if let url = venue.mapsURL { fallback(url) }
+    }
+
+    /// What each place's check found, so it is asked once a launch.
+    @MainActor private static var checked: [String: Bool] = [:]
+
+    /// **The check you made by hand, made first.** Tapping Maps on "Lake Devo"
+    /// found a street corner, and on "Outdoor" found six other places: Apple
+    /// could not find either again by its own name. So before a stop is
+    /// offered, its name is searched for within a few hundred metres of where
+    /// it is listed, and it stands only if Apple finds it there -- the same
+    /// identifier, or the same name within 150 metres. A place that fails is
+    /// left out and the plan moves on to the next one.
+    ///
+    /// True when it cannot be asked (no network, throttled): a stop is not
+    /// taken away because the check could not be made.
+    @MainActor
+    static func isFoundAgain(_ venue: Venue) async -> Bool {
+        guard venue.id.hasPrefix("mk:") else { return true }
+        if let known = checked[venue.id] { return known }
+
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = venue.name
+        request.resultTypes = .pointOfInterest
+        request.region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: venue.coordinate.latitude,
+                                           longitude: venue.coordinate.longitude),
+            latitudinalMeters: 800, longitudinalMeters: 800
+        )
+        if #available(iOS 18.0, *) {
+            request.regionPriority = .required
+        }
+        let items: [MKMapItem]
+        do {
+            items = try await MKLocalSearch(request: request).start().mapItems
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            items = []
+        } catch {
+            return true
+        }
+
+        let wanted = sameName(venue.name)
+        let found = items.contains { item in
+            if #available(iOS 18.0, *), let raw = venue.mapsID,
+               item.identifier?.rawValue == raw {
+                return true
+            }
+            guard let name = item.name else { return false }
+            let here = Coordinate(latitude: item.placemark.coordinate.latitude,
+                                  longitude: item.placemark.coordinate.longitude)
+            return sameName(name) == wanted && DatePlanner.km(here, venue.coordinate) <= 0.15
+        }
+        checked[venue.id] = found
+        return found
+    }
+
+    /// A name with its case, accents and punctuation taken off, for comparing.
+    private static func sameName(_ name: String) -> String {
+        name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: nil)
+            .filter { $0.isLetter || $0.isNumber }
     }
 
     // MARK: Geocoding
