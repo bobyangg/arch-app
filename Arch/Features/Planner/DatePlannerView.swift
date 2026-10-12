@@ -41,6 +41,12 @@ struct PlannerCandidate: Identifiable, Hashable {
 /// **It is computed, not stored.** The plan is rebuilt from `you` and the
 /// person you picked on every render, so editing your interests on the You tab,
 /// or answering the questions again, changes the plan the next time you look.
+///
+/// **A plan you have both said yes to comes first.** Pick somebody you have
+/// agreed a plan with -- or say "I'm in" in a thread -- and the planner shows
+/// that plan as it was agreed (`AgreedPlan`), with **Make changes**. Changing
+/// it opens the planner on its places, and what you share goes to them as a new
+/// plan; the agreed one stands until they say yes to that.
 /// Where to point the planner when it is opened from a plan in a thread: on this
 /// person, at this time of day. Identified, so opening it twice on the same
 /// person still counts as a change the planner hears.
@@ -53,6 +59,9 @@ struct PlannerPreset: Equatable {
     /// it" starts from the same shape of date. Nil for a plan sent before
     /// plans were made of items.
     var items: [PlanItem]? = nil
+    /// Open on the plan you have agreed with this person, as it was agreed,
+    /// rather than on the planner: after "I'm in".
+    var showsAgreed = false
     let id = UUID()
 }
 
@@ -125,6 +134,10 @@ struct DatePlannerView: View {
     @State private var notToOffer: Set<String> = []
     /// The place just hidden, for the line that offers to undo it.
     @State private var justHidden: (id: String, name: String)?
+    /// The agreed plan being changed, by its message's id. While it matches
+    /// the plan agreed with the person on screen, the planner shows, under a
+    /// line saying what is being changed; otherwise the agreed plan does.
+    @State private var changingAgreed: String?
 
     /// What the rankings are built from that can change under you: your
     /// interests, and the interests of the person you are planning with.
@@ -154,12 +167,28 @@ struct DatePlannerView: View {
                     DatePreferenceQuestions(index: $questionIndex, draft: $draft) { answers in
                         onSavePreferences(answers)
                         restartSwaps()
-                        pickedTime = nil
+                        // Changing an agreed plan keeps its time of day.
+                        if changingAgreed == nil { pickedTime = nil }
                     }
+                } else if let chosen, let agreed = chosen.conversation.agreedPlan,
+                          changingAgreed != agreed.messageID {
+                    // Nothing here needs your answers to the questions: the
+                    // plan is already made.
+                    picker
+                    agreedScreen(agreed, with: chosen)
                 } else if you.datePreferences == nil {
+                    if candidates.contains(where: { $0.conversation.agreedPlan != nil }) {
+                        picker
+                    }
+                    if let chosen, let agreed = chosen.conversation.agreedPlan {
+                        changingBanner(agreed, with: chosen)
+                    }
                     PlannerGetStarted { startAsking() }
                 } else if let chosen {
                     picker
+                    if let agreed = chosen.conversation.agreedPlan {
+                        changingBanner(agreed, with: chosen)
+                    }
                     if isLive && nearby[chosen.id] == nil {
                         looking(for: chosen)
                     } else {
@@ -264,6 +293,15 @@ struct DatePlannerView: View {
             guard let preset else { return }
             questionIndex = nil
             chosenID = preset.personID
+            sentTo = nil
+            // "I'm in": the agreed plan, as it was agreed.
+            if preset.showsAgreed {
+                changingAgreed = nil
+                return
+            }
+            // A change to a plan, with one already agreed, is a change to it.
+            changingAgreed = candidates.first { $0.id == preset.personID }?
+                .conversation.agreedPlan?.messageID
             pickedTime = preset.time
             pickedDay = preset.day
             if let restored = preset.items, !restored.isEmpty {
@@ -337,6 +375,174 @@ struct DatePlannerView: View {
         justHidden = nil
         guard isLive else { return }
         Task { try? await ArchBackend.unhidePlace(key: hidden.id) }
+    }
+
+    // MARK: The agreed plan
+
+    /// "Make changes": the planner, opened on the agreed plan's day, time and
+    /// places, each saying where it came from.
+    private func change(_ agreed: AgreedPlan) {
+        items = agreed.plan.planItems(from: "From your agreed plan.") ?? [PlanItem()]
+        pickedTime = agreed.plan.timeOfDay
+        pickedDay = agreed.plan.planDay
+        changingAgreed = agreed.messageID
+        replanned = nil
+        justHidden = nil
+        sentTo = nil
+    }
+
+    /// The plan you both said yes to: when, where and for how long, each place
+    /// a tap from Apple Maps -- and the way into changing it.
+    private func agreedScreen(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> some View {
+        let name = candidate.person.name
+        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
+        let stops = agreed.plan.stops ?? []
+        return VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("You are both in")
+                    .archText(.caption)
+                    .foregroundStyle(ArchColor.lamp)
+                Text(agreed.plan.planDay.map { "\($0.weekdayName) \(part) with \(name)" }
+                     ?? "An \(part) with \(name)")
+                    .archText(.titleM)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ArchSpacing.xxs)
+                if let day = agreed.plan.planDay {
+                    Text("\(day.long) \u{00B7} \(untilDay(day))")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .padding(.top, 2)
+                }
+
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(Array(stops.enumerated()), id: \.offset) { index, stop in
+                        if let travel = stop.travel {
+                            HStack(spacing: ArchSpacing.s) {
+                                Rectangle()
+                                    .fill(ArchColor.quietBorder)
+                                    .frame(width: 2, height: 28)
+                                    .padding(.leading, 32)
+                                Text(travel)
+                                    .archText(.footnote)
+                                    .foregroundStyle(ArchColor.mortar)
+                            }
+                            .padding(.vertical, ArchSpacing.xxs)
+                        } else if index > 0 {
+                            Color.clear.frame(height: ArchSpacing.s)
+                        }
+                        agreedStop(stop, index: index)
+                    }
+                }
+                .padding(.top, ArchSpacing.m)
+
+                Text(([agreed.endsAt.map { "Done by about \(DatePlanner.clockTime($0))." }].compactMap { $0 }
+                      + [agreed.saidYesByThem ? "\(name) said yes." : "You said yes."])
+                    .joined(separator: " "))
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .padding(.top, ArchSpacing.m)
+            }
+            .padding(ArchSpacing.m)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                    .fill(ArchColor.stone)
+            )
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("planner.agreed")
+
+            if let byYou = agreed.newerSentByYou {
+                Text(byYou ? "You sent \(name) a newer plan. It is waiting on them."
+                           : "\(name) sent a newer plan. It is waiting on you in your conversation.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, ArchSpacing.m)
+            }
+
+            ArchButton(title: "Make changes", kind: .quiet) {
+                withAnimation(ArchMotion.standard) { change(agreed) }
+            }
+            .accessibilityIdentifier("planner.agreed.edit")
+            .padding(.top, ArchSpacing.m)
+
+            Text("Changes go to \(name) as a new plan. This one stands until they say yes.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .padding(.top, ArchSpacing.s)
+        }
+    }
+
+    private func agreedStop(_ stop: SharedPlan.Stop, index: Int) -> some View {
+        HStack(alignment: .top, spacing: ArchSpacing.s) {
+            Text(DatePlanner.clockTime(stop.start))
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+                .frame(width: 64, alignment: .leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(stop.name)
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(([stop.kind, stop.neighbourhood]
+                      + (stop.minutes.map { ["\($0 / 60) hr"] } ?? []))
+                    .joined(separator: " \u{00B7} "))
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+            }
+            Spacer(minLength: 0)
+            if let url = stop.venue?.mapsURL {
+                ArchTextButton(title: "Maps") { openURL(url) }
+                    .fixedSize()
+                    .frame(height: 32)
+                    .accessibilityLabel("Open \(stop.name) in Apple Maps")
+                    .accessibilityIdentifier("planner.agreed.maps.\(index)")
+            }
+        }
+    }
+
+    /// "Tomorrow", "In 4 days".
+    private func untilDay(_ day: PlanDay) -> String {
+        let days = Calendar.current.dateComponents([.day], from: PlanDay.today.date, to: day.date).day ?? 0
+        switch days {
+        case ...0: return "Today"
+        case 1:    return "Tomorrow"
+        default:   return "In \(days) days"
+        }
+    }
+
+    /// Over the planner while an agreed plan is being changed: what, and the
+    /// way back to it.
+    private func changingBanner(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> some View {
+        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
+        return VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+            Text(agreed.plan.planDay.map { "Changing your plan for \($0.weekdayName) \(part)" }
+                 ?? "Changing your plan for the \(part)")
+                .archText(.subhead)
+                .foregroundStyle(ArchColor.limestone)
+            Text("Share it to send \(candidate.person.name) the new version. The plan you agreed stands until they say yes.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+            ArchTextButton(title: "Back to the agreed plan") {
+                withAnimation(ArchMotion.standard) {
+                    changingAgreed = nil
+                    sentTo = nil
+                }
+            }
+            .fixedSize()
+            .accessibilityIdentifier("planner.agreed.back")
+        }
+        .padding(ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .fill(ArchColor.stone)
+        )
+        .padding(.bottom, ArchSpacing.l)
     }
 
     // MARK: Items
@@ -430,6 +636,7 @@ struct DatePlannerView: View {
                 HStack(spacing: ArchSpacing.m) {
                     ForEach(candidates) { candidate in
                         let isChosen = candidate.id == chosen?.id
+                        let hasAgreed = candidate.conversation.agreedPlan != nil
                         Button {
                             chosenID = candidate.id
                             pickedTime = nil
@@ -450,10 +657,17 @@ struct DatePlannerView: View {
                                 Text(candidate.person.name)
                                     .archText(.caption)
                                     .foregroundStyle(isChosen ? ArchColor.limestone : ArchColor.mortar)
+                                // Somebody you have a plan with says so.
+                                if hasAgreed {
+                                    Text("Agreed")
+                                        .archText(.caption)
+                                        .foregroundStyle(ArchColor.lamp)
+                                        .padding(.top, -ArchSpacing.xxs)
+                                }
                             }
                         }
                         .buttonStyle(PressScaleStyle())
-                        .accessibilityLabel(candidate.person.name)
+                        .accessibilityLabel(hasAgreed ? "\(candidate.person.name), plan agreed" : candidate.person.name)
                         .accessibilityAddTraits(isChosen ? [.isButton, .isSelected] : .isButton)
                         // By id: a name is also on their row in Messages and
                         // their card in the Daily 5.

@@ -116,6 +116,52 @@ struct SharedPlan: Codable, Hashable {
     }
 }
 
+/// The plan two people have said yes to.
+///
+/// Read off the conversation rather than stored: the latest plan somebody
+/// answered "I'm in" to, while its day is still to come. Both phones hold the
+/// same messages, so both show the same agreed plan, and nothing new has to be
+/// kept anywhere.
+struct AgreedPlan: Hashable {
+    /// The message that carries the plan -- which plan, when there are several.
+    let messageID: String
+    let plan: SharedPlan
+    /// True when they said yes to your plan, false when you said yes to theirs.
+    let saidYesByThem: Bool
+    /// A later plan nobody has answered yet: true if you sent it and it is
+    /// waiting on them, false if they sent it and it is waiting on you.
+    let newerSentByYou: Bool?
+
+    /// When the last stop ends, in minutes after midnight.
+    var endsAt: Int? {
+        (plan.stops ?? []).last.map { $0.start + ($0.minutes ?? 60) }
+    }
+}
+
+extension Conversation {
+    /// The plan you have both said yes to, if there is one still ahead.
+    var agreedPlan: AgreedPlan? {
+        let today = PlanDay.today
+        func isPast(_ plan: SharedPlan) -> Bool { plan.planDay.map { $0 < today } ?? false }
+        func answer(to id: String) -> Message? { messages.first { $0.plan?.answering == id } }
+
+        for (index, message) in messages.enumerated().reversed() {
+            guard let plan = message.plan, plan.isPlan, let yes = answer(to: message.id) else { continue }
+            // The latest plan agreed is the one that counts; once its day has
+            // gone, so has any plan before it.
+            guard !isPast(plan) else { return nil }
+            let newer = messages[(index + 1)...].last { later in
+                guard let laterPlan = later.plan, laterPlan.isPlan else { return false }
+                return answer(to: later.id) == nil && !isPast(laterPlan)
+            }
+            return AgreedPlan(messageID: message.id, plan: plan,
+                              saidYesByThem: !yes.isOutgoing,
+                              newerSentByYou: newer.map(\.isOutgoing))
+        }
+        return nil
+    }
+}
+
 /// What a thread can do with a plan, handed down from the app shell through the
 /// environment rather than through every view between them -- a thread is built
 /// in two places, and neither has any other business knowing about plans.
@@ -127,6 +173,10 @@ struct PlanActions {
     /// name, or nil for a plan you sent -- so the planner can say where the
     /// places came from.
     var change: (Conversation, SharedPlan, String?) -> Void = { _, _, _ in }
+    /// Open the Date planner on the plan you have agreed with this person:
+    /// after "I'm in", and from "See the plan" on a card that has been
+    /// answered.
+    var showAgreed: (Conversation) -> Void = { _ in }
 }
 
 private struct PlanActionsKey: EnvironmentKey {
@@ -152,6 +202,8 @@ extension EnvironmentValues {
 ///   phones. Changing it opens the planner on the two of you, at the same time
 ///   of day.
 /// - The person who sent it sees who it is waiting on, and **Change it**.
+/// - Once somebody has said yes, both see who, and -- on the plan that still
+///   stands -- **See the plan**, which opens it in the Date planner.
 struct PlanCard: View {
     let message: Message
     let plan: SharedPlan
@@ -160,8 +212,12 @@ struct PlanCard: View {
     let answeredByThem: Bool?
     /// False once the conversation can no longer be written in.
     let canAct: Bool
+    /// Whether this is the plan the two of you have agreed on now -- not an
+    /// earlier one that a later yes has replaced.
+    var isAgreed: Bool = false
     let onYes: () -> Void
     let onChange: () -> Void
+    var onSee: () -> Void = {}
 
     @State private var open: Set<Int> = []
 
@@ -264,10 +320,18 @@ struct PlanCard: View {
     @ViewBuilder
     private var status: some View {
         if let byThem = answeredByThem {
-            Text(byThem ? "\(theirName) is in." : "You are in.")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
-                .padding(.top, ArchSpacing.xxs)
+            HStack {
+                Text(byThem ? "\(theirName) is in." : "You are in.")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                Spacer(minLength: ArchSpacing.s)
+                if isAgreed {
+                    ArchTextButton(title: "See the plan", action: onSee)
+                        .fixedSize()
+                        .accessibilityIdentifier("thread.plan.see")
+                }
+            }
+            .padding(.top, ArchSpacing.xxs)
         } else if isPast {
             Text("This day has been and gone.")
                 .archText(.footnote)
@@ -285,6 +349,7 @@ struct PlanCard: View {
             } else {
                 HStack(spacing: ArchSpacing.xs) {
                     ArchButton(title: "I\u{2019}m in", action: onYes)
+                        .accessibilityIdentifier("thread.plan.yes")
                     ArchButton(title: "Change it", kind: .quiet, action: onChange)
                         .accessibilityIdentifier("thread.plan.change")
                 }
