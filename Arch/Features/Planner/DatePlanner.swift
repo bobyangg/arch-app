@@ -505,6 +505,14 @@ enum DatePlanner {
     private static let nearbyKm = 6.0
     /// How far past halfway a place may be, for two people further apart.
     private static let pastHalfwayKm = 2.0
+    /// The same two, when neither of you asked to keep it walkable: "a short
+    /// ride is fine" used to reach exactly as far as walking did. Ten
+    /// kilometres is about 25 to 35 minutes by transit across a city.
+    static let rideKm = 10.0
+    private static let ridePastHalfwayKm = 3.0
+    /// How much distance costs when a ride is fine, against walking: half, so
+    /// a place across town that suits you both can win over the nearest one.
+    private static let rideDistanceScale = 0.5
     /// At most this much, per place, to tell near-equals apart.
     private static let varietyNudge = 1.0
     /// What being in a plan you already sent this person costs a place.
@@ -605,9 +613,13 @@ enum DatePlanner {
         /// Weighed so that distance can win: at the old weights a shared
         /// interest was worth four kilometres, and a place across town that
         /// matched one beat everything round the corner.
+        /// Distance counts in full when either of you wants to walk, and half
+        /// when a ride is fine.
+        let distanceScale = fit.walkable ? 1.0 : Self.rideDistanceScale
+
         func between(_ venue: Venue) -> Double {
             var cost = 0.0
-            if let middle { cost += Self.kmFromHalfwayCost * km(middle, venue.coordinate) }
+            if let middle { cost += distanceScale * Self.kmFromHalfwayCost * km(middle, venue.coordinate) }
             if let yourPoint, let theirPoint {
                 cost += 1.0 * abs(km(yourPoint, venue.coordinate) - km(theirPoint, venue.coordinate))
             }
@@ -617,11 +629,14 @@ enum DatePlanner {
         /// **Never far from either of you.** No further from the one it is
         /// further from than halfway plus a little -- or, for two people who
         /// live close, than a short trip. Without it a plan reached as far as
-        /// the search did, which in a quiet place was twenty kilometres.
+        /// the search did, which in a quiet place was twenty kilometres. A
+        /// short trip is further when a ride is fine (`rideKm`).
+        let nearby = fit.walkable ? Self.nearbyKm : Self.rideKm
+        let pastHalfway = fit.walkable ? Self.pastHalfwayKm : Self.ridePastHalfwayKm
         let reachLimit: Double? = {
             switch (yourPoint, theirPoint) {
-            case let (a?, b?): return max(Self.nearbyKm, km(a, b) / 2 + Self.pastHalfwayKm)
-            case (_?, nil), (nil, _?): return Self.nearbyKm
+            case let (a?, b?): return max(nearby, km(a, b) / 2 + pastHalfway)
+            case (_?, nil), (nil, _?): return nearby
             default: return nil
             }
         }()
@@ -730,7 +745,8 @@ enum DatePlanner {
         /// any order a walkable date had a train in it.
         func score(_ venue: Venue, near reference: Venue?) -> Double {
             guard let reference else { return liking(venue) - between(venue) }
-            return liking(venue) - Self.kmFromNeighbourCost * km(reference.coordinate, venue.coordinate)
+            return liking(venue)
+                - distanceScale * Self.kmFromNeighbourCost * km(reference.coordinate, venue.coordinate)
         }
 
         /// "Keep it walkable": only what is a walk from that stop. It gives way
