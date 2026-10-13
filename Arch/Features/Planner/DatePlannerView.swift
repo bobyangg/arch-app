@@ -144,6 +144,8 @@ struct DatePlannerView: View {
     @State private var changingAgreed: String?
     /// The agreed plan "Cancel the date" is asking about.
     @State private var cancelling: AgreedPlan?
+    /// The agreed plan on its way to Apple Calendar, while Apple's screen is up.
+    @State private var addingToCalendar: AgreedPlan?
     /// Said after a date has been called off, until you pick somebody else.
     @State private var cancelledNote: String?
 
@@ -528,6 +530,12 @@ struct DatePlannerView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.top, ArchSpacing.s)
 
+            // Apple's own new-event screen, filled in; nothing is added until
+            // you tap Add there (`CalendarEventSheet`).
+            ArchButton(title: "Add to Apple Calendar", kind: .quiet) { addingToCalendar = agreed }
+                .accessibilityIdentifier("planner.agreed.calendar")
+                .padding(.top, ArchSpacing.m)
+
             // Asked first: it tells them, and it cannot be taken back.
             ArchTextButton(title: "Cancel the date") { cancelling = agreed }
                 .accessibilityIdentifier("planner.agreed.cancel")
@@ -547,6 +555,13 @@ struct DatePlannerView: View {
             Button("Keep the date", role: .cancel) { cancelling = nil }
         } message: {
             Text("\(name) will see that it is off, in your conversation.")
+        }
+        .sheet(isPresented: Binding(get: { addingToCalendar != nil },
+                                    set: { if !$0 { addingToCalendar = nil } })) {
+            if let adding = addingToCalendar {
+                CalendarEventSheet(agreed: adding, name: name) { addingToCalendar = nil }
+                    .ignoresSafeArea()
+            }
         }
     }
 
@@ -722,7 +737,10 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.limestone)
 
             ScrollView(.horizontal) {
-                HStack(spacing: ArchSpacing.m) {
+                // Top-aligned: "Agreed" under one name makes that column
+                // taller, and centred columns lifted that person's photo and
+                // name above everybody else's.
+                HStack(alignment: .top, spacing: ArchSpacing.m) {
                     ForEach(candidates) { candidate in
                         let isChosen = candidate.id == chosen?.id
                         let hasAgreed = candidate.conversation.agreedPlan != nil

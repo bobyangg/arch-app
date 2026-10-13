@@ -122,6 +122,12 @@ CLCircularRegion
 # Opening a Date planner stop in Apple Maps by its own identifier (iOS 18)
 MKMapItemRequest
 
+# EventKit: "Add to Apple Calendar" on an agreed date
+EKEventStore
+EKEventEditViewController
+EKEvent
+EKStructuredLocation
+
 # MapKit, added when the Date planner started finding places in Apple Maps
 MKPointOfInterestFilter
 MKLocalPointsOfInterestRequest
