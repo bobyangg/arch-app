@@ -69,6 +69,9 @@ struct RootTabView: View {
     /// and opens on its first question.
     @State private var plannerStarts = 0
 
+    /// A conversation the Messages tab should open, from a tapped notification.
+    @State private var messagesOpening: ConversationOpening?
+
     @State private var ownedDaily = DailyFiveStore()
     @State private var ownedSettings = SettingsStore()
 
@@ -148,6 +151,13 @@ struct RootTabView: View {
         ))
         .background(ArchColor.night)
         .onAppear { settings.systemNotificationsAllowed = allowsNotifications }
+        // A tapped notification lands in its conversation. `onReceive` hears
+        // the value already waiting as well as later ones, so a tap that
+        // launched the app -- before this screen existed -- is opened too.
+        .onReceive(PushNotifications.shared.$tappedConversation) { id in
+            guard let id else { return }
+            Task { await openFromNotification(id) }
+        }
         .onChange(of: introducePlanner, initial: true) { _, introduce in
             guard introduce else { return }
             showingPlannerIntro = true
@@ -185,6 +195,22 @@ struct RootTabView: View {
         } else {
             store.stopWatchingThread()
         }
+    }
+
+    /// The conversation a notification was about, opened in Messages.
+    ///
+    /// Asked for from the server first when it is not here yet -- the message
+    /// that sent the notification is newer than the last refresh, and a tap
+    /// that launched the app comes before the first one. If it still is not
+    /// there (the conversation has since ended, say), the app just opens.
+    private func openFromNotification(_ id: String) async {
+        if store.conversation(id) == nil {
+            await store.refreshConversations()
+        }
+        PushNotifications.shared.tappedConversation = nil
+        guard store.conversation(id) != nil else { return }
+        selection = .messages
+        messagesOpening = ConversationOpening(conversationID: id)
     }
 
     /// Whether the tab showing is showing a conversation.
@@ -275,7 +301,8 @@ struct RootTabView: View {
                     live: { store.conversation($0) },
                     onSend: { store.reply(to: $0, text: $1) },
                     popToRoot: messagePops,
-                    onThreadOpenChanged: { reading(.messages, $0) }
+                    onThreadOpenChanged: { reading(.messages, $0) },
+                    opening: messagesOpening
                 )
             }
             tab(.planner) {
