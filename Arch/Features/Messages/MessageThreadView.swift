@@ -95,9 +95,13 @@ struct MessageThreadView: View {
                 dismiss()
             } onCancel: { action = nil }
         case .report:
-            ReportSheet(person: conversation.person) { reason, alsoBlock in
+            ReportSheet(person: conversation.person) { reason in
+                actions.report(conversation, reason)
+            } onDone: { alsoBlock in
                 action = nil
-                actions.report(conversation.person, reason, alsoBlock)
+                // Reporting on its own removes nothing. You reported them; you
+                // did not ask to lose the conversation.
+                if alsoBlock { actions.block(conversation.person) }
                 dismiss()
             } onCancel: { action = nil }
         case .leave:
