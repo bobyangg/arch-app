@@ -228,14 +228,10 @@ struct RootTabView: View {
                     settings.blocked.append(person.name)
                 }
             },
-            report: { person, _, alsoBlock in
-                // Reporting on its own removes nothing. You reported them; you did
-                // not ask to lose the conversation.
-                guard alsoBlock else { return }
-                store.block(person)
-                if !settings.blocked.contains(person.name) {
-                    settings.blocked.append(person.name)
-                }
+            // **This dropped every report.** It took the reason as `_` and only
+            // ever acted on "block as well", so nothing reached `reports`.
+            report: { conversation, reason in
+                store.report(conversation, reason: reason)
             }
         )
     }
