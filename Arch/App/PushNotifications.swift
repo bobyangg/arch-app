@@ -17,6 +17,12 @@ final class PushNotifications: NSObject, ObservableObject {
 
     static let shared = PushNotifications()
 
+    /// The conversation a tapped notification was about, until the app has
+    /// opened it. Set by the tap, cleared by `RootTabView` once the thread is on
+    /// screen -- which, when the tap is what launched the app, is after sign-in
+    /// and the first load, so it waits here rather than being acted on at once.
+    @Published var tappedConversation: String?
+
     /// Ask, then register. Safe to call again — iOS answers from its own record
     /// after the first time and shows no second prompt.
     func enable() async {
@@ -78,12 +84,41 @@ final class PushNotifications: NSObject, ObservableObject {
     }
 }
 
+/// Tapping a notification opens the conversation it was about.
+///
+/// The push carries the conversation's id (`conversation`, from
+/// `supabase/functions/push`; `conversationId` from the version before it), and
+/// this hands it to `tappedConversation`. Nothing is opened here: the screen
+/// that can open a thread is `RootTabView`, and it may not exist yet.
+extension PushNotifications: UNUserNotificationCenterDelegate {
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let info = response.notification.request.content.userInfo
+        guard let id = (info["conversation"] ?? info["conversationId"]) as? String else { return }
+        await MainActor.run { self.tappedConversation = id }
+    }
+}
+
 /// The one thing SwiftUI has no hook for.
 ///
 /// Remote-notification registration is still a `UIApplicationDelegate` callback,
-/// so there has to be a delegate — but it does exactly this and nothing else, and
-/// no app state lives here.
+/// so there has to be a delegate -- and launch is where the notification
+/// centre's delegate has to be set, or a tap that launches the app is delivered
+/// before anything is listening. No app state lives here.
 final class ArchAppDelegate: NSObject, UIApplicationDelegate {
+
+    func application(
+        _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        MainActor.assumeIsolated {
+            UNUserNotificationCenter.current().delegate = PushNotifications.shared
+        }
+        return true
+    }
 
     func application(
         _ application: UIApplication,

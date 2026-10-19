@@ -677,7 +677,7 @@ struct DatePlannerView: View {
 
             // Out of Arch: into your calendar, or to anybody through any app.
             HStack(spacing: ArchSpacing.xs) {
-                ArchButton(title: "Add to calendar", kind: .quiet, isEnabled: plan.planDay != nil) {
+                ArchButton(title: "Add to calendar", kind: .quiet) {
                     calendarDraft = PlanCalendarDraft(plan: plan, title: settled.eventTitle)
                 }
                 .accessibilityIdentifier("planner.agreed.calendar")
@@ -717,7 +717,9 @@ struct DatePlannerView: View {
             Text(settled.cancelMessage)
         }
         .sheet(item: $calendarDraft) { draft in
-            PlanCalendarSheet(draft: draft) { calendarDraft = nil }
+            // Apple's own new-event screen, filled in; nothing is added until
+            // you tap Add there (`CalendarEventSheet`).
+            CalendarEventSheet(plan: draft.plan, title: draft.title) { calendarDraft = nil }
                 .ignoresSafeArea()
         }
         .sheet(item: $exporting) { export in
