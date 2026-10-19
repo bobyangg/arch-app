@@ -1388,8 +1388,14 @@ struct DatePlannerView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    // How long: one, two or three hours. Everything after it moves.
+                    // How long: one, two or three hours. Everything after it
+                    // moves. Labelled, so the buttons say what they set.
                     HStack(spacing: ArchSpacing.xxs) {
+                        Text("Duration")
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(minWidth: 64, alignment: .leading)
+                            .padding(.trailing, ArchSpacing.xxs)
                         ForEach(PlanItem.hourChoices, id: \.self) { hours in
                             let isOn = items.indices.contains(index) && items[index].hours == hours
                             Button {
