@@ -1497,20 +1497,24 @@ const clockAt=m=>{const h=Math.floor(m/60)%24,mm=m%60,t=h%12===0?12:h%12;
 const stableHash=t=>{let h=0x811c9dc5; for(const ch of t){h^=ch.charCodeAt(0); h=Math.imul(h,0x01000193)>>>0;} return h;};
 function planDate(you,them,time,items,day,alreadyShared,excluded){
   const hidden=excluded||new Set();
+  /* A self plan: you, planning for yourself, asked for by passing you as both
+     people. Your interests and answers alone -- counted once -- around where
+     you are, with reasons in words for one person. */
+  const solo=you===them;
   /* Anywhere shut that day is not on the plan. */
   const dow=day?dayDate(day).getDay():null;
   /* What you each said a date should be like. Either may be missing: somebody
      who has not answered is planned for from interests alone. */
-  const fit=dateFit(you.prefs,them.prefs);
-  const yours=themesOf(you),theirs=themesOf(them);
+  const fit=dateFit(you.prefs,solo?null:them.prefs);
+  const yours=themesOf(you),theirs=solo?{}:themesOf(them);
   const shared=DATE_THEME_ORDER.filter(k=>k in yours&&k in theirs);
   const oneSided=DATE_THEME_ORDER.filter(k=>(k in yours)!==(k in theirs));
   const norm=t=>t.toLowerCase().replace(/[^a-z0-9]/g,"");
   const yourWords=new Set((you.interests||[]).filter(Boolean).map(norm));
-  const sameWords=(them.interests||[]).filter(i=>i&&yourWords.has(norm(i)));
+  const sameWords=solo?[]:(them.interests||[]).filter(i=>i&&yourWords.has(norm(i)));
   /* Theirs is their neighbourhood's centre and never anything finer -- what
      their profile already shows. */
-  const yp=you.coord||(you.place&&you.place.centre)||null, tp=(them.place&&them.place.centre)||null;
+  const yp=you.coord||(you.place&&you.place.centre)||null, tp=solo?null:(them.place&&them.place.centre)||null;
   const mid=yp&&tp?{lat:(yp.lat+tp.lat)/2,lon:(yp.lon+tp.lon)/2}:(yp||tp);
   /* Variety without a dice roll: a small nudge per place from the two of you
      and the day, so near-equals are told apart differently for each pair and
@@ -1553,7 +1557,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
        only when it is: a walk, not a ride. */
     if(near&&near.id!==v.id) return travelFor(kmBetween(near.c,v.c)).foot
       ?`A short walk from ${near.name}.`:`The closest option to ${near.name}.`;
-    return "About halfway between you.";};
+    return solo?"Close to where you are.":"About halfway between you.";};
 
   let halfway=null;
   if(mid){let best=Infinity; PLACES.forEach(pl=>{if(!pl.centre) return;
@@ -1635,7 +1639,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
-  return {day,shared,sameWords,halfway,fairness,stops,
+  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
@@ -1810,15 +1814,23 @@ function plannerQuestion(){
 }
 
 /* The toggle's choice, or else the time your answers (and theirs) prefer. */
-const plannerTime=cur=>S.planner.time||dateFit(S.you.prefs,cur&&cur.p.prefs).time;
+const plannerTime=cur=>S.planner.time||dateFit(S.you.prefs,cur&&!cur.solo?cur.p.prefs:null).time;
 
 /* The people you are talking to, as faces. Somebody you have a plan with says so. */
-const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div class="prow mt-s">`+cands.map(c=>{
+/* "Self plan": a date with yourself, last in the row. Not a conversation, so
+   nothing to send it into; your own photo, because it is you it is for. */
+const SELF_PLAN="self-plan";
+const selfCandidate=()=>({p:S.you,convo:null,solo:true});
+const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div class="prow mt-s" id="planPicker">`+cands.map(c=>{
   const ok=!!agreedPlan(c.convo);
-  return `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${c.p.id===cur.p.id}"
+  return `<button class="pwho" data-a="planWith" data-id="${c.p.id}" aria-pressed="${!!cur&&!cur.solo&&c.p.id===cur.p.id}"
       aria-label="${esc(c.p.name)}${ok?", plan agreed":""}">
     <div class="face" style="${tone(c.p.photos[0])}"></div><div class="nm">${esc(c.p.name)}</div>
-    ${ok?`<div class="ok">Agreed</div>`:""}</button>`;}).join("")+`</div>`;
+    ${ok?`<div class="ok">Agreed</div>`:""}</button>`;}).join("")
+  +`<button class="pwho" data-a="planWith" data-id="${SELF_PLAN}" aria-pressed="${!!cur&&!!cur.solo}" aria-label="Self plan">
+    <div class="face" style="${tone(S.you.photos[0])}"></div><div class="nm">Self plan</div></button></div>`
+  +(cands.length?"":`<div class="spread mt-s" style="align-items:baseline"><div class="footnote mortar">Plans with somebody are for people you are talking to.</div>
+    <button class="btntext" style="width:auto; padding:0 4px" data-a="tab" data-k="daily">See your matches</button></div>`);
 
 /* The plan you both said yes to: when, where, for how long, each place a tap
    from Apple Maps -- and the way into changing it. A change is a new plan sent
@@ -1867,7 +1879,9 @@ function plannerRoot(){
      yes with -- or saying "I'm in" in a thread -- opens on that plan, as it
      was agreed, with the way into changing it. Nothing here needs your answers
      to the questions: the plan is already made. */
-  const cands0=plannerCandidates(), cur0=cands0.find(c=>c.p.id===P_.with)||cands0[0];
+  const cands0=plannerCandidates();
+  /* A self plan when you chose it, or when there is nobody else yet. */
+  const cur0=P_.with===SELF_PLAN||!cands0.length?selfCandidate():cands0.find(c=>c.p.id===P_.with)||cands0[0];
   const agreed=cur0&&agreedPlan(cur0.convo);
   if(agreed&&P_.editing!==agreed.key) return h+pickerRow(cands0,cur0)+agreedScreen(cur0,agreed)+`</div></div>`;
   /* Places kept from a plan show without the questions: "Change it" on
@@ -1881,25 +1895,21 @@ function plannerRoot(){
       <div class="subhead">Your date preferences</div>
       <button class="btntext" data-a="planStart" aria-label="Edit your date preferences" style="width:auto">Edit</button></div>
     <div class="footnote mortar" style="margin-top:4px">${esc(prefsSummary(S.you.prefs))}</div></div>`;
-  if(!cands.length){
-    return h+prefRow+`<div class="v gap-s mt-xl"><div class="titleM">Nobody to plan with yet</div>
-      <div class="body mortar">Plans are for people you are talking to. Write to one of your matches, and you can plan a date with them here.</div>
-      <button class="btn quiet mt-s" data-a="tab" data-k="daily">See your matches</button></div></div></div>`;
-  }
-  const cur=cands.find(c=>c.p.id===P_.with)||cands[0];
+  const cur=cur0, solo=!!cur.solo;
   const time=plannerTime(cur), day=plannerDay(P_.day);
   const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
 
   h+=pickerRow(cands,cur)+cancelledLine;
   /* Changing a plan you agreed on: said, with the way back to it. */
-  if(agreed&&cur.p.id===cur0.p.id) h+=editingBanner(cur,agreed);
+  if(agreed) h+=editingBanner(cur,agreed);
 
-  h+=`<div class="subhead mt-l">What you share</div>`;
+  h+=`<div class="subhead mt-l">${solo?"What you like":"What you share"}</div>`;
   h+=plan.shared.length
     ?`<div class="chips mt-s">${plan.shared.map(k=>`<div class="chip">${DATE_THEMES[k].label}</div>`).join("")}</div>`
+    :solo?`<div class="footnote mortar mt-s">Nothing you wrote points anywhere in particular yet, so this leans on your date preferences.</div>`
     :`<div class="footnote mortar mt-s">Nothing in common yet in what you each wrote, so this leans on what ${esc(cur.p.name)} wrote.</div>`;
   if(plan.sameWords.length) h+=`<div class="footnote mortar mt-s">You both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}.</div>`;
-  if(plan.halfway) h+=`<div class="footnote mortar mt-s">About halfway: ${esc(plan.halfway)}</div>`;
+  if(plan.halfway) h+=`<div class="footnote mortar mt-s">${solo?"Around":"About halfway:"} ${esc(plan.halfway)}</div>`;
   h+=prefRow;
 
   /* The day, as a button that opens a calendar: tomorrow to three months on. */
@@ -1982,6 +1992,8 @@ function plannerRoot(){
   /* "Share this plan" shares only into Messages: it opens the people you are
      talking to, the one you planned with first, and sends into whichever
      conversation you pick. Never the system share sheet. */
+  /* A self plan is yours alone: nobody to share it with. */
+  if(solo) return h+`<div class="footnote center mt-m" data-k="selfNote">A plan just for you. It is not sent to anybody.</div></div></div>`;
   h+=`<button class="btn primary mt-m" data-a="planShare">Share this plan</button>`;
   if(P_.sent) h+=`<div class="footnote mortar center mt-s">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   return h+`</div></div>`;

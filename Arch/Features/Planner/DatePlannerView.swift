@@ -42,6 +42,11 @@ struct PlannerCandidate: Identifiable, Hashable {
 /// person you picked on every render, so editing your interests on the You tab,
 /// or answering the questions again, changes the plan the next time you look.
 ///
+/// **And a self plan, for a date with yourself.** Last in the row of faces,
+/// as "Self plan": the same planner, from your interests and your answers
+/// alone, around where you are. It goes to nobody -- there is no conversation
+/// for it to go into.
+///
 /// **A plan you have both said yes to comes first.** Pick somebody you have
 /// agreed a plan with -- or say "I'm in" in a thread -- and the planner shows
 /// that plan as it was agreed (`AgreedPlan`), with **Make changes**. Changing
@@ -114,9 +119,26 @@ struct DatePlannerView: View {
     /// have no network, and runs the UI tests -- it keeps the bundled venues.
     private var isLive: Bool { ArchConfig.isConfigured }
 
+    /// The self plan's place in the row of faces, and its key wherever a
+    /// person's id would go.
+    static let selfPlanID = "self-plan"
+
+    /// Planning for yourself: you chose "Self plan", or there is nobody else
+    /// yet to plan with.
+    private var isSolo: Bool { chosenID == Self.selfPlanID || candidates.isEmpty }
+
+    /// The match you are planning with. Nil on a self plan.
     private var chosen: PlannerCandidate? {
-        candidates.first { $0.id == chosenID } ?? candidates.first
+        guard !isSolo else { return nil }
+        return candidates.first { $0.id == chosenID } ?? candidates.first
     }
+
+    /// Who the plan is for besides you: the match, or -- on a self plan -- you
+    /// again, which is how the planner is asked for a plan for one.
+    private var planningWith: Person? { isSolo ? you : chosen?.person }
+
+    /// What the places found are kept under: the match's id, or the self plan's.
+    private var planningID: String { isSolo ? Self.selfPlanID : (chosen?.id ?? "") }
 
     /// The day you picked, if it can still be planned for; otherwise
     /// tomorrow. Worked out on every draw, so a planner left open overnight
@@ -161,14 +183,15 @@ struct DatePlannerView: View {
     }
 
     private var inputs: PlanInputs {
-        PlanInputs(personID: chosen?.id,
+        PlanInputs(personID: planningID,
                    yours: you.interests.map(\.text),
                    theirs: chosen?.person.interests.map(\.text) ?? [])
     }
 
-    /// The toggle's choice, or else the time your answers prefer.
-    private func openingTime(with person: Person) -> DatePlan.TimeOfDay {
-        pickedTime ?? DateFit(yours: you.datePreferences, theirs: person.datePreferences).time
+    /// The toggle's choice, or else the time your answers prefer -- and
+    /// theirs, when there is somebody else.
+    private func openingTime(with person: Person?) -> DatePlan.TimeOfDay {
+        pickedTime ?? DateFit(yours: you.datePreferences, theirs: person?.datePreferences).time
     }
 
     var body: some View {
@@ -198,29 +221,29 @@ struct DatePlannerView: View {
                         changingBanner(agreed, with: chosen)
                     }
                     PlannerGetStarted { startAsking() }
-                } else if let chosen {
+                } else if let person = planningWith {
                     picker
                     cancelledLine
-                    if let agreed = chosen.conversation.agreedPlan {
+                    if let chosen, let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
                     }
-                    if isLive && nearby[chosen.id] == nil && !hasKept {
-                        looking(for: chosen)
+                    if isLive && nearby[planningID] == nil && !hasKept {
+                        looking(for: planningID)
                     } else {
                         // Apple Maps' places in a real build, the bundled ones
                         // in a design build. Everything after this line is the
                         // same either way.
-                        let found = nearby[chosen.id]
-                        let time = openingTime(with: chosen.person)
+                        let found = nearby[planningID]
+                        let time = openingTime(with: chosen?.person)
                         // Still searching, with places kept from a plan: those
                         // show at once, and the rest fill in when Apple Maps
                         // answers. Never the design build's Brooklyn.
-                        let plan = DatePlanner.plan(you: you, them: chosen.person, time: time,
+                        let plan = DatePlanner.plan(you: you, them: person, time: time,
                                                     day: day, venues: found?.venues ?? (isLive ? [] : venues),
                                                     items: items,
                                                     theirCentre: found?.theirCentre,
                                                     halfwayName: found?.halfway,
-                                                    alreadyShared: alreadyShared(with: chosen),
+                                                    alreadyShared: chosen.map(alreadyShared(with:)) ?? [],
                                                     excluded: notToOffer.union(notFoundAgain))
                         if isLive && (found?.venues.isEmpty ?? true) && !hasKept {
                             preferencesRow
@@ -228,7 +251,7 @@ struct DatePlannerView: View {
                             timeToggle(time)
                             nowhereNearby
                         } else {
-                            shared(plan, with: chosen.person)
+                            shared(plan, with: person)
                             preferencesRow
                             dayRow
                             timeToggle(time)
@@ -260,7 +283,11 @@ struct DatePlannerView: View {
                                     await checkStops(plan.stops.map(\.venue).filter { !kept.contains($0.id) })
                                 }
                             if !plan.stops.isEmpty {
-                                footer(plan, with: chosen)
+                                if let chosen {
+                                    footer(plan, with: chosen)
+                                } else {
+                                    selfFooter(plan)
+                                }
                             }
                         }
                     }
@@ -273,7 +300,7 @@ struct DatePlannerView: View {
             .padding(.bottom, ArchSpacing.sectionGap)
         }
         .background(ArchColor.night)
-        .task(id: "\(chosen?.id ?? "")#\(attempt)") { await findPlaces() }
+        .task(id: "\(planningID)#\(attempt)") { await findPlaces() }
         .task {
             guard isLive else { return }
             notToOffer.formUnion(await ArchBackend.placesNotToOffer())
@@ -673,14 +700,16 @@ struct DatePlannerView: View {
     /// somebody else cancels this, and a cancelled search must not mark the
     /// person it was for as unreachable.
     private func findPlaces() async {
-        guard isLive, let candidate = chosen, nearby[candidate.id] == nil else { return }
-        unreachable.remove(candidate.id)
-        let found = await VenueSearch.nearby(you: you, them: candidate.person)
+        let id = planningID
+        guard isLive, let person = planningWith, nearby[id] == nil else { return }
+        unreachable.remove(id)
+        // On a self plan, `person` is you: the search centres on you.
+        let found = await VenueSearch.nearby(you: you, them: person)
         guard !Task.isCancelled else { return }
         if let found {
-            nearby[candidate.id] = found
+            nearby[id] = found
         } else {
-            unreachable.insert(candidate.id)
+            unreachable.insert(id)
         }
     }
 
@@ -762,23 +791,76 @@ struct DatePlannerView: View {
                         // their card in the Daily 5.
                         .accessibilityIdentifier("planner.with.\(candidate.id)")
                     }
+                    selfPlanButton
                 }
                 .padding(.vertical, ArchSpacing.xxs)
                 .padding(.horizontal, 3)
             }
             .scrollIndicators(.hidden)
+            .accessibilityIdentifier("planner.picker")
+
+            // With nobody else yet, the self plan is the plan -- and the way
+            // to somebody to plan with is said.
+            if candidates.isEmpty {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Plans with somebody are for people you are talking to.")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: ArchSpacing.s)
+                    ArchTextButton(title: "See your matches", action: onOpenDaily)
+                        .fixedSize()
+                }
+            }
         }
         .padding(.bottom, ArchSpacing.l)
+    }
+
+    /// "Self plan": a date with yourself, last in the row. Your own photo,
+    /// because it is you it is planned for.
+    private var selfPlanButton: some View {
+        Button {
+            chosenID = Self.selfPlanID
+            pickedTime = nil
+        } label: {
+            VStack(spacing: ArchSpacing.xs) {
+                PhotoPlaceholder(toneIndex: you.avatarToneIndex,
+                                 url: you.mainPhoto?.url,
+                                 data: you.mainPhoto?.local)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: ArchRadius.control,
+                                                style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: ArchRadius.control + 3,
+                                         style: .continuous)
+                            .stroke(ArchColor.limestone, lineWidth: isSolo ? 2 : 0)
+                            .padding(-3)
+                    }
+                Text("Self plan")
+                    .archText(.caption)
+                    .foregroundStyle(isSolo ? ArchColor.limestone : ArchColor.mortar)
+            }
+        }
+        .buttonStyle(PressScaleStyle())
+        .accessibilityLabel("Self plan")
+        .accessibilityHint("Plans a date for you on your own")
+        .accessibilityAddTraits(isSolo ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("planner.with.self")
     }
 
     @ViewBuilder
     private func shared(_ plan: DatePlan, with person: Person) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text("What you share")
+            Text(isSolo ? "What you like" : "What you share")
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
 
-            if plan.shared.isEmpty {
+            if plan.shared.isEmpty && isSolo {
+                Text("Nothing you wrote points anywhere in particular yet, so this leans on your date preferences.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if plan.shared.isEmpty {
                 Text("Nothing in common yet in what you each wrote, so this leans on what \(person.name) wrote.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
@@ -794,7 +876,7 @@ struct DatePlannerView: View {
             }
 
             if let halfway = plan.halfway {
-                Text("About halfway: \(halfway)")
+                Text(isSolo ? "Around \(halfway)" : "About halfway: \(halfway)")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
             }
@@ -1199,6 +1281,24 @@ struct DatePlannerView: View {
         }
     }
 
+    /// The end of a self plan: when it is done, and that it is yours alone.
+    /// No "Share this plan" -- it is not for anybody else.
+    private func selfFooter(_ plan: DatePlan) -> some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text(summary(plan))
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+            Text("A plan just for you. It is not sent to anybody.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.limestone)
+                .frame(maxWidth: .infinity)
+                .multilineTextAlignment(.center)
+                .accessibilityIdentifier("planner.selfNote")
+        }
+        .padding(.top, ArchSpacing.l)
+    }
+
     private func summary(_ plan: DatePlan) -> String {
         var parts = ["Done by about \(DatePlanner.clockTime(plan.endsAt))."]
         if let day = plan.day { parts.insert("\(day.long).", at: 0) }
@@ -1216,8 +1316,8 @@ struct DatePlannerView: View {
 
     /// While Apple Maps is asked, and if it could not be.
     @ViewBuilder
-    private func looking(for candidate: PlannerCandidate) -> some View {
-        if unreachable.contains(candidate.id) {
+    private func looking(for id: String) -> some View {
+        if unreachable.contains(id) {
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
                 Text("Arch could not reach Apple Maps just now.")
                     .archText(.body)
@@ -1230,7 +1330,7 @@ struct DatePlannerView: View {
                     .padding(.top, ArchSpacing.xs)
             }
         } else {
-            Text("Finding places near you both\u{2026}")
+            Text(isSolo ? "Finding places near you\u{2026}" : "Finding places near you both\u{2026}")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
         }
@@ -1242,7 +1342,8 @@ struct DatePlannerView: View {
             Text("Nowhere to plan around yet")
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
-            Text("Apple Maps found no caf\u{00E9}s, parks or restaurants near the point halfway between you.")
+            Text(isSolo ? "Apple Maps found no caf\u{00E9}s, parks or restaurants near you."
+                        : "Apple Maps found no caf\u{00E9}s, parks or restaurants near the point halfway between you.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
