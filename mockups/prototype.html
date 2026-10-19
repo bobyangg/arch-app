@@ -265,6 +265,25 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
                font-size:13px; color:var(--mortar); text-align:center;}
 .phours button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
 .pcard{padding:16px; border-radius:var(--r-card); background:var(--stone);}
+/* The planner, plan first: one row of settings, stops that open on a tap,
+   and Share kept in reach at the bottom. */
+.pchiprow{display:flex; flex-wrap:wrap; gap:8px; align-items:center;}
+.pchip{position:relative; display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 14px;
+  border-radius:999px; background:var(--stone); font-size:13px; line-height:16px; color:var(--limestone);}
+.pchip input{position:absolute; inset:0; opacity:0; pointer-events:none;}
+.pchip .dim{color:var(--mortar);}
+.pseg{display:inline-flex; height:36px; padding:3px; border-radius:999px; background:var(--stone);}
+.pseg button{padding:0 12px; border-radius:999px; font-size:13px; color:var(--mortar);}
+.pseg button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+.pc2 .pstop{cursor:pointer;}
+.pc2 .pstop .at{width:60px;}
+.pc2 .swap{font-size:20px; line-height:20px; min-height:36px; margin-top:-8px; color:var(--mortar);}
+.pc2 .chev{flex:none; color:var(--mortar); font-size:12px; margin-top:4px; transition:transform .2s ease-out;}
+.pc2.open .chev{transform:rotate(180deg);}
+.pmore{margin:12px 0 0 72px; padding-top:12px; border-top:1px solid var(--quiet);}
+.pmore .phours{padding-left:0; margin-top:10px;}
+.psticky{position:sticky; bottom:0; margin:0 calc(-1 * var(--s-l)); padding:16px var(--s-l) 12px;
+  background:linear-gradient(to bottom, transparent, var(--night) 35%);}
 .pcard .pstop{padding:0; background:none;}
 .pstop{display:flex; gap:12px; align-items:flex-start; padding:16px; border-radius:var(--r-card);
        background:var(--stone);}
@@ -1931,8 +1950,7 @@ function plannerRoot(){
   const cands=plannerCandidates(), P_=S.planner;
   let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="v gap-s" style="padding-top:8px">
-      <div class="titleL">Date planner</div>
-      <div class="body mortar">Somewhere you would both actually like, about halfway between you.</div></div>`;
+      <div class="titleL">Date planner</div></div>`;
   if(P_.q!=null) return h+plannerQuestion()+`</div></div>`;
   /* **The plan you agreed on comes first.** Picking somebody you have said
      yes with -- or saying "I'm in" in a thread -- opens on that plan, as it
@@ -1952,11 +1970,6 @@ function plannerRoot(){
   const cancelledLine=P_.cancelled?`<div class="footnote mt-l">${esc(P_.cancelled)}</div>`:"";
   if(!S.you.prefs&&!kept) return h+(cands0.some(c=>agreedPlan(c.convo))||P_.cancelled?pickerRow(cands0,cur0):"")
     +cancelledLine+(agreed?editingBanner(cur0,agreed):"")+`<div class="mt-xl">${plannerGetStarted("planStart")}</div></div></div>`;
-  /* Your own answers in a line, and the way back into them. Only ever yours. */
-  const prefRow=!S.you.prefs?"":`<div class="mt-l"><div class="spread" style="align-items:baseline">
-      <div class="subhead">Your date preferences</div>
-      <button class="btntext" data-a="planStart" aria-label="Edit your date preferences" style="width:auto">Edit</button></div>
-    <div class="footnote mortar" style="margin-top:4px">${esc(prefsSummary(S.you.prefs))}</div></div>`;
   const cur=cur0, solo=!!cur.solo;
   const time=plannerTime(cur), day=plannerDay(P_.day);
   const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
@@ -1969,34 +1982,36 @@ function plannerRoot(){
       <div class="footnote mortar" style="margin-top:4px">Confirm it to replace the one you have.</div>
       <button class="btntext mt-s" style="width:auto; padding:0 4px" data-a="selfBack">Back to your confirmed plan</button></div>`;}
 
-  h+=`<div class="subhead mt-l">${solo?"What you like":"What you share"}</div>`;
-  h+=plan.shared.length
-    ?`<div class="chips mt-s">${plan.shared.map(k=>`<div class="chip">${DATE_THEMES[k].label}</div>`).join("")}</div>`
-    :solo?`<div class="footnote mortar mt-s">Nothing you wrote points anywhere in particular yet, so this leans on your date preferences.</div>`
-    :`<div class="footnote mortar mt-s">Nothing in common yet in what you each wrote, so this leans on what ${esc(cur.p.name)} wrote.</div>`;
-  if(plan.sameWords.length) h+=`<div class="footnote mortar mt-s">You both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}.</div>`;
-  if(plan.halfway) h+=`<div class="footnote mortar mt-s">${solo?"Around":"About halfway:"} ${esc(plan.halfway)}</div>`;
-  h+=prefRow;
+  /* **Settings in one row.** The day (a calendar), the time of day, and your
+     answers -- each a tap, none a section of its own. */
+  const shortDay=dayDate(day).toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"});
+  h+=`<div class="pchiprow mt-l">
+      <button class="pchip" data-a="planDateOpen" aria-label="Date, ${esc(dayLong(day))}. Change">
+        ${day===firstDay()?`<span class="dim">Tomorrow</span>`:""}${esc(shortDay)}
+        <input type="date" id="planDateInput" value="${day}" min="${firstDay()}" max="${lastDay()}" tabindex="-1" aria-hidden="true"></button>
+      <div class="pseg" role="group" aria-label="Time of day">${["afternoon","evening"].map(t=>
+        `<button data-a="planTime" data-k="${t}" aria-pressed="${time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")}</div>
+      <button class="pchip" data-a="planPrefs" aria-label="Your date preferences">Preferences</button></div>`;
 
-  /* The day, as a button that opens a calendar: tomorrow to three months on. */
-  h+=`<div class="subhead mt-l">When</div>
-    <button class="pdate mt-s" data-a="planDateOpen" aria-label="Date, ${esc(dayLong(day))}">
-      <div class="v"><div class="subhead">${esc(dayLong(day))}</div>
-        ${day===firstDay()?`<div class="caption mortar">Tomorrow</div>`:""}</div>
-      <span class="chg">Change</span>
-      <input type="date" id="planDateInput" value="${day}" min="${firstDay()}" max="${lastDay()}" tabindex="-1" aria-hidden="true"></button>`;
-
-  h+=`<div class="ptime mt-s">`+["afternoon","evening"].map(t=>
-    `<button data-a="planTime" data-k="${t}" aria-pressed="${time===t}">${t==="afternoon"?"Afternoon":"Evening"}</button>`).join("")+`</div>`;
+  /* **What it is built on, in one line**: what you share (or like), and where. */
+  const phrases=plan.shared.map(k=>DATE_THEMES[k].phrase);
+  const joined=phrases.length>1?phrases.slice(0,-1).join(", ")+" and "+phrases[phrases.length-1]:phrases[0];
+  const basis=solo?(phrases.length?`You like ${joined}`:"Leaning on your date preferences")
+    :(phrases.length?`You both like ${joined}`:`Leaning on what ${esc(cur.p.name)} wrote`);
+  const bits0=[basis];
+  if(plan.sameWords.length) bits0.push(`you both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}`);
+  if(plan.halfway) bits0.push(`${solo?"around":"near"} ${esc(plan.halfway)}`);
+  h+=`<div class="footnote mortar mt-s" data-k="planBasis">${bits0.join(" \u00B7 ")}</div>`;
 
   if(P_.hidden) h+=`<div class="spread mt-m" style="align-items:baseline"><div class="footnote mortar">${esc(P_.hidden.name)} will not be suggested again.</div>
     <button class="btntext" style="width:auto; padding:0 4px" data-a="planUnhide">Undo</button></div>`;
   if(P_.replanned) h+=`<div class="footnote mt-m" style="color:var(--lamp)">${esc(P_.replanned)}</div>`;
 
-  /* What you added, in order: each item the planner found a place for as its
-     stop, a blank one as the choice of what it should be, and under them the
-     way to add another, up to three. */
-  const anchorStop=plan.stops.find(x=>x.isAnchor);
+  /* **Each stop in two lines until you open it**: when, where, what kind,
+     how long. A tap opens the rest -- why it was chosen, its hours, the
+     length, Maps, Not for us, Remove. Swap stays on the outside. Hours show
+     unopened only when they are a problem. */
+  const anchorStop=plan.stops.find(x=>x.isAnchor), opened=P_.open||{};
   h+=`<div class="v mt-l">`;
   P_.items.forEach((it,i)=>{
     const st=plan.stops.find(x=>x.id===it.id);
@@ -2016,54 +2031,66 @@ function plannerRoot(){
         <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button></div>`;
       return;
     }
+    const open=!!opened[it.id], hrs=hoursOf(st.v), kept=!!(it.pin&&it.pin.id===st.v.id);
     const only=st.isAnchor||!anchorStop||!st.nearName?"The only place that fits what you both said."
       :`The only place near ${st.nearName} that fits. Swap ${anchorStop.v.name} to move the whole date.`;
-    h+=`<div class="pcard"><div class="pstop"><div class="at">${clockAt(st.start)}</div>
-      <div class="v gap-xxs" style="flex:1; min-width:0">
-        <div class="caption mortar">${CAT_TITLE[st.cat]}</div>
-        <div class="subhead">${esc(st.v.name)}</div>
-        <div class="footnote mortar">${KINDS[st.v.kind][0]} \u00B7 ${esc(st.v.hood)}</div>
-        <div class="caption ${st.openThroughout?"mortar":""}">${(h=>st.openThroughout
-          ?`${h.typical?"Usually open":"Open"} ${clockAt(h.o)} \u2013 ${clockAt(h.c)}`
-          :`Closes at ${clockAt(h.c)}, before this ends. Swap it or shorten the time.`)(hoursOf(st.v))}</div>
-        <div class="footnote" style="margin-top:4px">${esc(st.reason)}</div>
-        ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}</div>
-      ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}"
-        aria-label="Swap ${esc(st.v.name)}">Swap</button>`:""}</div>
-      <div class="phours">${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
-        aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}
-        </div>
-      <div style="display:flex; margin-top:4px">
-        <a class="btntext" style="flex:1; text-decoration:none" target="_blank" rel="noopener"
-          href="https://maps.apple.com/?q=${encodeURIComponent(st.v.name)}&sll=${st.v.c.lat},${st.v.c.lon}&z=17"
-          aria-label="Open ${esc(st.v.name)} in Apple Maps">Maps</a>
-        <button class="btntext" style="flex:1" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
-          aria-label="Never suggest ${esc(st.v.name)}">Not for us</button>
-        <button class="btntext" style="flex:1" data-a="planRemove" data-i="${i}"
-          aria-label="Remove ${esc(st.v.name)}">Remove</button></div></div>`;
+    h+=`<div class="pcard pc2 ${open?"open":""}" data-k="planStop">
+      <div class="pstop" data-a="planOpen" data-k="${it.id}" role="button" aria-expanded="${open}"
+        aria-label="${esc(st.v.name)}, ${clockAt(st.start)}. ${open?"Hide":"Show"} details">
+        <div class="at">${clockAt(st.start)}</div>
+        <div class="v" style="flex:1; min-width:0; gap:2px">
+          <div class="subhead">${esc(st.v.name)}</div>
+          <div class="footnote mortar">${KINDS[st.v.kind][0]} \u00B7 ${esc(st.v.hood)} \u00B7 ${it.hours} hr</div>
+          ${kept?`<div class="caption" style="color:var(--lamp)">${esc(st.reason)}</div>`:""}
+          ${st.openThroughout?"":`<div class="caption">Closes at ${clockAt(hrs.c)}, before this ends. Swap it or shorten the time.</div>`}</div>
+        ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}" aria-label="Swap ${esc(st.v.name)}">\u21BB</button>`
+          :`<span class="chev" aria-hidden="true">\u25BE</span>`}</div>`;
+    if(open){
+      h+=`<div class="pmore">
+        ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}
+        ${st.openThroughout?`<div class="caption mortar" style="margin-top:4px">${hrs.typical?"Usually open":"Open"} ${clockAt(hrs.o)} \u2013 ${clockAt(hrs.c)}</div>`:""}
+        ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}
+        <div class="phours">${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
+          aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}</div>
+        <div style="display:flex; margin-top:4px">
+          <a class="btntext" style="flex:1; text-decoration:none" target="_blank" rel="noopener"
+            href="https://maps.apple.com/?q=${encodeURIComponent(st.v.name)}&sll=${st.v.c.lat},${st.v.c.lon}&z=17"
+            aria-label="Open ${esc(st.v.name)} in Apple Maps">Maps</a>
+          <button class="btntext" style="flex:1" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
+            aria-label="Never suggest ${esc(st.v.name)}">Not for us</button>
+          <button class="btntext" style="flex:1" data-a="planRemove" data-i="${i}"
+            aria-label="Remove ${esc(st.v.name)}">Remove</button></div></div>`;
+    }
+    h+=`</div>`;
   });
-  if(!P_.items.some(it=>!it.cat)){
-    h+=P_.items.length<MAX_ITEMS
-      ?`<button class="btn quiet mt-m" data-a="planAddItem">Add to the date</button>`
-      :`<div class="footnote mortar center mt-m">Three is as many as a plan holds.</div>`;
-  }
+  /* Another item while there is room. At three it simply is not offered. */
+  if(!P_.items.some(it=>!it.cat)&&P_.items.length<MAX_ITEMS)
+    h+=`<button class="btn quiet mt-m" data-a="planAddItem">Add to the date</button>`;
   h+=`</div>`;
   if(!plan.stops.length) return h+`</div></div>`;
 
-  const bits=[`${dayLong(day)}.`,`Done by about ${clockAt(plan.endsAt)}.`];
-  if(plan.fromYou!=null) bits.push(`The first stop is ${plan.fromYou.toFixed(1)} km from you.`);
-  if(plan.fairness) bits.push(plan.fairness);
-  h+=`<div class="footnote mortar mt-l">${bits.join(" ")}</div>`;
+  /* **The rest of the facts in one line**, with the finer print a tap away. */
+  const facts=[`Done about ${clockAt(plan.endsAt)}`];
+  if(plan.fromYou!=null) facts.push(`${plan.fromYou.toFixed(1)} km from you`);
+  h+=`<div class="footnote mortar center mt-l">${facts.join(" \u00B7 ")} \u00B7
+      <button class="footnote" style="color:var(--lamp); padding:0" data-a="planDetails" aria-expanded="${!!P_.details}">${P_.details?"Less":"Details"}</button></div>`;
+  if(P_.details){
+    const fine=[`${dayLong(day)}, ${time}.`];
+    if(plan.fairness) fine.push(plan.fairness);
+    fine.push("Hours marked \u201Cusually\u201D are what places like these keep. Check before you go.");
+    h+=`<div class="footnote mortar center mt-s" data-k="planFine">${fine.map(esc).join(" ")}</div>`;
+  }
 
-  /* "Share this plan" shares only into Messages: it opens the people you are
-     talking to, the one you planned with first, and sends into whichever
-     conversation you pick. Never the system share sheet. */
-  /* A self plan is yours alone: nobody to share it with. */
-  if(solo) return h+`<button class="btn primary mt-m" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
-    <div class="footnote mortar center mt-s" data-k="selfNote">A plan just for you. Confirm it to add it to your calendar or export it.</div></div></div>`;
-  h+=`<button class="btn primary mt-m" data-a="planShare">Share this plan</button>`;
-  if(P_.sent) h+=`<div class="footnote mortar center mt-s">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
-  return h+`</div></div>`;
+  /* Share -- or, on a self plan, Confirm -- kept in reach at the bottom. */
+  h+=`<div class="psticky">`;
+  if(solo){
+    h+=`<button class="btn primary" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
+      <div class="caption mortar center" style="margin-top:6px" data-k="selfNote">Just for you. Confirm it to add it to your calendar or export it.</div>`;
+  } else {
+    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>`;
+    if(P_.sent) h+=`<div class="caption mortar center" style="margin-top:6px">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
+  }
+  return h+`</div></div></div>`;
 }
 
 function youRoot(){
@@ -3379,6 +3406,19 @@ document.addEventListener("click",e=>{
     introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
       S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,items:restartSwaps(),sent:null}; render();},
+    /* A stop opens to its details, and closes again. */
+    planOpen:()=>{const k=el.dataset.k, o={...(S.planner.open||{})}; o[k]=!o[k];
+      S.planner={...S.planner,open:o}; render();},
+    planDetails:()=>{S.planner={...S.planner,details:!S.planner.details}; render();},
+    /* Your answers, in a sheet: the line that used to sit on the screen, and
+       the way back into the questions. Only ever yours. */
+    planPrefs:()=>{if(!S.you.prefs) return;
+      openSheet(`<div class="titleM">Your date preferences</div>
+        <div class="body mortar mt-s">${esc(prefsSummary(S.you.prefs))}</div>
+        <div class="footnote mortar mt-s">They shape every plan. Nobody else sees them.</div>
+        <button class="btn quiet mt-m" data-a="planPrefsEdit">Change your answers</button>
+        <button class="btntext mt-s" data-a="closeSheet">Done</button>`);},
+    planPrefsEdit:()=>{closeSheet(); S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
     planDateOpen:()=>{const i=document.getElementById("planDateInput"); if(!i) return;
       try{ i.showPicker(); }catch(e){ i.style.pointerEvents="auto"; i.focus(); i.click(); }},
     /* Swap: the next place along. A kept place is let go, and the planner
