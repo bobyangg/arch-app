@@ -67,13 +67,22 @@ enum VenueSearch {
         // a couple of kilometres; a small town gets its own few places rather
         // than the next town's. This went to twenty kilometres, and the
         // planner took what it found.
+        //
+        // **Wider when a ride is fine.** "A short ride is fine" searched the
+        // same few kilometres as "keep it walkable", so it changed only whether
+        // the stops had to be a walk from each other. When neither of you asked
+        // to keep it walkable, the first ring is twice as wide, and the planner
+        // lets a stop be up to `DatePlanner.rideKm` from each of you.
+        let rideIsFine = !DateFit(yours: you.datePreferences, theirs: them.datePreferences).walkable
+        let rings: [Double] = rideIsFine ? [6_000, 12_000] : [3_000, 8_000]
         let cuisines = cuisines(for: "\(you.id)|\(them.id)")
         var found: [Venue]?
-        // Two rings rather than three: there are about twenty searches a ring
-        // now (more with iOS 18's categories), and Apple Maps turns an app away
-        // past about fifty a minute. The second ring runs only when the first
-        // found too little, which in a city it rarely does.
-        for radius in [3_000.0, 8_000.0] {
+        // Two rings rather than three: there are about thirty searches a ring
+        // now, and Apple Maps turns an app away past about fifty a minute. The
+        // second ring runs only when the first found too little, which in a
+        // city it rarely does, and a ring already searched is not searched
+        // again (`ringCache`).
+        for radius in rings {
             guard let venues = await venues(around: middle, radius: radius, cuisines: cuisines) else {
                 // Unreachable, or throttled: say so rather than show half a list.
                 if found == nil { return nil }
@@ -212,17 +221,22 @@ enum VenueSearch {
         var keep = 10
     }
 
-    /// What kinds of food to search for by name, besides "restaurant": three a
+    /// What kinds of food to search for by name, besides "restaurant": five a
     /// pair, from this list, so two people do not get the same handful of
-    /// places every time and different pairs get different ones.
+    /// places every time and different pairs get different ones. Five rather
+    /// than three, and a longer list: "restaurant" alone gives Apple's top few
+    /// dozen, and the same few dozen for everybody in a neighbourhood.
     private static let cuisineQueries = ["ramen", "tacos", "pizza", "dumplings", "brunch",
-                                         "thai", "sushi", "pho", "falafel", "curry"]
+                                         "thai", "sushi", "pho", "falafel", "curry",
+                                         "korean bbq", "italian", "burgers", "dim sum",
+                                         "greek", "mexican", "vietnamese", "tapas"]
 
     private static func cuisines(for seed: String) -> [String] {
         var hash: UInt64 = 0xcbf29ce484222325
         for byte in seed.utf8 { hash = (hash ^ UInt64(byte)) &* 0x100000001b3 }
         let start = Int(hash % UInt64(cuisineQueries.count))
-        return (0..<3).map { cuisineQueries[(start + $0 * 3) % cuisineQueries.count] }
+        // Steps of seven through eighteen: coprime, so five picks never repeat.
+        return (0..<5).map { cuisineQueries[(start + $0 * 7) % cuisineQueries.count] }
     }
 
     /// **Asked for as things to do, not as everything on the map.** "Park" and
@@ -285,6 +299,26 @@ enum VenueSearch {
             Group(categories: [.cafe, .restaurant, .store, .nightlife], query: "board game cafe",
                   nameHas: ["game", "board", "dice", "meeple", "snakes"],
                   kind: .play, themes: [.play, .food], times: [.afternoon, .evening]),
+            // More of what a date is actually made of. Each is a search by name
+            // held to Apple's own categories and, where the name has to say it,
+            // to words in the name -- and, like everything, to a phone or a
+            // website and to being found again where it is listed.
+            Group(categories: [.nightlife, .restaurant, .brewery, .winery], query: "cocktail bar",
+                  kind: .bar, themes: [.food, .night], times: [.evening]),
+            Group(categories: [.bakery, .cafe, .restaurant, .foodMarket], query: "dessert",
+                  kind: .food, themes: [.food], times: [.afternoon, .evening], keep: 8),
+            Group(categories: [.nightlife, .store, .amusementPark, .restaurant], query: "karaoke",
+                  nameHas: ["karaoke", "noraebang", "ktv", "sing"],
+                  kind: .play, themes: [.play, .sound, .night], times: [.evening]),
+            Group(categories: [.nightlife, .store, .amusementPark, .restaurant, .fitnessCenter],
+                  query: "billiards", nameHas: ["billiard", "pool", "snooker", "cue"],
+                  kind: .play, themes: [.play, .night], times: [.afternoon, .evening]),
+            Group(categories: [.store, .museum, .school], query: "pottery studio",
+                  nameHas: ["pottery", "ceramic", "clay", "paint", "studio", "craft"],
+                  kind: .studio, themes: [.craft], times: [.afternoon, .evening]),
+            Group(categories: [.amusementPark, .store, .fitnessCenter, .nightlife], query: "axe throwing",
+                  nameHas: ["axe", "hatchet"],
+                  kind: .play, themes: [.play, .active], times: [.afternoon, .evening]),
         ]
         // Bowling, mini golf, go-karts, climbing, skating: categories of their
         // own from iOS 18. Before that, the escape-room search is the one
@@ -419,10 +453,27 @@ enum VenueSearch {
         "theatre", "theater", "cinema", "lanes", "bowl", "bowling", "arcade", "club", "house",
     ]
 
-    /// Every group at once, around one point. Nil if any search failed outright,
-    /// because a plan built from the half that answered would be quietly wrong.
+    /// What each ring found, by where and how wide, for the life of the launch:
+    /// going back to somebody, or planning with somebody else nearby, does not
+    /// spend another thirty searches on an area already searched.
+    @MainActor private static var ringCache: [String: [Venue]] = [:]
+
+    /// Every group at once, around one point. Nil when too many searches failed
+    /// to plan from (no network, or throttled).
+    ///
+    /// **Most, not all.** This used to give up if any one search failed, which
+    /// was right at fifteen searches and wrong at thirty: one throttled
+    /// "pottery studio" search took away every café and restaurant with it. Now
+    /// a ring stands if four in five of its searches answered; what is missing
+    /// is a few extra options, not the plan. Only a complete ring is kept in
+    /// `ringCache`, so a later look tries the missing ones again.
+    @MainActor
     private static func venues(around point: Coordinate, radius: Double,
                                cuisines: [String]) async -> [Venue]? {
+        let key = String(format: "%.3f|%.3f|%.0f|", point.latitude, point.longitude, radius)
+            + cuisines.joined(separator: ",")
+        if let known = ringCache[key] { return known }
+
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
             latitudinalMeters: radius * 2, longitudinalMeters: radius * 2
@@ -436,7 +487,8 @@ enum VenueSearch {
             for await (index, venues) in tasks { results[index] = venues }
             return results
         }
-        guard results.allSatisfy({ $0 != nil }) else { return nil }
+        let answered = results.filter { $0 != nil }.count
+        guard answered * 5 >= groups.count * 4 else { return nil }
 
         // In group order, each place once: a brewery that is also a restaurant
         // keeps whichever line found it first.
@@ -449,9 +501,11 @@ enum VenueSearch {
         // when it knows where you both are; this holds whether it does or not.
         let limitKm = radius / 1000 * 1.25
         var seen = Set<String>()
-        return results.compactMap { $0 }.joined().filter {
+        let venues = results.compactMap { $0 }.joined().filter {
             DatePlanner.km(point, $0.coordinate) <= limitKm && seen.insert($0.id).inserted
         }
+        if answered == groups.count { ringCache[key] = venues }
+        return venues
     }
 
     private static func search(_ group: Group, in region: MKCoordinateRegion) async -> [Venue]? {

@@ -188,7 +188,19 @@ extension Conversation {
     /// The plan you have both said yes to, if there is one still ahead.
     var agreedPlan: AgreedPlan? {
         let today = PlanDay.today
-        func isPast(_ plan: SharedPlan) -> Bool { plan.planDay.map { $0 < today } ?? false }
+        /// Past from the day after its day, by this phone's calendar -- so the
+        /// planner goes back to planning the morning after the date.
+        ///
+        /// **A plan with no day used to never be past.** Plans sent before the
+        /// planner asked for a day have none, and one that was agreed held the
+        /// planner on "your agreed plan" for that person for good. With no day
+        /// to run out on, it counts as past a week after `since` -- when it was
+        /// agreed, or for one still waiting, when it was sent.
+        func isPast(_ plan: SharedPlan, since: Date?) -> Bool {
+            if let day = plan.planDay { return day < today }
+            guard let since else { return true }
+            return PlanDay(since.addingTimeInterval(7 * 24 * 60 * 60)) < today
+        }
         func answer(to id: String) -> Message? { messages.first { $0.plan?.answering == id } }
         func isCancelled(_ id: String) -> Bool { messages.contains { $0.plan?.cancelling == id } }
 
@@ -196,10 +208,10 @@ extension Conversation {
             guard let plan = message.plan, plan.isPlan, let yes = answer(to: message.id) else { continue }
             // The latest plan agreed is the one that counts; once its day has
             // gone, or it has been called off, so has any plan before it.
-            guard !isPast(plan), !isCancelled(message.id) else { return nil }
+            guard !isPast(plan, since: yes.sentAt), !isCancelled(message.id) else { return nil }
             let newer = messages[(index + 1)...].last { later in
                 guard let laterPlan = later.plan, laterPlan.isPlan else { return false }
-                return answer(to: later.id) == nil && !isPast(laterPlan)
+                return answer(to: later.id) == nil && !isPast(laterPlan, since: later.sentAt)
             }
             return AgreedPlan(messageID: message.id, plan: plan,
                               saidYesByThem: !yes.isOutgoing,

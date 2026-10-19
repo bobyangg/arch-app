@@ -7,6 +7,13 @@ import SwiftUI
 /// starts because somebody wrote a message, so a conversation and a message are the
 /// same event.
 ///
+/// A request to open one conversation, from outside the list. A fresh `token`
+/// each time, so the same conversation asked for twice is two openings.
+struct ConversationOpening: Equatable {
+    let conversationID: String
+    let token = UUID()
+}
+
 /// One list, most recent first. Deliberately **no "waiting for a reply" grouping**:
 /// separating the messages nobody answered would tell you that you have been passed
 /// over, which the app has no business doing and often would not even be true.
@@ -52,6 +59,11 @@ struct MessagesListView: View {
     /// left open in Daily 5 would otherwise go on hiding the tab bar after you
     /// had switched away from it.
     var onThreadOpenChanged: (String?) -> Void = { _ in }
+
+    /// A conversation to open from outside the list -- a tapped notification.
+    /// Each opening is new, so tapping the same person's notification twice
+    /// opens their thread twice.
+    var opening: ConversationOpening? = nil
 
     @State private var path = NavigationPath()
 
@@ -99,6 +111,14 @@ struct MessagesListView: View {
         // through whatever was on it, so an open thread slides away exactly as
         // the back button would have sent it.
         .onChange(of: popToRoot) { _, _ in path = NavigationPath() }
+        // Straight to the thread, from whatever was open: the notification was
+        // about this conversation, so that is where the tap should land.
+        .onChange(of: opening) { _, opening in
+            guard let opening, let conversation = live(opening.conversationID) else { return }
+            var fresh = NavigationPath()
+            fresh.append(conversation)
+            path = fresh
+        }
     }
 
     private var list: some View {
