@@ -684,7 +684,8 @@ enum DatePlanner {
               let anchorCategory = filled[anchorIndex].category
         else {
             return DatePlan(time: time, day: day,
-                            shared: DateTheme.allCases.filter { shared.contains($0) },
+                            // On a self plan, what you like -- before anything is added too.
+                            shared: DateTheme.allCases.filter { solo ? yours[$0] != nil : shared.contains($0) },
                             sameWords: sameWordsShown,
                             halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
                             fromYou: nil, fairness: nil, stops: [])
