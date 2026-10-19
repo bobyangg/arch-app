@@ -80,6 +80,15 @@ body{
 button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; text-align:left;}
 :focus-visible{outline:2px solid var(--lamp); outline-offset:2px;}
 
+/* ---- the prototype's own switch, outside the device ---- */
+#proto{position:fixed; top:12px; left:12px; z-index:50; display:flex; align-items:center; gap:4px;
+  padding:4px; border-radius:999px; background:var(--stone); box-shadow:0 2px 10px rgba(0,0,0,.12);
+  font-size:12px; line-height:16px;}
+#proto span{padding:0 8px; color:var(--mortar); font-weight:600;}
+#proto button{padding:6px 10px; border-radius:999px; color:var(--mortar); text-align:center;}
+#proto button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+@media (max-width:459px), (max-height:899px){ #proto{top:auto; bottom:84px; left:8px; opacity:.92;} }
+
 /* ---- the device ---- */
 #device{
   width:393px; height:852px; max-width:100vw; max-height:100dvh;
@@ -417,6 +426,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .spread{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
 </style>
 
+<!-- Not part of the app: switches the prototype between states to look at. -->
+<div id="proto" role="group" aria-label="Prototype state">
+  <span>Prototype</span>
+  <button data-proto="matches" aria-pressed="true">With matches</button>
+  <button data-proto="nomatches" aria-pressed="false">No matches</button>
+</div>
 <div id="device">
   <div id="root" class="v" style="flex:1; min-height:0;"></div>
   <div id="scrim"></div>
@@ -1574,7 +1589,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
 
   const filled=(items||[]).filter(it=>it.cat);
   let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
-  if(ai<0) return {day,shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
@@ -4014,5 +4029,23 @@ render=function(){
 applyTheme();
 seedPrefs();
 seedHanaPlan();
+/* **No matches**: nobody in Messages -- a new account before anybody has been
+   written to -- to see what the Date planner does with nobody to plan with: it
+   plans for you, as Self plan. From the switch beside the device, or
+   `?nomatches` (and `&planner` to open on that tab). */
+const allConvos=S.convos;
+function protoState(k){
+  const none=k==="nomatches";
+  S.convos=none?[]:allConvos;
+  S.planner={...S.planner,with:null,editing:null,selfEditing:false,sent:null,cancelled:null,exported:null};
+  S.stacks.messages=[];
+  if(none) S.tab="planner";
+  document.querySelectorAll("#proto button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.proto===k)));
+  render();
+}
+document.getElementById("proto").addEventListener("click",e=>{const b=e.target.closest("button"); if(b) protoState(b.dataset.proto);});
+(()=>{const q=new URLSearchParams(location.search);
+  if(q.has("nomatches")) protoState("nomatches");
+  if(q.has("planner")) S.tab="planner";})();
 render();
 </script>
