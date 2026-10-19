@@ -919,7 +919,10 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.limestone)
 
             ScrollView(.horizontal) {
-                HStack(spacing: ArchSpacing.m) {
+                // Top-aligned: "Agreed" or "Confirmed" under a name makes that
+                // face's column taller, and centred it rose above the others.
+                // The faces stay on one line; the word only adds below.
+                HStack(alignment: .top, spacing: ArchSpacing.m) {
                     ForEach(candidates) { candidate in
                         let isChosen = candidate.id == chosen?.id
                         let hasAgreed = candidate.conversation.agreedPlan != nil
