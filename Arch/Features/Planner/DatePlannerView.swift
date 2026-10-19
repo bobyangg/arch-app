@@ -1588,6 +1588,8 @@ struct DatePlannerView: View {
         .padding(.bottom, ArchSpacing.s)
         .frame(maxWidth: .infinity)
         .background(ArchColor.night)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planner.bottomBar")
     }
 
     /// While Apple Maps is asked, and if it could not be.
