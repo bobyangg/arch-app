@@ -352,17 +352,18 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
         XCTAssertEqual(stops.count, 1)
         XCTAssertFalse(app.buttons["planner.hours.0.3"].exists, "A stop should open closed.")
-        app.buttons["planner.open.0"].tap()
+        tapClearOfTheBar(app.buttons["planner.open.0"], in: app)
         XCTAssertTrue(app.buttons["planner.hours.0.3"].waitForExistence(timeout: 5), "Opening a stop showed no length.")
-        app.buttons["planner.hours.0.3"].tap()
+        tapClearOfTheBar(app.buttons["planner.hours.0.3"], in: app)
         XCTAssertTrue(app.buttons["planner.hours.0.3"].isSelected, "The three-hour block did not stick.")
 
-        // Something to eat, then whatever the planner suggests.
-        app.buttons["planner.addItem"].tap()
-        app.buttons["planner.choose.food"].tap()
+        // Something to eat, then whatever the planner suggests. A new item
+        // lands at the end of the list, which can be under Share.
+        tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
+        tapClearOfTheBar(app.buttons["planner.choose.food"], in: app)
         XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
-        app.buttons["planner.addItem"].tap()
-        app.buttons["planner.choose.surprise"].tap()
+        tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
+        tapClearOfTheBar(app.buttons["planner.choose.surprise"], in: app)
         XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
         XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
 
@@ -390,19 +391,38 @@ final class ArchSmokeTests: XCTestCase {
 
         // "Not for us": the place goes, another takes the item, and the
         // planner offers to undo it.
-        app.buttons["planner.hide.0"].tap()
+        tapClearOfTheBar(app.buttons["planner.hide.0"], in: app)
         XCTAssertTrue(app.buttons["planner.undoHide"].waitForExistence(timeout: 5),
                       "Hiding a place did not offer to undo it.")
         XCTAssertEqual(stops.count, 3, "Hiding a place lost the stop instead of replacing it.")
-        app.buttons["planner.undoHide"].tap()
+        tapClearOfTheBar(app.buttons["planner.undoHide"], in: app)
 
         // Removing one leaves room to add again.
-        app.buttons["planner.open.2"].tap()
+        tapClearOfTheBar(app.buttons["planner.open.2"], in: app)
         XCTAssertTrue(app.buttons["planner.remove.2"].waitForExistence(timeout: 5), "Opening the third stop showed no Remove.")
-        app.buttons["planner.remove.2"].tap()
+        tapClearOfTheBar(app.buttons["planner.remove.2"], in: app)
         XCTAssertEqual(stops.count, 2, "Remove did not take the stop off.")
         XCTAssertTrue(app.buttons["planner.addItem"].exists, "With two items there is room for a third.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
+    }
+
+    /// Taps a control in the planner after scrolling it clear of the bar pinned
+    /// at the bottom. Share stays put while the plan scrolls under it, so a
+    /// control that is on screen can still be behind it -- and a tap there is
+    /// a tap on Share.
+    private func tapClearOfTheBar(
+        _ element: XCUIElement, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5),
+                      "\(element) never appeared.", file: file, line: line)
+        let bar = app.otherElements["planner.bottomBar"]
+        var tries = 0
+        while tries < 4, bar.exists, element.frame.maxY > bar.frame.minY - 4 {
+            app.swipeUp()
+            tries += 1
+        }
+        element.tap()
     }
 
     /// Through "Get started" and the five questions, taking the first option
