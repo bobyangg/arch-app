@@ -1091,7 +1091,11 @@ enum ArchBackend {
         )
     }
 
-    static func report(_ person: Person, reason: String, note: String?) async throws {
+    /// `reason` is one of `removal_reason`'s codes; `conversationID` attaches the
+    /// conversation, which whoever reads the report reads too (backend/034).
+    static func report(
+        _ person: Person, reason: String, note: String?, conversationID: String?
+    ) async throws {
         guard let session = await SupabaseClient.shared.restore() else {
             throw ArchAPIError.notSignedIn
         }
@@ -1100,11 +1104,12 @@ enum ArchBackend {
             let reportedId: String
             let reason: String
             let note: String?
+            let conversationId: String?
         }
         try await SupabaseClient.shared.insert(
             "reports",
             Report(reporterId: session.userID, reportedId: person.id,
-                   reason: reason, note: note)
+                   reason: reason, note: note, conversationId: conversationID)
         )
     }
 

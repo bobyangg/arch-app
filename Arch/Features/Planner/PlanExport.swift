@@ -1,10 +1,9 @@
-import EventKit
-import EventKitUI
 import SwiftUI
 import UIKit
 
-/// A settled plan, taken out of Arch: into your calendar, or to anybody at all
-/// through whatever app you like -- Messages, Instagram, WhatsApp.
+/// A settled plan, taken out of Arch to anybody at all, through whatever app
+/// you like -- Messages, Instagram, WhatsApp. (Into your calendar is
+/// `CalendarEventSheet`.)
 ///
 /// **Only from a settled plan, and only when you ask.** Sharing a plan *into*
 /// Arch stays in Messages (`ShareWithSheet`), because there it carries the
@@ -44,18 +43,6 @@ enum PlanExport {
     static func items(for plan: SharedPlan, title: String) -> [Any] {
         let words: [Any] = [text(for: plan, title: title)]
         return (image(for: plan, title: title).map { [$0] } ?? []) + words
-    }
-
-    /// When the plan starts and ends, on its day. Nil for a plan with no day.
-    static func interval(of plan: SharedPlan) -> (start: Date, end: Date)? {
-        guard let day = plan.planDay, let stops = plan.stops,
-              let first = stops.first, let last = stops.last else { return nil }
-        let calendar = Calendar.current
-        let midnight = calendar.startOfDay(for: day.date)
-        guard let start = calendar.date(byAdding: .minute, value: first.start, to: midnight),
-              let end = calendar.date(byAdding: .minute, value: last.start + (last.minutes ?? 60), to: midnight)
-        else { return nil }
-        return (start, end)
     }
 }
 
@@ -124,58 +111,10 @@ struct PlanShareSheet: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: UIActivityViewController, context: Context) {}
 }
 
-/// What "Add to calendar" is about to add.
+/// What "Add to calendar" is about to add, while Apple's screen is up
+/// (`CalendarEventSheet`).
 struct PlanCalendarDraft: Identifiable {
     let id = UUID()
     let plan: SharedPlan
     let title: String
-}
-
-/// "Add to calendar": the system's own new-event screen, filled in -- the
-/// day, from the first stop to the end of the last, at the first place, with
-/// every stop in the notes. You check it and tap Add.
-///
-/// **No calendar permission.** From iOS 17 this screen runs outside the app
-/// and adds the event itself, so Arch never asks to read your calendar and
-/// never could.
-struct PlanCalendarSheet: UIViewControllerRepresentable {
-    let draft: PlanCalendarDraft
-    let onDone: () -> Void
-
-    func makeCoordinator() -> Coordinator { Coordinator(onDone: onDone) }
-
-    func makeUIViewController(context: Context) -> EKEventEditViewController {
-        let store = EKEventStore()
-        let event = EKEvent(eventStore: store)
-        event.title = draft.title
-        if let span = PlanExport.interval(of: draft.plan) {
-            event.startDate = span.start
-            event.endDate = span.end
-        }
-        if let first = draft.plan.stops?.first {
-            event.location = "\(first.name), \(first.neighbourhood)"
-        }
-        event.notes = PlanExport.text(for: draft.plan, title: draft.title)
-
-        let controller = EKEventEditViewController()
-        controller.eventStore = store
-        controller.event = event
-        controller.editViewDelegate = context.coordinator
-        return controller
-    }
-
-    func updateUIViewController(_ controller: EKEventEditViewController, context: Context) {}
-
-    final class Coordinator: NSObject, EKEventEditViewDelegate {
-        let onDone: () -> Void
-
-        init(onDone: @escaping () -> Void) {
-            self.onDone = onDone
-        }
-
-        func eventEditViewController(_ controller: EKEventEditViewController,
-                                     didCompleteWith action: EKEventEditViewAction) {
-            onDone()
-        }
-    }
 }

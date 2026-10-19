@@ -146,6 +146,12 @@ targets:
           about a kilometre and never shown to anyone — your profile shows a
           neighbourhood, never a distance.
 
+        # "Add to Apple Calendar" uses Apple's own event screen, which from iOS 17
+        # runs outside the app and needs no access. This is here in case iOS asks
+        # anyway, so a missing string can never be the reason it fails.
+        NSCalendarsWriteOnlyAccessUsageDescription:
+          Arch adds a date you have agreed to your calendar, only when you tap Add.
+
         # Read from the build settings above rather than written here, so that
         # Debug stays the design build and Release is the real one. Xcode expands
         # `$(...)` in Info.plist values when it processes the file.

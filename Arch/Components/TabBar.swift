@@ -101,6 +101,10 @@ private struct TabBarItem: View {
     }
     private var weight: CGFloat { isActive ? 2.25 : ArchSpacing.glyphStroke }
 
+    /// About what the pill always was on a 390pt phone, so "You" and "Daily 5"
+    /// look as they did; only a label wider than this widens it.
+    private static let pillMinimumWidth: CGFloat = 60
+
     var body: some View {
         Button(action: action) {
             VStack(spacing: ArchSpacing.xxs) {
@@ -121,18 +125,25 @@ private struct TabBarItem: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity)
+            // **The pill is measured from what it lights, not from the tab.** It
+            // used to be the tab's fifth of the bar inset by `xs` either side --
+            // 62pt on most phones -- and "Date planner" is wider than that, so
+            // the words ran out past the frost. Now it is the label plus `xs`
+            // either side, never narrower than the old pill, and the label
+            // shrinks to fit inside it rather than past it.
+            .padding(.horizontal, ArchSpacing.xs)
             .padding(.vertical, ArchSpacing.xxs)
+            .frame(minWidth: Self.pillMinimumWidth)
             .background {
                 if isActive {
                     // `limestone` at a whisper: dark on paper, pale at night, so
                     // it reads as frost on the glass in either world.
                     RoundedRectangle(cornerRadius: ArchGlass.pillRadius, style: .continuous)
                         .fill(ArchColor.limestone.opacity(ArchGlass.pillWash))
-                        .padding(.horizontal, ArchSpacing.xs)
                         .matchedGeometryEffect(id: "pill", in: pill)
                 }
             }
+            .frame(maxWidth: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

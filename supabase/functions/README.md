@@ -16,6 +16,7 @@ These add the parts Supabase does not do.
 | `subscription` | The app bought or restored Premium: ask Apple, record the answer. Signed in |
 | `app-store-notifications` | Apple, saying a subscription renewed, lapsed or was refunded. **No JWT** -- Apple has no session |
 | `photo-sweep` | Removes photo files no photograph owns. Called hourly by `private.sweep_photos` with the push job's cron secret. Only the Storage API may delete a file; SQL is refused |
+| `report-alert` | Somebody was reported: emails the team through Resend (`RESEND_API_KEY`) and notifies every phone in `private.moderators`. Called by `private.sweep_reports` with the push job's cron secret, only when a report is waiting (backend/034) |
 | `_shared/appattest.ts` | Apple's verification steps, in Apple's order |
 | `_shared/devicecheck.ts` | The two bits, over Apple's server-to-server API |
 

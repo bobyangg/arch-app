@@ -675,6 +675,30 @@ final class DailyFiveStore {
         }
     }
 
+    /// A report, filed with the conversation it came from.
+    ///
+    /// Removes nothing: blocking as well is a separate call the sheet makes.
+    /// Tried three times, a few seconds apart, because a report lost to a
+    /// dropped connection is the one write the person was counting on most.
+    func report(_ conversation: Conversation, reason: String) {
+        let person = conversation.person
+        let thread = conversation.id.hasPrefix("pending-") ? nil : conversation.id
+        persist {
+            var attempt = 1
+            while true {
+                do {
+                    try await ArchBackend.report(person, reason: reason, note: nil,
+                                                 conversationID: thread)
+                    return
+                } catch {
+                    guard attempt < 3 else { throw error }
+                    try? await Task.sleep(for: .seconds(2 * attempt))
+                    attempt += 1
+                }
+            }
+        }
+    }
+
     /// What the other side sees when somebody leaves, blocks, or deletes.
     ///
     /// Nothing calls this in a design build — there is no second phone to do the
