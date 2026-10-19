@@ -144,3 +144,10 @@ DatePicker
 
 # Opening a Date planner stop in Apple Maps
 URLComponents
+
+# Exporting a settled plan: its picture, the share sheet, and Add to calendar
+ImageRenderer
+UIActivityViewController
+EKEventStore
+EKEvent
+EKEventEditViewController
