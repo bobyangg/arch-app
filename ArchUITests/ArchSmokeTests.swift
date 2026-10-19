@@ -500,6 +500,32 @@ final class ArchSmokeTests: XCTestCase {
                       "The planner did not say it replanned after your interests changed.")
     }
 
+    /// "Self plan", last in the row of faces, plans a date for you alone: the
+    /// same items, from your own interests and answers, with nothing to share.
+    func testASelfPlanIsLastAndPlansForYou() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        let me = app.buttons["planner.with.self"]
+        XCTAssertTrue(me.waitForExistence(timeout: 5), "There is no Self plan in the row of faces.")
+        // Last in the row: further right than every match.
+        let faces = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'planner.with.'"))
+        let rightmost = faces.allElementsBoundByIndex.max { $0.frame.minX < $1.frame.minX }
+        XCTAssertEqual(rightmost?.identifier, "planner.with.self", "Self plan is not the last in the row.")
+
+        var tries = 0
+        while !me.isHittable && tries < 4 { app.scrollViews["planner.picker"].swipeLeft(); tries += 1 }
+        me.tap()
+        XCTAssertTrue(me.isSelected, "Tapping Self plan did not choose it.")
+
+        app.buttons["planner.choose.activity"].tap()
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "A self plan planned nothing.")
+        XCTAssertTrue(app.staticTexts["planner.selfNote"].exists, "A self plan does not say it is yours alone.")
+        XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on a self plan.")
+    }
+
     /// "Change it" on a plan somebody sent opens your planner on *their*
     /// plan: the same places, not ones like them, each saying where it came
     /// from. Hana's plan in the design build carries its places.
