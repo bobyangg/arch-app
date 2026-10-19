@@ -164,8 +164,34 @@ struct DatePlannerView: View {
     /// the plan agreed with the person on screen, the planner shows, under a
     /// line saying what is being changed; otherwise the agreed plan does.
     @State private var changingAgreed: String?
-    /// The agreed plan "Cancel the date" is asking about.
-    @State private var cancelling: AgreedPlan?
+    /// While Cancel is asking first.
+    @State private var askingCancel = false
+    /// What Add to calendar is adding, and what Export is sending, while
+    /// their sheets are open.
+    @State private var calendarDraft: PlanCalendarDraft?
+    @State private var exporting: PlanShareItems?
+    /// Your confirmed self plan, as JSON, kept on this phone: it goes into no
+    /// conversation, so there is nowhere on the server it belongs. Empty when
+    /// there is none.
+    @AppStorage("arch.selfPlan") private var savedSelfPlan = ""
+    /// While a confirmed self plan is being changed.
+    @State private var changingSelf = false
+
+    /// A confirmed self plan, as kept: whose it is, so another account
+    /// signed in on this phone does not see it.
+    private struct SavedSelfPlan: Codable {
+        let owner: String
+        let plan: SharedPlan
+    }
+
+    /// Your confirmed self plan, while its day is still to come.
+    private var confirmedSelfPlan: SharedPlan? {
+        guard let data = savedSelfPlan.data(using: .utf8),
+              let saved = try? JSONDecoder().decode(SavedSelfPlan.self, from: data),
+              saved.owner == you.id, saved.plan.isPlan else { return nil }
+        if let day = saved.plan.planDay, day < .today { return nil }
+        return saved.plan
+    }
     /// Said after a date has been called off, until you pick somebody else.
     @State private var cancelledNote: String?
 
@@ -211,7 +237,15 @@ struct DatePlannerView: View {
                     // Nothing here needs your answers to the questions: the
                     // plan is already made.
                     picker
-                    agreedScreen(agreed, with: chosen)
+                    settledScreen(settled(agreed, with: chosen),
+                                  onChange: { change(agreed) },
+                                  onCancel: { cancel(agreed, with: chosen) })
+                } else if isSolo, let confirmed = confirmedSelfPlan, !changingSelf {
+                    // Your confirmed self plan, settled the same way.
+                    picker
+                    settledScreen(settledSelf(confirmed),
+                                  onChange: { changeSelf(confirmed) },
+                                  onCancel: { cancelSelf(confirmed) })
                 } else if you.datePreferences == nil && !hasKept {
                     if candidates.contains(where: { $0.conversation.agreedPlan != nil }) || cancelledNote != nil {
                         picker
@@ -226,6 +260,9 @@ struct DatePlannerView: View {
                     cancelledLine
                     if let chosen, let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
+                    }
+                    if isSolo, changingSelf, let confirmed = confirmedSelfPlan {
+                        changingSelfBanner(confirmed)
                     }
                     if isLive && nearby[planningID] == nil && !hasKept {
                         looking(for: planningID)
@@ -313,6 +350,7 @@ struct DatePlannerView: View {
             sentTo = nil
             replanned = nil
             cancelledNote = nil
+            changingSelf = false
         }
         .onChange(of: pickedTime) { _, _ in
             restartSwaps()
@@ -431,15 +469,95 @@ struct DatePlannerView: View {
         Task { try? await ArchBackend.unhidePlace(key: hidden.id) }
     }
 
-    // MARK: The agreed plan
+    // MARK: Settled plans
+
+    /// A plan that is decided, as its screen shows it: one agreed with a
+    /// match, or a self plan you confirmed. One screen for both, so the two
+    /// work the same way -- Maps on every stop, Add to calendar, Export, Make
+    /// changes, and Cancel.
+    private struct Settled {
+        let plan: SharedPlan
+        /// "You are both in", "Confirmed".
+        let badge: String
+        /// "Thursday evening with Hana", "Monday afternoon, just you". Also
+        /// the heading of what Export sends.
+        let title: String
+        /// Under the stops, after when it ends: "Hana said yes."
+        let closing: String
+        /// A newer plan still waiting, when there is one.
+        let note: String?
+        /// Under Make changes: what a change does.
+        let changeNote: String
+        /// The calendar event's name.
+        let eventTitle: String
+        let cancelTitle: String
+        let cancelQuestion: String
+        let cancelMessage: String
+    }
+
+    /// "evening" or "afternoon".
+    private func partOfDay(_ plan: SharedPlan) -> String {
+        plan.timeOfDay == .evening ? "evening" : "afternoon"
+    }
+
+    /// "Thursday evening", or "the evening" for a plan with no day.
+    private func when(_ plan: SharedPlan) -> String {
+        plan.planDay.map { "\($0.weekdayName) \(partOfDay(plan))" } ?? "the \(partOfDay(plan))"
+    }
+
+    private func settled(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> Settled {
+        let name = candidate.person.name
+        let part = partOfDay(agreed.plan)
+        return Settled(
+            plan: agreed.plan,
+            badge: "You are both in",
+            title: agreed.plan.planDay.map { "\($0.weekdayName) \(part) with \(name)" } ?? "An \(part) with \(name)",
+            closing: agreed.saidYesByThem ? "\(name) said yes." : "You said yes.",
+            note: agreed.newerSentByYou.map { byYou in
+                byYou ? "You sent \(name) a newer plan. It is waiting on them."
+                      : "\(name) sent a newer plan. It is waiting on you in your conversation."
+            },
+            changeNote: "Changes go to \(name) as a new plan. This one stands until they say yes.",
+            eventTitle: "Date with \(name)",
+            cancelTitle: "Cancel the date",
+            cancelQuestion: "Cancel your \(when(agreed.plan)) with \(name)?",
+            cancelMessage: "\(name) will see that it is off, in your conversation."
+        )
+    }
+
+    private func settledSelf(_ plan: SharedPlan) -> Settled {
+        let part = partOfDay(plan)
+        return Settled(
+            plan: plan,
+            badge: "Confirmed",
+            title: plan.planDay.map { "\($0.weekdayName) \(part), just you" } ?? "An \(part), just you",
+            closing: "A plan just for you.",
+            note: nil,
+            changeNote: "Changes replace this plan when you confirm them.",
+            eventTitle: "Self plan",
+            cancelTitle: "Cancel this plan",
+            cancelQuestion: "Cancel your self plan for \(when(plan))?",
+            cancelMessage: "It is only on this phone, so nobody else is told."
+        )
+    }
 
     /// "Make changes": the planner, opened on the agreed plan's day, time and
     /// places, each saying where it came from.
     private func change(_ agreed: AgreedPlan) {
-        items = agreed.plan.planItems(from: "From your agreed plan.") ?? [PlanItem()]
-        pickedTime = agreed.plan.timeOfDay
-        pickedDay = agreed.plan.planDay
+        reopen(agreed.plan, from: "From your agreed plan.")
         changingAgreed = agreed.messageID
+    }
+
+    /// "Make changes" on a confirmed self plan.
+    private func changeSelf(_ plan: SharedPlan) {
+        reopen(plan, from: "From your confirmed plan.")
+        changingSelf = true
+    }
+
+    private func reopen(_ plan: SharedPlan, from: String) {
+        items = plan.planItems(from: from) ?? [PlanItem()]
+        pickedTime = plan.timeOfDay
+        pickedDay = plan.planDay
         replanned = nil
         justHidden = nil
         sentTo = nil
@@ -448,17 +566,33 @@ struct DatePlannerView: View {
     /// "Cancel the date": said in the conversation, tied to the plan, so it
     /// is off on both phones -- the card in the thread says who cancelled it.
     private func cancel(_ agreed: AgreedPlan, with candidate: PlannerCandidate) {
-        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
-        let when = agreed.plan.planDay.map { "\($0.weekdayName) \(part)" } ?? "the \(part)"
+        let whenText = when(agreed.plan)
         onSend(candidate.conversation,
-               "I have to cancel our plan for \(when).",
+               "I have to cancel our plan for \(whenText).",
                SharedPlan(cancelling: agreed.messageID))
-        cancelledNote = "Your plan with \(candidate.person.name) for \(when) is cancelled. It says so in your conversation."
+        cancelledNote = "Your plan with \(candidate.person.name) for \(whenText) is cancelled. It says so in your conversation."
         changingAgreed = nil
         sentTo = nil
     }
 
-    /// After "Cancel the date".
+    /// "Confirm this plan": the self plan, frozen as it is and kept on this
+    /// phone, and the screen it is settled on.
+    private func confirmSelf(_ plan: DatePlan) {
+        let frozen = SavedSelfPlan(owner: you.id, plan: SharedPlan(plan, sharedWith: you, plannedWith: you))
+        guard let data = try? JSONEncoder().encode(frozen),
+              let json = String(data: data, encoding: .utf8) else { return }
+        savedSelfPlan = json
+        changingSelf = false
+        cancelledNote = nil
+    }
+
+    private func cancelSelf(_ plan: SharedPlan) {
+        savedSelfPlan = ""
+        changingSelf = false
+        cancelledNote = "Your self plan for \(when(plan)) is cancelled."
+    }
+
+    /// After a cancel.
     @ViewBuilder
     private var cancelledLine: some View {
         if let cancelledNote {
@@ -471,25 +605,25 @@ struct DatePlannerView: View {
         }
     }
 
-    /// The plan you both said yes to: when, where and for how long, each place
-    /// a tap from Apple Maps -- and the way into changing it.
-    private func agreedScreen(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> some View {
-        let name = candidate.person.name
-        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
-        let stops = agreed.plan.stops ?? []
-        let when = agreed.plan.planDay.map { "\($0.weekdayName) \(part)" } ?? part
+    /// A settled plan: when, where and for how long, each place a tap from
+    /// Apple Maps -- and what can be done with it now.
+    private func settledScreen(_ settled: Settled,
+                               onChange: @escaping () -> Void,
+                               onCancel: @escaping () -> Void) -> some View {
+        let plan = settled.plan
+        let stops = plan.stops ?? []
+        let ends = stops.last.map { $0.start + ($0.minutes ?? 60) }
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("You are both in")
+                Text(settled.badge)
                     .archText(.caption)
                     .foregroundStyle(ArchColor.lamp)
-                Text(agreed.plan.planDay.map { "\($0.weekdayName) \(part) with \(name)" }
-                     ?? "An \(part) with \(name)")
+                Text(settled.title)
                     .archText(.titleM)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, ArchSpacing.xxs)
-                if let day = agreed.plan.planDay {
+                if let day = plan.planDay {
                     Text("\(day.long) \u{00B7} \(untilDay(day))")
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
@@ -512,13 +646,13 @@ struct DatePlannerView: View {
                         } else if index > 0 {
                             Color.clear.frame(height: ArchSpacing.s)
                         }
-                        agreedStop(stop, index: index)
+                        settledStop(stop, index: index)
                     }
                 }
                 .padding(.top, ArchSpacing.m)
 
-                Text(([agreed.endsAt.map { "Done by about \(DatePlanner.clockTime($0))." }].compactMap { $0 }
-                      + [agreed.saidYesByThem ? "\(name) said yes." : "You said yes."])
+                Text(([ends.map { "Done by about \(DatePlanner.clockTime($0))." }].compactMap { $0 }
+                      + [settled.closing])
                     .joined(separator: " "))
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
@@ -533,51 +667,67 @@ struct DatePlannerView: View {
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("planner.agreed")
 
-            if let byYou = agreed.newerSentByYou {
-                Text(byYou ? "You sent \(name) a newer plan. It is waiting on them."
-                           : "\(name) sent a newer plan. It is waiting on you in your conversation.")
+            if let note = settled.note {
+                Text(note)
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, ArchSpacing.m)
             }
 
-            ArchButton(title: "Make changes", kind: .quiet) {
-                withAnimation(ArchMotion.standard) { change(agreed) }
+            // Out of Arch: into your calendar, or to anybody through any app.
+            HStack(spacing: ArchSpacing.xs) {
+                ArchButton(title: "Add to calendar", kind: .quiet, isEnabled: plan.planDay != nil) {
+                    calendarDraft = PlanCalendarDraft(plan: plan, title: settled.eventTitle)
+                }
+                .accessibilityIdentifier("planner.agreed.calendar")
+                ArchButton(title: "Export", kind: .quiet) {
+                    exporting = PlanShareItems(items: PlanExport.items(for: plan, title: settled.title))
+                }
+                .accessibilityLabel("Export this plan")
+                .accessibilityHint("Send it through Messages, Instagram or any other app")
+                .accessibilityIdentifier("planner.agreed.export")
             }
-            .accessibilityIdentifier("planner.agreed.edit")
             .padding(.top, ArchSpacing.m)
 
-            Text("Changes go to \(name) as a new plan. This one stands until they say yes.")
+            ArchButton(title: "Make changes", kind: .quiet) {
+                withAnimation(ArchMotion.standard) { onChange() }
+            }
+            .accessibilityIdentifier("planner.agreed.edit")
+            .padding(.top, ArchSpacing.xs)
+
+            Text(settled.changeNote)
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
                 .padding(.top, ArchSpacing.s)
 
-            // Asked first: it tells them, and it cannot be taken back.
-            ArchTextButton(title: "Cancel the date") { cancelling = agreed }
+            // Asked first: for a date it tells them, and it cannot be taken back.
+            ArchTextButton(title: settled.cancelTitle) { askingCancel = true }
                 .accessibilityIdentifier("planner.agreed.cancel")
                 .padding(.top, ArchSpacing.m)
         }
-        .confirmationDialog(
-            "Cancel your \(when) with \(name)?",
-            isPresented: Binding(get: { cancelling != nil }, set: { if !$0 { cancelling = nil } }),
-            titleVisibility: .visible
-        ) {
+        .confirmationDialog(settled.cancelQuestion, isPresented: $askingCancel, titleVisibility: .visible) {
             Button("Yes, cancel it", role: .destructive) {
-                if let cancelling {
-                    withAnimation(ArchMotion.standard) { cancel(cancelling, with: candidate) }
-                }
-                cancelling = nil
+                withAnimation(ArchMotion.standard) { onCancel() }
             }
-            Button("Keep the date", role: .cancel) { cancelling = nil }
+            Button("Keep it", role: .cancel) {}
         } message: {
-            Text("\(name) will see that it is off, in your conversation.")
+            Text(settled.cancelMessage)
+        }
+        .sheet(item: $calendarDraft) { draft in
+            PlanCalendarSheet(draft: draft) { calendarDraft = nil }
+                .ignoresSafeArea()
+        }
+        .sheet(item: $exporting) { export in
+            PlanShareSheet(items: export.items)
+                .presentationDetents([.medium, .large])
+                .ignoresSafeArea()
         }
     }
 
-    private func agreedStop(_ stop: SharedPlan.Stop, index: Int) -> some View {
+    private func settledStop(_ stop: SharedPlan.Stop, index: Int) -> some View {
         HStack(alignment: .top, spacing: ArchSpacing.s) {
             Text(DatePlanner.clockTime(stop.start))
                 .archText(.subhead)
@@ -617,24 +767,42 @@ struct DatePlannerView: View {
         }
     }
 
-    /// Over the planner while an agreed plan is being changed: what, and the
-    /// way back to it.
+    /// Over the planner while an agreed plan is being changed.
     private func changingBanner(_ agreed: AgreedPlan, with candidate: PlannerCandidate) -> some View {
-        let part = agreed.plan.timeOfDay == .evening ? "evening" : "afternoon"
-        return VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
-            Text(agreed.plan.planDay.map { "Changing your plan for \($0.weekdayName) \(part)" }
-                 ?? "Changing your plan for the \(part)")
+        changingBanner(
+            title: "Changing your plan for \(when(agreed.plan))",
+            detail: "Share it to send \(candidate.person.name) the new version. The plan you agreed stands until they say yes.",
+            back: "Back to the agreed plan"
+        ) {
+            changingAgreed = nil
+            sentTo = nil
+        }
+    }
+
+    /// Over the planner while a confirmed self plan is being changed.
+    private func changingSelfBanner(_ plan: SharedPlan) -> some View {
+        changingBanner(
+            title: "Changing your self plan for \(when(plan))",
+            detail: "Confirm it to replace the one you have.",
+            back: "Back to your confirmed plan"
+        ) {
+            changingSelf = false
+        }
+    }
+
+    /// What is being changed, and the way back to it.
+    private func changingBanner(title: String, detail: String, back: String,
+                                onBack: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+            Text(title)
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
-            Text("Share it to send \(candidate.person.name) the new version. The plan you agreed stands until they say yes.")
+            Text(detail)
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
-            ArchTextButton(title: "Back to the agreed plan") {
-                withAnimation(ArchMotion.standard) {
-                    changingAgreed = nil
-                    sentTo = nil
-                }
+            ArchTextButton(title: back) {
+                withAnimation(ArchMotion.standard) { onBack() }
             }
             .fixedSize()
             .accessibilityIdentifier("planner.agreed.back")
@@ -816,8 +984,9 @@ struct DatePlannerView: View {
         .padding(.bottom, ArchSpacing.l)
     }
 
-    /// "Self plan": a date with yourself, last in the row. Your own photo,
-    /// because it is you it is planned for.
+    /// "Self plan": a date with yourself, last in the row. Your own profile
+    /// photo -- the first of yours, as the You tab shows it -- because it is
+    /// you it is planned for.
     private var selfPlanButton: some View {
         Button {
             chosenID = Self.selfPlanID
@@ -839,10 +1008,16 @@ struct DatePlannerView: View {
                 Text("Self plan")
                     .archText(.caption)
                     .foregroundStyle(isSolo ? ArchColor.limestone : ArchColor.mortar)
+                if confirmedSelfPlan != nil {
+                    Text("Confirmed")
+                        .archText(.caption)
+                        .foregroundStyle(ArchColor.lamp)
+                        .padding(.top, -ArchSpacing.xxs)
+                }
             }
         }
         .buttonStyle(PressScaleStyle())
-        .accessibilityLabel("Self plan")
+        .accessibilityLabel(confirmedSelfPlan != nil ? "Self plan, confirmed" : "Self plan")
         .accessibilityHint("Plans a date for you on your own")
         .accessibilityAddTraits(isSolo ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("planner.with.self")
@@ -1281,17 +1456,22 @@ struct DatePlannerView: View {
         }
     }
 
-    /// The end of a self plan: when it is done, and that it is yours alone.
-    /// No "Share this plan" -- it is not for anybody else.
+    /// The end of a self plan: when it is done, and Confirm -- which settles
+    /// it on the same screen as an agreed date. No "Share this plan" into
+    /// Messages; once confirmed, Export sends it anywhere you like.
     private func selfFooter(_ plan: DatePlan) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
             Text(summary(plan))
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("A plan just for you. It is not sent to anybody.")
+            ArchButton(title: changingSelf ? "Confirm the changes" : "Confirm this plan") {
+                withAnimation(ArchMotion.standard) { confirmSelf(plan) }
+            }
+            .accessibilityIdentifier("planner.self.confirm")
+            Text("A plan just for you. Confirm it to add it to your calendar or export it.")
                 .archText(.footnote)
-                .foregroundStyle(ArchColor.limestone)
+                .foregroundStyle(ArchColor.mortar)
                 .frame(maxWidth: .infinity)
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("planner.selfNote")

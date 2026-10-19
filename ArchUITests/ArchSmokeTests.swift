@@ -523,6 +523,29 @@ final class ArchSmokeTests: XCTestCase {
         let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "A self plan planned nothing.")
         XCTAssertTrue(app.staticTexts["planner.selfNote"].exists, "A self plan does not say it is yours alone.")
+
+        // Confirmed, it is settled like an agreed date: calendar, export,
+        // change and cancel. Neither sheet is opened -- both are the system's.
+        let confirm = app.buttons["planner.self.confirm"]
+        var scrolls = 0
+        while !confirm.isHittable && scrolls < 6 { app.swipeUp(); scrolls += 1 }
+        confirm.tap()
+        XCTAssertTrue(app.buttons["planner.agreed.edit"].waitForExistence(timeout: 5),
+                      "Confirming a self plan did not settle it.")
+        XCTAssertTrue(app.buttons["planner.agreed.calendar"].exists, "A confirmed plan has no Add to calendar.")
+        XCTAssertTrue(app.buttons["planner.agreed.export"].exists, "A confirmed plan has no Export.")
+
+        // Cancelled, it is gone -- and kept on no phone, for the next launch.
+        let cancel = app.buttons["planner.agreed.cancel"]
+        scrolls = 0
+        while !cancel.isHittable && scrolls < 6 { app.swipeUp(); scrolls += 1 }
+        cancel.tap()
+        let yes = app.buttons["Yes, cancel it"]
+        XCTAssertTrue(yes.waitForExistence(timeout: 5), "Cancelling a self plan did not ask first.")
+        yes.tap()
+        XCTAssertTrue(app.staticTexts["planner.cancelled"].waitForExistence(timeout: 5),
+                      "The planner did not say the self plan was cancelled.")
+        XCTAssertFalse(app.buttons["planner.agreed.edit"].exists, "A cancelled self plan is still settled.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on a self plan.")
     }
 
