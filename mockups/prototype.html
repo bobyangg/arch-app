@@ -264,6 +264,8 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .phours button{width:48px; height:32px; border-radius:var(--r-control); background:var(--night);
                font-size:13px; color:var(--mortar); text-align:center;}
 .phours button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+/* "Duration", in front of the hour buttons, so they read as how long. */
+.phours .plabel{font-size:13px; line-height:16px; color:var(--mortar); margin-right:8px; min-width:64px;}
 .pcard{padding:16px; border-radius:var(--r-card); background:var(--stone);}
 /* The planner, plan first: one row of settings, stops that open on a tap,
    and Share kept in reach at the bottom. */
@@ -2050,7 +2052,7 @@ function plannerRoot(){
         ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}
         ${st.openThroughout?`<div class="caption mortar" style="margin-top:4px">${hrs.typical?"Usually open":"Open"} ${clockAt(hrs.o)} \u2013 ${clockAt(hrs.c)}</div>`:""}
         ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}
-        <div class="phours">${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
+        <div class="phours" role="group" aria-label="Duration"><span class="plabel" aria-hidden="true">Duration</span>${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
           aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}</div>
         <div style="display:flex; margin-top:4px">
           <a class="btntext" style="flex:1; text-decoration:none" target="_blank" rel="noopener"
