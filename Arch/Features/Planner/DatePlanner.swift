@@ -560,16 +560,22 @@ enum DatePlanner {
         alreadyShared: Set<String> = [],
         excluded: Set<String> = []
     ) -> DatePlan {
+        /// **A self plan: you, planning for yourself.** Asked for by passing
+        /// you as both people. It plans from your interests and your answers
+        /// alone -- counted once, not twice -- around where you are rather than
+        /// halfway to anybody, and says why in words for one person.
+        let solo = you.id == them.id
+
         // What you each said a date should be like. Either may be missing:
         // somebody who has not answered is planned for from interests alone.
-        let fit = DateFit(yours: you.datePreferences, theirs: them.datePreferences)
+        let fit = DateFit(yours: you.datePreferences, theirs: solo ? nil : them.datePreferences)
 
         let yours = DateTheme.themes(of: you)
-        let theirs = DateTheme.themes(of: them)
+        let theirs: [DateTheme: String] = solo ? [:] : DateTheme.themes(of: them)
         let shared = Set(yours.keys).intersection(theirs.keys)
         let oneSided = Set(yours.keys).symmetricDifference(theirs.keys)
 
-        let sameWords = Set(you.interests.map { normalised($0.text) })
+        let sameWords: Set<String> = solo ? [] : Set(you.interests.map { normalised($0.text) })
             .intersection(them.interests.map { normalised($0.text) })
         let sameWordsShown = them.interests.map(\.text).filter { sameWords.contains(normalised($0)) }
 
@@ -577,7 +583,7 @@ enum DatePlanner {
         // planner that used a more exact position than the profile shows would
         // be the one screen that could tell you where somebody lives.
         let yourPoint = you.matchPoint
-        let theirPoint = theirCentre ?? them.place?.centre
+        let theirPoint = solo ? nil : theirCentre ?? them.place?.centre
         let middle = Self.middle(yourPoint, theirPoint)
 
         /// **Variety, without a dice roll on every draw.** Apple Maps calls
@@ -678,7 +684,8 @@ enum DatePlanner {
               let anchorCategory = filled[anchorIndex].category
         else {
             return DatePlan(time: time, day: day,
-                            shared: DateTheme.allCases.filter { shared.contains($0) },
+                            // On a self plan, what you like -- before anything is added too.
+                            shared: DateTheme.allCases.filter { solo ? yours[$0] != nil : shared.contains($0) },
                             sameWords: sameWordsShown,
                             halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
                             fromYou: nil, fairness: nil, stops: [])
@@ -828,7 +835,7 @@ enum DatePlanner {
                     ? (item.pinnedFrom ?? "From the plan that was sent.")
                     : reason(for: venue, near: near,
                              shared: shared, you: you, yours: yours,
-                             them: them, theirs: theirs, yourName: "You"),
+                             them: them, theirs: theirs, yourName: "You", solo: solo),
                 sharedReason: reason(for: venue, near: near,
                                      shared: shared, you: you, yours: yours,
                                      them: them, theirs: theirs, yourName: you.name),
@@ -855,7 +862,8 @@ enum DatePlanner {
         return DatePlan(
             time: time,
             day: day,
-            shared: DateTheme.allCases.filter { shared.contains($0) },
+            // On a self plan, what you like: there is nobody to share it with.
+            shared: DateTheme.allCases.filter { solo ? yours[$0] != nil : shared.contains($0) },
             sameWords: sameWordsShown,
             halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
             fromYou: fromYou,
@@ -900,7 +908,8 @@ enum DatePlanner {
         shared: Set<DateTheme>,
         you: Person, yours: [DateTheme: String],
         them: Person, theirs: [DateTheme: String],
-        yourName: String
+        yourName: String,
+        solo: Bool = false
     ) -> String {
         let order = DateTheme.allCases
         if let theme = order.first(where: { venue.themes.contains($0) && shared.contains($0) }) {
@@ -922,7 +931,7 @@ enum DatePlanner {
                 ? "A short walk from \(anchor.name)."
                 : "The closest option to \(anchor.name)."
         }
-        return "About halfway between you."
+        return solo ? "Close to where you are." : "About halfway between you."
     }
 
     private static func normalised(_ text: String) -> String {
