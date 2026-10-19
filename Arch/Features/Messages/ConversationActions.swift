@@ -7,8 +7,10 @@ import SwiftUI
 struct ConversationActions {
     var leave: (Conversation) -> Void = { _ in }
     var block: (Person) -> Void = { _ in }
-    /// person, reason, and whether to block them as well.
-    var report: (Person, String, Bool) -> Void = { _, _, _ in }
+    /// Files a report: the conversation it came from, and the reason as the
+    /// server's code for it (`ReportSheet.Reason.code`). Blocking as well is the
+    /// sheet's to ask for, through `block`.
+    var report: (Conversation, String) -> Void = { _, _ in }
 }
 
 /// What the reader is doing about this conversation, if anything.
@@ -138,19 +140,32 @@ struct BlockConfirmSheet: View {
 /// take, so it is the one that gets `lamp`. Blocking and leaving do not.
 struct ReportSheet: View {
     let person: Person
-    let onSend: (String, Bool) -> Void
+    /// Files the report, with the reason's code. Called on "Send report", not on
+    /// "Done": the next screen says the report has been sent, so by then it has.
+    /// It used to be filed on "Done", and swiping the sheet away lost it.
+    let onSend: (String) -> Void
+    /// Closes the sheet, and whether to block them as well.
+    let onDone: (Bool) -> Void
     let onCancel: () -> Void
 
+    /// The code of the chosen reason.
     @State private var reason: String?
     @State private var alsoBlock = true
     @State private var sent = false
 
+    /// What the sheet says, and what `reports.reason` stores. The column takes
+    /// only these five codes, and filing the sentence instead was refused.
+    struct Reason: Hashable {
+        let label: String
+        let code: String
+    }
+
     static let reasons = [
-        "They were abusive or harassing",
-        "Their photos are not them",
-        "They are underage",
-        "They are trying to sell something",
-        "Something else"
+        Reason(label: "They were abusive or harassing", code: "abuse"),
+        Reason(label: "Their photos are not them", code: "photos"),
+        Reason(label: "They are underage", code: "underage"),
+        Reason(label: "They are trying to sell something", code: "selling"),
+        Reason(label: "Something else", code: "other")
     ]
 
     var body: some View {
@@ -162,6 +177,9 @@ struct ReportSheet: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ArchColor.stone)
         .presentationDetents([.height(sent ? 320 : 620)])
+        // Once sent, "Done" is the way out, so a swipe cannot skip the block
+        // they asked for.
+        .interactiveDismissDisabled(sent)
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .archSheetBackground()
@@ -185,7 +203,7 @@ struct ReportSheet: View {
 
             Spacer(minLength: 0)
 
-            ArchButton(title: "Done") { onSend(reason ?? "", alsoBlock) }
+            ArchButton(title: "Done") { onDone(alsoBlock) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -204,9 +222,9 @@ struct ReportSheet: View {
             .padding(.top, ArchSpacing.l)
 
             VStack(spacing: ArchSpacing.xs) {
-                ForEach(Self.reasons, id: \.self) { option in
-                    OptionRow(text: option, isSelected: reason == option) {
-                        reason = option
+                ForEach(Self.reasons, id: \.code) { option in
+                    OptionRow(text: option.label, isSelected: reason == option.code) {
+                        reason = option.code
                     }
                 }
             }
@@ -221,6 +239,8 @@ struct ReportSheet: View {
             Spacer(minLength: 0)
 
             ArchButton(title: "Send report", isEnabled: reason != nil) {
+                guard let reason else { return }
+                onSend(reason)
                 withAnimation(ArchMotion.standard) { sent = true }
             }
             ArchTextButton(title: "Cancel", action: onCancel)
@@ -290,7 +310,7 @@ struct LeaveConfirmSheet: View {
 }
 
 #Preview("Report") {
-    ReportSheet(person: MockData.nadia, onSend: { _, _ in }, onCancel: {})
+    ReportSheet(person: MockData.nadia, onSend: { _ in }, onDone: { _ in }, onCancel: {})
         .frame(height: 620)
         .preferredColorScheme(.dark)
 }
