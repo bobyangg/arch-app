@@ -281,6 +281,15 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .agreed .astop{display:flex; gap:12px; align-items:flex-start;}
 .agreed .astop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
 .agreed .astop .btntext{width:auto; flex:none; padding:0 0 0 8px; min-height:32px; margin-top:-6px; text-decoration:none;}
+/* Export: the plan as a picture, then the apps it can go to. */
+.xcard{padding:20px; border-radius:var(--r-card); background:var(--night); border:1px solid var(--quiet);}
+.xapps{display:grid; grid-template-columns:repeat(5,1fr); gap:8px;}
+.xapps button{display:flex; flex-direction:column; align-items:center; gap:6px; font-size:11px; color:var(--mortar);}
+.xapps i{display:block; width:48px; height:48px; border-radius:12px; font-style:normal; font-size:22px;
+  line-height:48px; text-align:center; color:#fff;}
+.xform{border-radius:var(--r-control); background:var(--stone); padding:4px 16px;}
+.xform div{display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--quiet); font-size:14px;}
+.xform div:last-child{border-bottom:none;}
 .pwho .ok{font-size:11px; line-height:14px; font-weight:600; color:var(--lamp); margin-top:-6px;}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
@@ -1828,19 +1837,41 @@ const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div clas
     <div class="face" style="${tone(c.p.photos[0])}"></div><div class="nm">${esc(c.p.name)}</div>
     ${ok?`<div class="ok">Agreed</div>`:""}</button>`;}).join("")
   +`<button class="pwho" data-a="planWith" data-id="${SELF_PLAN}" aria-pressed="${!!cur&&!!cur.solo}" aria-label="Self plan">
-    <div class="face" style="${tone(S.you.photos[0])}"></div><div class="nm">Self plan</div></button></div>`
+    <div class="face" style="${tone(S.you.photos[0])}"></div><div class="nm">Self plan</div>
+    ${selfConfirmed()?`<div class="ok">Confirmed</div>`:""}</button></div>`
   +(cands.length?"":`<div class="spread mt-s" style="align-items:baseline"><div class="footnote mortar">Plans with somebody are for people you are talking to.</div>
     <button class="btntext" style="width:auto; padding:0 4px" data-a="tab" data-k="daily">See your matches</button></div>`);
 
 /* The plan you both said yes to: when, where, for how long, each place a tap
    from Apple Maps -- and the way into changing it. A change is a new plan sent
    into the conversation; this one stands until they say yes to that. */
-function agreedScreen(cur,ag){
-  const pl=ag.plan, part=pl.time==="evening"?"evening":"afternoon", name=esc(cur.p.name);
+/* A settled plan: agreed with a match, or a self plan you confirmed. One
+   screen for both -- Maps on every stop, Add to calendar, Export, Make
+   changes and Cancel. `k` says which: "agreed" or "self". */
+function settledFor(k){
+  if(k==="self"){const pl=selfConfirmed(); if(!pl) return null;
+    const part=pl.time==="evening"?"evening":"afternoon";
+    return {k,plan:pl,badge:"Confirmed",title:`${pl.day?dayName(pl.day)+" "+part:"An "+part}, just you`,
+      closing:"A plan just for you.",note:null,changeNote:"Changes replace this plan when you confirm them.",
+      eventTitle:"Self plan",cancelTitle:"Cancel this plan",editA:"selfEdit",cancelA:"selfCancelAsk"};}
+  const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0], ag=cur&&agreedPlan(cur.convo);
+  if(!ag) return null;
+  const pl=ag.plan, part=pl.time==="evening"?"evening":"afternoon", name=cur.p.name;
+  return {k,plan:pl,badge:"You are both in",title:`${pl.day?dayName(pl.day)+" "+part:"An "+part} with ${name}`,
+    closing:ag.saidYes==="them"?`${name} said yes.`:"You said yes.",
+    note:ag.newer?(ag.newer==="them"?`You sent ${name} a newer plan. It is waiting on them.`
+      :`${name} sent a newer plan. It is waiting on you in your conversation.`):null,
+    changeNote:`Changes go to ${name} as a new plan. This one stands until they say yes.`,
+    eventTitle:`Date with ${name}`,cancelTitle:"Cancel the date",editA:"agreedEdit",cancelA:"agreedCancelAsk"};
+}
+const selfConfirmed=()=>{const pl=S.selfPlan; return pl&&!(pl.day&&pl.day<isoDay(new Date()))?pl:null;};
+function agreedScreen(cur,ag){return settledScreen(settledFor("agreed"));}
+function settledScreen(d){
+  const pl=d.plan, k=d.k;
   const last=pl.stops[pl.stops.length-1], ends=last?last.start+(last.minutes||60):null;
   let h=`<div class="agreed mt-l" data-k="agreed">
-    <div class="caption" style="color:var(--lamp)">You are both in</div>
-    <div class="titleM" style="margin-top:4px">${pl.day?esc(dayName(pl.day))+" "+part:"An "+part} with ${name}</div>
+    <div class="caption" style="color:var(--lamp)">${esc(d.badge)}</div>
+    <div class="titleM" style="margin-top:4px">${esc(d.title)}</div>
     ${pl.day?`<div class="footnote mortar" style="margin-top:2px">${esc(dayLong(pl.day))} \u00B7 ${untilDay(pl.day)}</div>`:""}
     <div class="v mt-m">`;
   pl.stops.forEach((st,k)=>{
@@ -1853,15 +1884,28 @@ function agreedScreen(cur,ag){
         href="https://maps.apple.com/?q=${encodeURIComponent(st.name)}&sll=${st.lat},${st.lon}&z=17"
         aria-label="Open ${esc(st.name)} in Apple Maps">Maps</a>`:""}</div>`;
   });
-  h+=`</div><div class="footnote mortar mt-m">${[ends!=null?`Done by about ${clockAt(ends)}.`:"",
-    ag.saidYes==="them"?`${name} said yes.`:"You said yes."].join(" ")}</div></div>`;
-  if(ag.newer) h+=`<div class="footnote mt-m">${ag.newer==="them"?`You sent ${name} a newer plan. It is waiting on them.`
-    :`${name} sent a newer plan. It is waiting on you in your conversation.`}</div>`;
-  h+=`<button class="btn quiet mt-m" data-a="agreedEdit">Make changes</button>
-    <div class="footnote mortar center mt-s">Changes go to ${name} as a new plan. This one stands until they say yes.</div>
-    <button class="btntext mt-m" data-a="agreedCancelAsk">Cancel the date</button>`;
+  h+=`</div><div class="footnote mortar mt-m">${[ends!=null?`Done by about ${clockAt(ends)}.`:"",esc(d.closing)].join(" ")}</div></div>`;
+  if(d.note) h+=`<div class="footnote mt-m">${esc(d.note)}</div>`;
+  /* Out of Arch: into your calendar, or to anybody through any app. */
+  h+=`<div style="display:flex; gap:8px" class="mt-m">
+      <button class="btn quiet" style="flex:1" data-a="planCalendar" data-k="${k}" ${pl.day?"":"disabled"}>Add to calendar</button>
+      <button class="btn quiet" style="flex:1" data-a="planExport" data-k="${k}" aria-label="Export this plan">Export</button></div>
+    ${S.planner.exported?`<div class="footnote mortar center mt-s">${esc(S.planner.exported)}</div>`:""}
+    <button class="btn quiet mt-s" data-a="${d.editA}">Make changes</button>
+    <div class="footnote mortar center mt-s">${esc(d.changeNote)}</div>
+    <button class="btntext mt-m" data-a="${d.cancelA}">${esc(d.cancelTitle)}</button>`;
   return h;
 }
+
+/* The plan as words, the way Export and the calendar's notes carry it. */
+const planText=(pl,title)=>[title].concat(pl.day?[dayLong(pl.day)]:[]).concat([""])
+  .concat(pl.stops.map(st=>`${clockAt(st.start)} \u00B7 ${st.name}, ${st.hood}`)).join("\n");
+/* The plan as a picture: what Instagram gets. */
+const planPicture=(pl,title)=>`<div class="xcard"><div class="titleM">${esc(title)}</div>
+  ${pl.day?`<div class="footnote mortar" style="margin-top:2px">${esc(dayLong(pl.day))}</div>`:""}
+  <div class="v gap-s mt-m">${pl.stops.map(st=>`<div style="display:flex; gap:12px"><div class="subhead" style="width:72px; flex:none">${clockAt(st.start)}</div>
+    <div class="v"><div class="subhead">${esc(st.name)}</div><div class="footnote mortar">${esc(st.kind)} \u00B7 ${esc(st.hood)}</div></div></div>`).join("")}</div>
+  <div class="caption mt-m" style="color:var(--lamp)">Planned with Arch</div></div>`;
 
 const editingBanner=(cur,ag)=>{const part=ag.plan.time==="evening"?"evening":"afternoon";
   return `<div class="pcard mt-l" data-k="agreedEditing"><div class="subhead">Changing your plan for ${ag.plan.day?esc(dayName(ag.plan.day))+" "+part:"the "+part}</div>
@@ -1884,6 +1928,9 @@ function plannerRoot(){
   const cur0=P_.with===SELF_PLAN||!cands0.length?selfCandidate():cands0.find(c=>c.p.id===P_.with)||cands0[0];
   const agreed=cur0&&agreedPlan(cur0.convo);
   if(agreed&&P_.editing!==agreed.key) return h+pickerRow(cands0,cur0)+agreedScreen(cur0,agreed)+`</div></div>`;
+  /* Your confirmed self plan, settled the same way as an agreed date. */
+  if(cur0.solo&&selfConfirmed()&&!P_.selfEditing) return h+pickerRow(cands0,cur0)
+    +(P_.cancelled?`<div class="footnote mt-l">${esc(P_.cancelled)}</div>`:"")+settledScreen(settledFor("self"))+`</div></div>`;
   /* Places kept from a plan show without the questions: "Change it" on
      somebody's plan opens on their places, whatever else is not ready yet. */
   const kept=P_.items.some(it=>it.pin);
@@ -1902,6 +1949,10 @@ function plannerRoot(){
   h+=pickerRow(cands,cur)+cancelledLine;
   /* Changing a plan you agreed on: said, with the way back to it. */
   if(agreed) h+=editingBanner(cur,agreed);
+  if(solo&&P_.selfEditing&&selfConfirmed()){const sp=selfConfirmed(), part=sp.time==="evening"?"evening":"afternoon";
+    h+=`<div class="pcard mt-l" data-k="agreedEditing"><div class="subhead">Changing your self plan for ${sp.day?esc(dayName(sp.day))+" "+part:"the "+part}</div>
+      <div class="footnote mortar" style="margin-top:4px">Confirm it to replace the one you have.</div>
+      <button class="btntext mt-s" style="width:auto; padding:0 4px" data-a="selfBack">Back to your confirmed plan</button></div>`;}
 
   h+=`<div class="subhead mt-l">${solo?"What you like":"What you share"}</div>`;
   h+=plan.shared.length
@@ -1993,7 +2044,8 @@ function plannerRoot(){
      talking to, the one you planned with first, and sends into whichever
      conversation you pick. Never the system share sheet. */
   /* A self plan is yours alone: nobody to share it with. */
-  if(solo) return h+`<div class="footnote center mt-m" data-k="selfNote">A plan just for you. It is not sent to anybody.</div></div></div>`;
+  if(solo) return h+`<button class="btn primary mt-m" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
+    <div class="footnote mortar center mt-s" data-k="selfNote">A plan just for you. Confirm it to add it to your calendar or export it.</div></div></div>`;
   h+=`<button class="btn primary mt-m" data-a="planShare">Share this plan</button>`;
   if(P_.sent) h+=`<div class="footnote mortar center mt-s">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   return h+`</div></div>`;
@@ -3278,7 +3330,7 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null}; render();},
+    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null}; render();},
     /* What a blank item is: food, an activity, or "Surprise me" -- an
        activity if there is none (a date with nothing to do is a meal), then
        food if there is none, then the other kind from the item before it, so
@@ -3353,6 +3405,54 @@ document.addEventListener("click",e=>{
         ag=cur&&agreedPlan(cur.convo); if(!ag) return;
       openPlanIn(cur.convo,ag.i,"From your agreed plan.",ag.key);},
     agreedBack:()=>{S.planner={...S.planner,editing:null,sent:null}; render();},
+    /* "Confirm this plan": the self plan, frozen as it is, settled. */
+    selfConfirm:()=>{const P_=S.planner, day=plannerDay(P_.day), time=plannerTime(selfCandidate());
+      const plan=planDate(S.you,S.you,time,P_.items,day,new Set(),S.hiddenPlaces);
+      if(!plan.stops.length) return;
+      S.selfPlan=frozenPlan(plan,time,true);
+      S.planner={...P_,selfEditing:false,cancelled:null,exported:null}; render();},
+    selfEdit:()=>{const sp=selfConfirmed(); if(!sp) return;
+      const placeOf=x=>x.placeID&&x.lat!=null?(VENUES.find(v=>v.id===x.placeID)
+        ||VN(x.placeID,x.name,x.kindKey||(x.category==="food"?"food":"show"),x.hood,x.lat,x.lon,[],["afternoon","evening"],[])):null;
+      const shape=sp.stops.filter(x=>x.category).map(x=>newItem(x.category,
+        Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),"From your confirmed plan."));
+      S.planner={...S.planner,with:SELF_PLAN,time:sp.time,day:sp.day||null,items:shape.length?shape:[newItem()],
+        selfEditing:true,exported:null,replanned:null,hidden:null}; render();},
+    selfBack:()=>{S.planner={...S.planner,selfEditing:false}; render();},
+    selfCancelAsk:()=>{const sp=selfConfirmed(); if(!sp) return;
+      const part=sp.time==="evening"?"evening":"afternoon", when=sp.day?dayName(sp.day)+" "+part:part;
+      openSheet(`<div class="titleM">Cancel your self plan for ${esc(when)}?</div>
+        <div class="body mortar mt-s">It is only on this phone, so nobody else is told.</div>
+        <button class="btn primary mt-m" data-a="selfCancel">Yes, cancel it</button>
+        <button class="btntext mt-s" data-a="closeSheet">Keep it</button>`);},
+    selfCancel:()=>{const sp=selfConfirmed(); if(!sp) return;
+      const part=sp.time==="evening"?"evening":"afternoon", when=sp.day?dayName(sp.day)+" "+part:"the "+part;
+      S.selfPlan=null; S.planner={...S.planner,selfEditing:false,exported:null,cancelled:`Your self plan for ${when} is cancelled.`};
+      closeSheet(); render();},
+    /* "Add to calendar": the system's new-event screen, filled in. No
+       calendar permission -- it adds the event itself. */
+    planCalendar:()=>{const d=settledFor(el.dataset.k); if(!d||!d.plan.day) return;
+      const pl=d.plan, last=pl.stops[pl.stops.length-1], first=pl.stops[0];
+      openSheet(`<div class="spread" style="align-items:center"><button class="btntext" style="width:auto" data-a="closeSheet">Cancel</button>
+          <div class="subhead">New Event</div><button class="btntext" style="width:auto; color:var(--lamp)" data-a="calendarAdd">Add</button></div>
+        <div class="xform mt-m"><div><span>${esc(d.eventTitle)}</span></div>
+          <div><span class="mortar">Location</span><span>${esc(first.name)}, ${esc(first.hood)}</span></div></div>
+        <div class="xform mt-s"><div><span class="mortar">Starts</span><span>${esc(dayLong(pl.day))} ${clockAt(first.start)}</span></div>
+          <div><span class="mortar">Ends</span><span>${clockAt(last.start+(last.minutes||60))}</span></div></div>
+        <div class="xform mt-s"><div style="display:block; white-space:pre-line" class="footnote">${esc(planText(pl,d.eventTitle))}</div></div>`);},
+    calendarAdd:()=>{S.planner={...S.planner,exported:"Added to your calendar."}; closeSheet(); render();},
+    /* "Export": the system share sheet -- the plan as a picture and as words,
+       to any app on the phone. */
+    planExport:()=>{const d=settledFor(el.dataset.k); if(!d) return;
+      const apps=[["Messages","#34c759","\u{1F4AC}"],["Instagram","#d62976","\u{1F4F7}"],["WhatsApp","#25d366","\u{1F4DE}"],
+        ["Mail","#1e88e5","\u2709"],["Copy","#8e8e93","\u29C9"]];
+      openSheet(`${planPicture(d.plan,d.title)}
+        <div class="xapps mt-m">${apps.map(([n,c,i])=>`<button data-a="exportTo" data-k="${d.k}" data-n="${n}"><i style="background:${c}">${i}</i>${n}</button>`).join("")}</div>
+        <button class="btntext mt-m" data-a="closeSheet">Close</button>`);},
+    exportTo:()=>{const d=settledFor(el.dataset.k), n=el.dataset.n; if(!d) return;
+      if(n==="Copy"){try{navigator.clipboard&&navigator.clipboard.writeText(planText(d.plan,d.title));}catch(e){}}
+      S.planner={...S.planner,exported:n==="Copy"?"Copied. Paste it anywhere.":`Opened ${n} with your plan.`};
+      closeSheet(); render();},
     /* "Cancel the date" asks first: it tells them, and it cannot be taken back. */
     agreedCancelAsk:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0],
         ag=cur&&agreedPlan(cur.convo); if(!ag) return;
