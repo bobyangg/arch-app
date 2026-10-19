@@ -80,6 +80,15 @@ body{
 button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; text-align:left;}
 :focus-visible{outline:2px solid var(--lamp); outline-offset:2px;}
 
+/* ---- the prototype's own switch, outside the device ---- */
+#proto{position:fixed; top:12px; left:12px; z-index:50; display:flex; align-items:center; gap:4px;
+  padding:4px; border-radius:999px; background:var(--stone); box-shadow:0 2px 10px rgba(0,0,0,.12);
+  font-size:12px; line-height:16px;}
+#proto span{padding:0 8px; color:var(--mortar); font-weight:600;}
+#proto button{padding:6px 10px; border-radius:999px; color:var(--mortar); text-align:center;}
+#proto button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
+@media (max-width:459px), (max-height:899px){ #proto{top:auto; bottom:84px; left:8px; opacity:.92;} }
+
 /* ---- the device ---- */
 #device{
   width:393px; height:852px; max-width:100vw; max-height:100dvh;
@@ -417,6 +426,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .spread{display:flex; align-items:flex-start; justify-content:space-between; gap:12px;}
 </style>
 
+<!-- Not part of the app: switches the prototype between states to look at. -->
+<div id="proto" role="group" aria-label="Prototype state">
+  <span>Prototype</span>
+  <button data-proto="matches" aria-pressed="true">With matches</button>
+  <button data-proto="nomatches" aria-pressed="false">No matches</button>
+</div>
 <div id="device">
   <div id="root" class="v" style="flex:1; min-height:0;"></div>
   <div id="scrim"></div>
@@ -594,7 +609,7 @@ function refillTime(){
   const zone=(parts.find(x=>x.type==="timeZoneName")||{}).value||"ET";
   return "9am "+zone;
 }
-const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"roster");
+const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"matches");
 const rosterName=()=>"your "+rosterWord();
 const rosterTitle=()=>"Your "+rosterWord();
 /* The top of the range stops being a number: somebody in a small town needs no
@@ -623,7 +638,7 @@ const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2]
    same-day refill, six prompts and finer preferences, none of which the app did
    anything about. A paywall is the easiest place to ship a lie. */
 const BENEFITS=[["Seven people instead of five","Two more slots. The same care choosing them \u2014 a longer queue is not the point."],
- ["Fifteen conversations instead of ten","More room before Arch holds your roster and asks you to answer someone."],
+ ["Fifteen conversations instead of ten","More room before Arch holds your matches and asks you to answer someone."],
  ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."],
  ["Be somewhere you are not yet","Choose any town for where you are \u2014 the city you are moving to, or the one you keep visiting \u2014 instead of where your phone says."],
  ["Answer the questions whenever you like","Everyone can answer again once a month. Premium drops the wait."]];
@@ -1025,8 +1040,8 @@ function dailyRoot(){
        stated once and the way out is a button rather than a lecture. */
     return h+`<div class="v gap-s pb-xxxl">
       <div class="titleM">${title} are waiting</div>
-      <div class="body mortar">You have ${open10} conversations open. Arch holds the people
-        in your roster until you are back under ${LIMIT()} &mdash; leave a conversation you are
+      <div class="body mortar">You have ${open10} conversations open. Arch holds your matches
+        until you are back under ${LIMIT()} &mdash; leave a conversation you are
         not going to answer and they come straight back.</div>
       <div class="btn btn-quiet mt-m" data-a="goMessages">Open your messages</div>
     </div></div></div>`;
@@ -1034,8 +1049,8 @@ function dailyRoot(){
   if(open10>=WARN()){
     const left=LIMIT()-open10;
     h+=`<div class="footnote mortar" style="padding-bottom:24px">${left===1
-      ?"One more conversation and your roster will wait until you leave one."
-      :left+" more conversations and your roster will wait until you leave one."}</div>`;
+      ?"One more conversation and your matches will wait until you leave one."
+      :left+" more conversations and your matches will wait until you leave one."}</div>`;
   }
   h+=`<div class="v gap-xxl">`;
   people.forEach(p=>{
@@ -1058,19 +1073,19 @@ function dailyRoot(){
       <div class="v gap-s ${people.length?"mt-m":""}">
         <div class="titleM">Your profile is paused</div>
         <div class="body mortar">Nobody new will arrive, and you are not in anyone
-          else&rsquo;s roster. Your conversations are not affected.</div>
+          else&rsquo;s matches. Your conversations are not affected.</div>
         <div class="btn quiet mt-m" data-a="unpause">Unpause</div></div>`;
   } else if(!people.length){
     /* Five identical open-slot cards stacked up reads as five separate pieces of
        bad news. One sentence is the whole state. */
     h+=`<div class="v gap-s">
       <div class="titleM">${S.offline
-        ? "Arch could not load your roster"
+        ? "Arch could not load your matches"
         : S.firstMorning
           ? "Your first five arrive in the morning"
           : "All "+numWord(S.slots.length)+" slots are open"}</div>
       <div class="body mortar">${S.offline
-        ? "This is a connection, not your roster. Whoever is in it is still in it."
+        ? "This is a connection, not your matches. They are all still there."
         : S.firstMorning
           ? "Arch is choosing them overnight. There is nothing to do until then &mdash; it is not a queue and there is no way to hurry it."
           : "People arrive at "+refillTime()+", wherever you are. Nothing here needs fixing."}</div></div>`;
@@ -1125,8 +1140,8 @@ function messagesRoot(){
     return `<div class="screen"><div class="pad v gap-s"
       style="height:100%; justify-content:center; padding-bottom:80px">
       <div class="titleM">No conversations yet</div>
-      <div class="body mortar">When you write to someone in your roster, the conversation appears here.</div>
-      <button class="btn quiet mt-m" data-a="goDaily">Open your roster</button></div></div>`;
+      <div class="body mortar">When you write to one of your matches, the conversation appears here.</div>
+      <button class="btn quiet mt-m" data-a="goDaily">See your matches</button></div></div>`;
   }
   let h=`<div class="screen"><div class="pad pb-xxxl">
     <div class="titleL" style="padding:16px 0 20px">Messages</div>`;
@@ -1162,7 +1177,7 @@ function requestsRoot(){
     return h+`<div class="screen"><div class="pad v gap-s" style="height:100%;
       justify-content:center; padding-bottom:80px">
       <div class="titleM">Nothing waiting</div>
-      <div class="body mortar">When somebody in your roster writes to you first, their
+      <div class="body mortar">When one of your matches writes to you first, their
         message waits here until you answer it.</div></div></div>`;
   }
   h+=`<div class="screen"><div class="pad v gap-m mt-l pb-xxxl">`;
@@ -1236,7 +1251,7 @@ function thread(id){
         <div class="subhead">This conversation has ended</div>
         <div class="footnote mortar" style="margin-top:4px">You can read it, but not reply.
           Arch does not say why a conversation ends, the same way it never says who left
-          your roster.</div></div>`;
+          your matches.</div></div>`;
   }
   if(isRequest(c)){
     return h+`</div></div>
@@ -1265,7 +1280,7 @@ function premiumRoot(){
   let h=`<div class="screen"><div style="padding-bottom:16px">
     <div class="pad v gap-s" style="padding-top:8px">
       <div class="titleL">Arch Premium</div>
-      <div class="body mortar">More room in your roster, and a clearer view of your own profile.</div></div>
+      <div class="body mortar">More room in your matches, and a clearer view of your own profile.</div></div>
     <div class="rail mt-l" id="prail">`;
   BENEFITS.forEach(([t,d])=>{
     h+=`<div class="rcard"><div class="subhead">${esc(t)}</div>
@@ -1574,7 +1589,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
 
   const filled=(items||[]).filter(it=>it.cat);
   let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
-  if(ai<0) return {day,shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
@@ -2585,7 +2600,7 @@ function settingDetail(id){
      +'<div class="body">Your profile, photos and answers are deleted.</div>'
      +'<div class="body">The people you are talking to can still read what was said, and cannot reply. They are not told why.</div>'
      +'<div class="body">You cannot undo this, and this Apple ID cannot make another account.</div></div>'
-     +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s roster, but your conversations keep working.")
+     +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s matches, but your conversations keep working.")
      +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
   } else if(id==="n-blocked"){
     b='<div class="titleM">Arch cannot send you anything</div>'
@@ -2628,13 +2643,13 @@ function settingDetail(id){
   } else if(id==="h-how"){
     b=sect("Five people, held","You have five slots. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear &mdash; if you do nothing, they stay.")
      +sect("Dismissing costs you a slot","If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe.")
-     +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to someone in your roster, you write to them.")
-     +sect("You are never told who dismissed whom","People leave your roster. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
+     +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to one of your matches, you write to them.")
+     +sect("You are never told who dismissed whom","People leave your matches. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
      +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
      +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
   } else if(id==="h-safety"){
     b=sect("Every account is tied to a device","It is not a guarantee that somebody is who they say. Signing in with Apple ties an account to an Apple ID as well, and an email address ties it to nothing on its own &mdash; but both are checked against the device, so starting again after being removed usually costs a new phone rather than thirty seconds. Making throwaway accounts expensive is most of the problem.")
-     +sect("Blocking is silent and complete","A blocked person leaves your roster, stops appearing again, and stops seeing you. They are not told.")
+     +sect("Blocking is silent and complete","A blocked person leaves your matches, stops appearing again, and stops seeing you. They are not told.")
      +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
      +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
   } else if(id==="h-contact"){
@@ -3066,7 +3081,7 @@ function dismissSheet(id){
 function COST(p){
   let t="Sending takes "+esc(p.name)+" out of "+rosterName()+". That slot fills with someone new tomorrow morning.";
   if(openConvos().length+1>=LIMIT())
-    t+=" It also takes you to "+LIMIT()+" conversations, so your roster will wait until you leave one.";
+    t+=" It also takes you to "+LIMIT()+" conversations, so your matches will wait until you leave one.";
   return '<div class="footnote mortar mt-m">'+t+'</div>';
 }
 
@@ -3231,7 +3246,7 @@ function convoMenuSheet(id){
     +row("reportOpen","Report "+n,"Reports go to a person, not a filter.")
     +row("blockOpen","Block "+n,"They stop seeing you and stop appearing again. They are not told.")
     +row("leaveOpen","Leave this conversation",
-         held?("Removes the conversation, and takes "+n+" out of your roster.")
+         held?("Removes the conversation, and takes "+n+" out of your matches.")
              :"Removes the conversation.")
     +'</div>');
 }
@@ -3240,7 +3255,7 @@ function blockSheet(id){
   const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
   openSheet('<div class="titleM" style="padding-top:8px">Block '+n+'?</div>'
     +'<div class="body mortar mt-s">'
-    +(held?(n+" leaves your roster, and "):"")
+    +(held?(n+" leaves your matches, and "):"")
     +"the conversation is removed. "+n+" will not appear again and will not see you. "
     +n+" is not told. You can undo this in Settings.</div>"
     +'<button class="btn quiet mt-xxl" data-a="blockDo" data-id="'+id+'">Block '+n+'</button>'
@@ -3251,7 +3266,7 @@ function leaveSheet(id){
   const c=S.convos.find(x=>x.id===id), n=esc(c.person.name), held=inRoster(c.person.id);
   openSheet('<div class="titleM" style="padding-top:8px">Leave this conversation?</div>'
     +'<div class="body mortar mt-s">'
-    +(held?("The conversation is removed and "+n+" leaves your roster. That slot fills with someone new tomorrow. You cannot undo this.")
+    +(held?("The conversation is removed and "+n+" leaves your matches. That slot fills with someone new tomorrow. You cannot undo this.")
           :"The conversation is removed. You cannot undo this.")
     +'</div>'
     +'<button class="btn quiet mt-xxl" data-a="leaveDo" data-id="'+id+'">Leave</button>'
@@ -3552,8 +3567,8 @@ document.addEventListener("click",e=>{
        the way back in is the screen a new account starts on, because Continue with
        Apple is both the sign-up and the sign-in. */
     signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
-      <div class="body mortar mt-s">Your profile, your conversations and the people in your
-        roster all stay exactly as they are. Nothing is deleted. Signing back in with Apple
+      <div class="body mortar mt-s">Your profile, your conversations and your
+        matches all stay exactly as they are. Nothing is deleted. Signing back in with Apple
         brings you straight back to it.</div>
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
@@ -4014,5 +4029,23 @@ render=function(){
 applyTheme();
 seedPrefs();
 seedHanaPlan();
+/* **No matches**: nobody in Messages -- a new account before anybody has been
+   written to -- to see what the Date planner does with nobody to plan with: it
+   plans for you, as Self plan. From the switch beside the device, or
+   `?nomatches` (and `&planner` to open on that tab). */
+const allConvos=S.convos;
+function protoState(k){
+  const none=k==="nomatches";
+  S.convos=none?[]:allConvos;
+  S.planner={...S.planner,with:null,editing:null,selfEditing:false,sent:null,cancelled:null,exported:null};
+  S.stacks.messages=[];
+  if(none) S.tab="planner";
+  document.querySelectorAll("#proto button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.proto===k)));
+  render();
+}
+document.getElementById("proto").addEventListener("click",e=>{const b=e.target.closest("button"); if(b) protoState(b.dataset.proto);});
+(()=>{const q=new URLSearchParams(location.search);
+  if(q.has("nomatches")) protoState("nomatches");
+  if(q.has("planner")) S.tab="planner";})();
 render();
 </script>
