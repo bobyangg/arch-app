@@ -346,10 +346,14 @@ final class ArchSmokeTests: XCTestCase {
                       "The planner should open on a blank item.")
         XCTAssertEqual(stops.count, 0, "Nothing is planned before anything is chosen.")
 
-        // An activity, given three hours.
+        // An activity, given three hours. A stop opens to its length and its
+        // actions; closed, it is two lines.
         app.buttons["planner.choose.activity"].tap()
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
         XCTAssertEqual(stops.count, 1)
+        XCTAssertFalse(app.buttons["planner.hours.0.3"].exists, "A stop should open closed.")
+        app.buttons["planner.open.0"].tap()
+        XCTAssertTrue(app.buttons["planner.hours.0.3"].waitForExistence(timeout: 5), "Opening a stop showed no length.")
         app.buttons["planner.hours.0.3"].tap()
         XCTAssertTrue(app.buttons["planner.hours.0.3"].isSelected, "The three-hour block did not stick.")
 
@@ -393,6 +397,8 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["planner.undoHide"].tap()
 
         // Removing one leaves room to add again.
+        app.buttons["planner.open.2"].tap()
+        XCTAssertTrue(app.buttons["planner.remove.2"].waitForExistence(timeout: 5), "Opening the third stop showed no Remove.")
         app.buttons["planner.remove.2"].tap()
         XCTAssertEqual(stops.count, 2, "Remove did not take the stop off.")
         XCTAssertTrue(app.buttons["planner.addItem"].exists, "With two items there is room for a third.")
@@ -473,7 +479,8 @@ final class ArchSmokeTests: XCTestCase {
         // By identifier: "Hana" is also the label of her row in Messages, and
         // the first run of this test failed on exactly that ambiguity.
         app.buttons["planner.with.hana"].tap()
-        let bothWrote = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'You both wrote'"))
+        // In the line under the settings: "... · you both wrote “Street trees” · ..."
+        let bothWrote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'you both wrote'"))
         XCTAssertEqual(bothWrote.count, 0, "Nothing you wrote matches Hana's words yet.")
 
         app.buttons["tab.you"].tap()
