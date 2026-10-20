@@ -57,40 +57,6 @@ struct PlannerGetStarted: View {
     }
 }
 
-/// The Date planner, introduced once, straight after onboarding.
-///
-/// A sheet rather than a screen in the onboarding flow: onboarding is already
-/// eight steps, and these questions are about dates with people you have not
-/// met yet. Here they are one tap away and entirely optional -- "Not now" leaves
-/// them waiting in the planner tab, where they are asked again on first visit.
-struct PlannerIntroSheet: View {
-    let onStart: () -> Void
-    let onLater: () -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                Text("New in Arch")
-                    .archText(.caption)
-                    .foregroundStyle(ArchColor.mortar)
-                    .padding(.top, ArchSpacing.xl)
-
-                PlannerGetStarted(onStart: onStart)
-
-                ArchTextButton(title: "Not now", action: onLater)
-                    .frame(maxWidth: .infinity)
-                    .accessibilityIdentifier("plannerIntro.later")
-            }
-            .padding(.horizontal, ArchSpacing.screenMargin)
-            .padding(.bottom, ArchSpacing.m)
-        }
-        .scrollIndicators(.hidden)
-        .presentationDetents([.large])
-        .presentationDragIndicator(.visible)
-        .archSheetBackground()
-    }
-}
-
 /// The five questions, one to a screen.
 ///
 /// Built the way the onboarding questionnaire is -- the same option rows, the
@@ -163,13 +129,5 @@ struct DatePreferenceQuestions: View {
         .padding(ArchSpacing.screenMargin)
         .frame(maxHeight: .infinity, alignment: .top)
         .background(ArchColor.night)
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Intro sheet") {
-    Color.clear
-        .sheet(isPresented: .constant(true)) {
-            PlannerIntroSheet(onStart: {}, onLater: {})
-        }
         .preferredColorScheme(.dark)
 }

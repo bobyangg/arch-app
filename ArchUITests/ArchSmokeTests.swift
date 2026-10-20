@@ -423,40 +423,53 @@ final class ArchSmokeTests: XCTestCase {
                       file: file, line: line)
     }
 
-    /// Straight after onboarding the planner is introduced in a popup, and its
-    /// "Get started" goes to the first question in the planner tab.
+    /// Straight after onboarding, the tour: a welcome, then a tab at a time --
+    /// the app moving to each tab as the tour reaches it -- and on the Date
+    /// planner's step, the five questions the planner's popup used to offer.
     ///
     /// The design build has no onboarding to finish, so `-introducePlanner`
     /// stands in for having just finished it -- the same flag finishing sets.
-    func testThePlannerIsIntroducedAfterOnboarding() {
+    func testTheTourFollowsOnboarding() {
         let app = launch(arguments: ["-introducePlanner"])
 
-        let start = app.buttons["planner.getStarted"]
-        XCTAssertTrue(start.waitForExistence(timeout: 10),
-                      "No Date planner popup after onboarding.")
-        start.tap()
+        let next = app.buttons["tour.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "No tour after onboarding.")
+        next.tap()  // Show me
+        XCTAssertTrue(app.buttons["tour.back"].waitForExistence(timeout: 5), "The tour did not move on.")
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "The tour's first step is not the Daily 5.")
+        next.tap()
+        XCTAssertTrue(app.buttons["tab.messages"].isSelected, "The tour did not move the app to Messages.")
+        app.buttons["tour.back"].tap()
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "Back did not go back to the Daily 5.")
+        next.tap()
+        next.tap()
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected, "The tour did not move the app to the Date planner.")
 
+        let questions = app.buttons["tour.questions"]
+        XCTAssertTrue(questions.waitForExistence(timeout: 5),
+                      "The planner's step does not offer the questions.")
+        questions.tap()
         XCTAssertTrue(app.staticTexts["1 of 5"].waitForExistence(timeout: 5),
-                      "Get started in the popup did not open the first question.")
-        XCTAssertTrue(app.buttons["tab.planner"].isSelected,
-                      "Get started in the popup did not go to the Date planner tab.")
+                      "The questions did not open from the tour.")
+        XCTAssertFalse(app.buttons["tour.next"].exists, "The tour stayed up over the questions.")
     }
 
-    /// "Not now" leaves the questions waiting where they belong: on the
-    /// planner tab's Get started screen.
-    func testThePlannerPopupCanWait() {
+    /// Skip leaves at once, back on the roster -- and the questions wait
+    /// where they belong, on the planner tab's Get started screen.
+    func testTheTourCanBeSkipped() {
         let app = launch(arguments: ["-introducePlanner"])
 
-        let later = app.buttons["plannerIntro.later"]
-        XCTAssertTrue(later.waitForExistence(timeout: 10),
-                      "No Date planner popup after onboarding.")
-        later.tap()
-        XCTAssertTrue(app.buttons["tab.daily"].isSelected,
-                      "Not now should leave you where you were.")
+        let skip = app.buttons["tour.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10), "No tour after onboarding.")
+        app.buttons["tour.next"].tap()
+        app.buttons["tour.next"].tap()
+        skip.tap()
+        XCTAssertFalse(app.buttons["tour.next"].waitForExistence(timeout: 2), "Skip did not end the tour.")
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "Skip should leave you on the roster.")
 
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(app.buttons["planner.getStarted"].waitForExistence(timeout: 5),
-                      "After Not now, the planner tab should still ask first.")
+                      "After the tour, the planner tab should still ask first.")
     }
 
     /// Editing your interests changes the plan.
