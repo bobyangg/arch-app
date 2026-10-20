@@ -1391,11 +1391,18 @@ struct DatePlannerView: View {
                         .foregroundStyle(ArchColor.mortar)
                         .fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: ArchSpacing.s)
-                    ArchTextButton(title: "Undo") {
+                    // An arrow rather than the word: it sits beside Swap's own
+                    // arrow, and reads as "back" at a glance.
+                    Button {
                         withAnimation(ArchMotion.standard) { undoSwap() }
+                    } label: {
+                        Image(systemName: "arrow.uturn.backward")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(ArchColor.limestone)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
                     }
-                    .fixedSize()
-                    .frame(height: 32)
+                    .buttonStyle(PressScaleStyle(scale: 0.9))
                     .accessibilityLabel("Undo swap, back to \(last.name)")
                     .accessibilityIdentifier("planner.undoSwap")
                 }
