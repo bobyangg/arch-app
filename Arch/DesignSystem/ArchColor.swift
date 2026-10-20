@@ -68,6 +68,10 @@ enum ArchColor {
     /// would be the accent arguing with itself.
     static let ember = Color(light: 0xA2622F, dark: 0xD3904F)
 
+    /// Red, for the one thing that cannot be taken back: deleting your account.
+    /// Nowhere else -- a red that appears for small things stops meaning this.
+    static let danger = Color(light: 0xB3261E, dark: 0xE46A5E)
+
     /// Marram green. Appears only when two people have connected. If it shows up
     /// as decoration anywhere, it is wrong.
     ///

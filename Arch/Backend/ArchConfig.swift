@@ -77,6 +77,15 @@ enum ArchConfig {
     /// for the terms. The page is `site/privacy.html` in this repository.
     static let privacyURL = URL(string: "https://archdating.com/privacy")
 
+    /// Safety: blocking, reporting, meeting for the first time. A page on the
+    /// site rather than in the app, so it can be read before signing up and
+    /// changed without a release.
+    static let safetyURL = URL(string: "https://archdating.com/safety")
+
+    /// Where a person reads what you write. The same address as the site and
+    /// the privacy policy.
+    static let supportEmail = "support@archdating.com"
+
     /// The values, for code that has already checked `isConfigured`.
     ///
     /// These trap rather than return an optional, on purpose: reaching one of them
