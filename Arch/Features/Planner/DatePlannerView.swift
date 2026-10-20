@@ -150,6 +150,12 @@ struct DatePlannerView: View {
 
     /// The calendar, while it is open.
     @State private var choosingDate = false
+    /// Your answers, in their sheet, while it is open.
+    @State private var showingPreferences = false
+    /// The stops opened to their details, by item. Closed, a stop is two lines.
+    @State private var openStops: Set<UUID> = []
+    /// The finer print under the plan, while it is open.
+    @State private var showingDetails = false
     /// Places never to offer: what you said was "Not for us", and what the
     /// team has taken off for everybody. Loaded once; a design build keeps
     /// yours for as long as the app is open.
@@ -272,26 +278,15 @@ struct DatePlannerView: View {
                         // same either way.
                         let found = nearby[planningID]
                         let time = openingTime(with: chosen?.person)
-                        // Still searching, with places kept from a plan: those
-                        // show at once, and the rest fill in when Apple Maps
-                        // answers. Never the design build's Brooklyn.
-                        let plan = DatePlanner.plan(you: you, them: person, time: time,
-                                                    day: day, venues: found?.venues ?? (isLive ? [] : venues),
-                                                    items: items,
-                                                    theirCentre: found?.theirCentre,
-                                                    halfwayName: found?.halfway,
-                                                    alreadyShared: chosen.map(alreadyShared(with:)) ?? [],
-                                                    excluded: notToOffer.union(notFoundAgain))
+                        let plan = makePlan(for: person)
                         if isLive && (found?.venues.isEmpty ?? true) && !hasKept {
-                            preferencesRow
-                            dayRow
-                            timeToggle(time)
+                            settingsRow(time)
                             nowhereNearby
                         } else {
-                            shared(plan, with: person)
-                            preferencesRow
-                            dayRow
-                            timeToggle(time)
+                            // **Plan first.** One row of settings and one line
+                            // saying what it is built on; then the stops.
+                            settingsRow(time)
+                            basisLine(plan)
                             if let justHidden {
                                 HStack(alignment: .firstTextBaseline) {
                                     Text("\(justHidden.name) will not be suggested again.")
@@ -320,21 +315,23 @@ struct DatePlannerView: View {
                                     await checkStops(plan.stops.map(\.venue).filter { !kept.contains($0.id) })
                                 }
                             if !plan.stops.isEmpty {
-                                if let chosen {
-                                    footer(plan, with: chosen)
-                                } else {
-                                    selfFooter(plan)
-                                }
+                                facts(plan)
                             }
                         }
                     }
                 } else {
-                    preferencesRow
                     emptyState
                 }
             }
             .padding(.horizontal, ArchSpacing.screenMargin)
             .padding(.bottom, ArchSpacing.sectionGap)
+        }
+        // Share -- or Confirm, on a self plan -- kept in reach at the bottom
+        // rather than at the end of the scroll.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if let plan = planOnScreen, !plan.stops.isEmpty {
+                bottomBar(plan)
+            }
         }
         .background(ArchColor.night)
         .task(id: "\(planningID)#\(attempt)") { await findPlaces() }
@@ -346,6 +343,8 @@ struct DatePlannerView: View {
         // have changed, so every item starts again from its best place. What
         // you added -- the kinds and the hours -- stays.
         .onChange(of: chosenID) { _, _ in
+            openStops = []
+            showingDetails = false
             restartSwaps()
             sentTo = nil
             replanned = nil
@@ -406,6 +405,33 @@ struct DatePlannerView: View {
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+    }
+
+    /// The plan for the person on screen -- or you, on a self plan -- from
+    /// Apple Maps' places in a real build and the bundled ones in a design
+    /// build. While Apple Maps is still answering, places kept from a plan show
+    /// at once and the rest fill in after; never the design build's Brooklyn.
+    private func makePlan(for person: Person) -> DatePlan {
+        let found = nearby[planningID]
+        return DatePlanner.plan(you: you, them: person, time: openingTime(with: chosen?.person),
+                                day: day, venues: found?.venues ?? (isLive ? [] : venues),
+                                items: items,
+                                theirCentre: found?.theirCentre,
+                                halfwayName: found?.halfway,
+                                alreadyShared: chosen.map(alreadyShared(with:)) ?? [],
+                                excluded: notToOffer.union(notFoundAgain))
+    }
+
+    /// The plan the screen is showing, when it is showing one being made --
+    /// for the bar pinned under it. Nil on the questions, Get started, a
+    /// settled plan, and while there is nothing yet to plan from.
+    private var planOnScreen: DatePlan? {
+        guard questionIndex == nil, let person = planningWith else { return nil }
+        if let chosen, let agreed = chosen.conversation.agreedPlan, changingAgreed != agreed.messageID { return nil }
+        if isSolo, confirmedSelfPlan != nil, !changingSelf { return nil }
+        if you.datePreferences == nil && !hasKept { return nil }
+        if isLive && !hasKept && (nearby[planningID]?.venues.isEmpty ?? true) { return nil }
+        return makePlan(for: person)
     }
 
     /// The places in plans you have already sent this person, so the planner
@@ -903,10 +929,6 @@ struct DatePlannerView: View {
             Text("Date planner")
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
-            Text("Somewhere you would both actually like, about halfway between you.")
-                .archText(.body)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.top, ArchSpacing.xs)
         .padding(.bottom, ArchSpacing.l)
@@ -1028,106 +1050,67 @@ struct DatePlannerView: View {
         .accessibilityIdentifier("planner.with.self")
     }
 
-    @ViewBuilder
-    private func shared(_ plan: DatePlan, with person: Person) -> some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(isSolo ? "What you like" : "What you share")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
-
-            if plan.shared.isEmpty && isSolo {
-                Text("Nothing you wrote points anywhere in particular yet, so this leans on your date preferences.")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else if plan.shared.isEmpty {
-                Text("Nothing in common yet in what you each wrote, so this leans on what \(person.name) wrote.")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                VitalsRow(vitals: plan.shared.map(\.label))
-            }
-
-            if !plan.sameWords.isEmpty {
-                Text("You both wrote \(plan.sameWords.map { "\u{201C}\($0)\u{201D}" }.joined(separator: " and ")).")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-            }
-
-            if let halfway = plan.halfway {
-                Text(isSolo ? "Around \(halfway)" : "About halfway: \(halfway)")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-            }
-        }
-        .padding(.bottom, ArchSpacing.l)
-    }
-
-    /// Your own answers, in a line, and the way back into the questions. Only
-    /// ever yours: the other person's answers shape the plan and are not shown.
-    @ViewBuilder
-    private var preferencesRow: some View {
-        if let preferences = you.datePreferences {
-            VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Your date preferences")
-                        .archText(.subhead)
-                        .foregroundStyle(ArchColor.limestone)
-                    Spacer(minLength: ArchSpacing.s)
-                    ArchTextButton(title: "Edit") { startAsking() }
-                        .accessibilityLabel("Edit your date preferences")
-                        .accessibilityIdentifier("planner.editPreferences")
-                }
-                Text(preferences.summary)
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.bottom, ArchSpacing.l)
-        }
-    }
-
-    /// The day, as a button that opens a calendar. The button is drawn here
-    /// rather than being the system's compact date picker, because the app
-    /// draws its own controls and a stock grey capsule would be the only one
-    /// on the screen; the calendar itself is the system's, which is the one
-    /// people already know how to use.
-    private var dayRow: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text("When")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
-
+    /// **The settings, in one row**: the day (a calendar), the time of day,
+    /// and your answers. Each is a tap; none is a section of its own.
+    ///
+    /// The day is a button rather than the system's compact date picker,
+    /// because the app draws its own controls and a stock grey capsule would be
+    /// the only one on the screen; the calendar it opens is the system's, which
+    /// is the one people already know how to use. The time of day is two
+    /// buttons rather than a segmented control, for the same reason.
+    private func settingsRow(_ time: DatePlan.TimeOfDay) -> some View {
+        HStack(spacing: ArchSpacing.xs) {
             Button { choosingDate = true } label: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(day?.long ?? "Pick a day")
-                            .archText(.subhead)
-                            .foregroundStyle(ArchColor.limestone)
-                        if day == PlanDay.earliest() {
-                            Text("Tomorrow")
-                                .archText(.caption)
-                                .foregroundStyle(ArchColor.mortar)
-                        }
-                    }
-                    Spacer(minLength: ArchSpacing.s)
-                    Text("Change")
-                        .archText(.footnote)
-                        .foregroundStyle(ArchColor.lamp)
-                }
-                .padding(.horizontal, ArchSpacing.m)
-                .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                        .fill(ArchColor.stone)
-                )
-                .contentShape(Rectangle())
+                Text(day.map { $0 == PlanDay.earliest() ? "Tomorrow" : $0.date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day()) }
+                     ?? "Pick a day")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.limestone)
+                    .lineLimit(1)
+                    .padding(.horizontal, ArchSpacing.s)
+                    .frame(height: 36)
+                    .background(Capsule().fill(ArchColor.stone))
+                    .contentShape(Capsule())
             }
-            .buttonStyle(PressScaleStyle(scale: 0.99))
+            .buttonStyle(PressScaleStyle(scale: 0.97))
             .accessibilityLabel("Date, \(day?.long ?? "not chosen")")
             .accessibilityHint("Opens a calendar")
             .accessibilityIdentifier("planner.date")
+
+            HStack(spacing: 0) {
+                ForEach(DatePlan.TimeOfDay.allCases) { option in
+                    let isOn = option == time
+                    Button { pickedTime = option } label: {
+                        Text(option.title)
+                            .archText(.footnote)
+                            .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                            .lineLimit(1)
+                            .padding(.horizontal, ArchSpacing.s)
+                            .frame(height: 30)
+                            .background(Capsule().fill(isOn ? ArchColor.stoneRaised : Color.clear))
+                            .contentShape(Capsule())
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.97))
+                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                }
+            }
+            .padding(3)
+            .background(Capsule().fill(ArchColor.stone))
+
+            Spacer(minLength: 0)
+
+            // Your answers: the line that used to sit on the screen, in a
+            // sheet, with the way back into the questions.
+            Button { showingPreferences = true } label: {
+                Image(systemName: "slider.horizontal.3")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(ArchColor.limestone)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(ArchColor.stone))
+                    .contentShape(Circle())
+            }
+            .buttonStyle(PressScaleStyle(scale: 0.95))
+            .accessibilityLabel("Your date preferences")
+            .accessibilityIdentifier("planner.editPreferences")
         }
         .padding(.bottom, ArchSpacing.s)
         .sheet(isPresented: $choosingDate) {
@@ -1139,31 +1122,68 @@ struct DatePlannerView: View {
                 onDone: { choosingDate = false }
             )
         }
+        .sheet(isPresented: $showingPreferences) { preferencesSheet }
     }
 
-    /// Two choices, so two buttons rather than a system segmented control: the
-    /// app draws its own controls, and a stock one would be the only grey
-    /// rectangle on the screen.
-    private func timeToggle(_ time: DatePlan.TimeOfDay) -> some View {
-        HStack(spacing: ArchSpacing.xs) {
-            ForEach(DatePlan.TimeOfDay.allCases) { option in
-                let isOn = option == time
-                Button { pickedTime = option } label: {
-                    Text(option.title)
-                        .archText(.subhead)
-                        .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: ArchSpacing.minimumTapTarget)
-                        .background(
-                            RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                                .fill(isOn ? ArchColor.stoneRaised : ArchColor.stone)
-                        )
-                }
-                .buttonStyle(PressScaleStyle(scale: 0.99))
-                .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+    /// Your answers, and the way back into the questions. Only ever yours:
+    /// the other person's shape the plan and are never shown.
+    private var preferencesSheet: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text("Your date preferences")
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+                .padding(.top, ArchSpacing.xl)
+            if let preferences = you.datePreferences {
+                Text(preferences.summary)
+                    .archText(.body)
+                    .foregroundStyle(ArchColor.limestone)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            Text("They shape every plan. Nobody else sees them.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+            ArchButton(title: "Change your answers", kind: .quiet) {
+                showingPreferences = false
+                startAsking()
+            }
+            .accessibilityIdentifier("planner.changeAnswers")
+            .padding(.top, ArchSpacing.s)
+            ArchTextButton(title: "Done") { showingPreferences = false }
         }
-        .padding(.bottom, ArchSpacing.l)
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .archSheetBackground()
+    }
+
+    /// **What the plan is built on, in one line**: what you share -- or, on a
+    /// self plan, what you like -- and where. "You both like being outside ·
+    /// near Prospect Heights".
+    private func basisLine(_ plan: DatePlan) -> some View {
+        let phrases = plan.shared.map(\.phrase)
+        let joined = phrases.count > 1
+            ? phrases.dropLast().joined(separator: ", ") + " and " + (phrases.last ?? "")
+            : (phrases.first ?? "")
+        var parts: [String] = []
+        if isSolo {
+            parts.append(phrases.isEmpty ? "Leaning on your date preferences" : "You like \(joined)")
+        } else {
+            parts.append(phrases.isEmpty ? "Leaning on what \(chosen?.person.name ?? "they") wrote" : "You both like \(joined)")
+        }
+        if !plan.sameWords.isEmpty {
+            parts.append("you both wrote \(plan.sameWords.map { "\u{201C}\($0)\u{201D}" }.joined(separator: " and "))")
+        }
+        if let halfway = plan.halfway {
+            parts.append(isSolo ? "around \(halfway)" : "near \(halfway)")
+        }
+        return Text(parts.joined(separator: " \u{00B7} "))
+            .archText(.footnote)
+            .foregroundStyle(ArchColor.mortar)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.bottom, ArchSpacing.l)
+            .accessibilityIdentifier("planner.basis")
     }
 
     /// What you have added, in order: each item the planner found a place for
@@ -1257,62 +1277,61 @@ struct DatePlannerView: View {
         )
     }
 
-    /// Another item, while there is room; the limit said in words once there
-    /// is not. Hidden while a blank one is waiting to be chosen.
+    /// Another item, while there is room. Hidden while a blank one is waiting
+    /// to be chosen.
     @ViewBuilder
     private var addRow: some View {
-        if !items.contains(where: { $0.category == nil }) {
-            if items.count < PlanItem.maximum {
-                ArchButton(title: "Add to the date", kind: .quiet) {
-                    withAnimation(ArchMotion.standard) { add() }
-                }
-                .accessibilityIdentifier("planner.addItem")
-                .padding(.top, ArchSpacing.m)
-            } else {
-                Text("Three is as many as a plan holds.")
-                    .archText(.footnote)
-                    .foregroundStyle(ArchColor.mortar)
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, ArchSpacing.m)
+        // At three it simply is not offered.
+        if !items.contains(where: { $0.category == nil }), items.count < PlanItem.maximum {
+            ArchButton(title: "Add to the date", kind: .quiet) {
+                withAnimation(ArchMotion.standard) { add() }
             }
+            .accessibilityIdentifier("planner.addItem")
+            .padding(.top, ArchSpacing.m)
         }
     }
 
+    /// **A stop, in two lines until you open it**: when, where, what kind,
+    /// how long -- with Swap on the outside. Opened, it adds why it was
+    /// chosen, its hours, the length, and Maps, Not for us and Remove. Two
+    /// things show closed because they matter at a glance: a place kept from a
+    /// plan that was sent ("From Hana's plan."), and hours that run out before
+    /// the stop does.
     private func stopCard(_ stop: DatePlan.Stop, index: Int, in plan: DatePlan) -> some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+        let isOpen = openStops.contains(stop.itemID)
+        let kept = items.indices.contains(index) && items[index].pinned?.id == stop.venue.id
+        let toggle = {
+            withAnimation(ArchMotion.standard) {
+                if isOpen { openStops.remove(stop.itemID) } else { openStops.insert(stop.itemID) }
+            }
+        }
+        return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: ArchSpacing.s) {
                 Text(DatePlanner.clockTime(stop.start))
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.limestone)
                     .frame(width: 64, alignment: .leading)
 
-                VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
-                    Text(stop.category.title)
-                        .archText(.caption)
-                        .foregroundStyle(ArchColor.mortar)
+                VStack(alignment: .leading, spacing: 2) {
                     Text(stop.venue.name)
                         .archText(.subhead)
                         .foregroundStyle(ArchColor.limestone)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("\(stop.venue.kind.label) \u{00B7} \(stop.venue.neighbourhood)")
+                    Text("\(stop.venue.kind.label) \u{00B7} \(stop.venue.neighbourhood) \u{00B7} \(stop.minutes / 60) hr")
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.mortar)
-                    // Its hours, and whether they are its own or what places
-                    // like it usually keep. Said, because a guess shown as a
-                    // fact is how two people end up at a locked door.
-                    Text(hoursLine(stop))
-                        .archText(.caption)
-                        .foregroundStyle(stop.isOpenThroughout ? ArchColor.mortar : ArchColor.limestone)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(stop.reason)
-                        .archText(.footnote)
-                        .foregroundStyle(ArchColor.limestone)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, ArchSpacing.xxs)
-                    if !stop.canSwap {
-                        Text(onlyFit(stop, in: plan))
+                    if kept {
+                        Text(stop.reason)
                             .archText(.caption)
-                            .foregroundStyle(ArchColor.mortar)
+                            .foregroundStyle(ArchColor.lamp)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // A guess shown as a fact is how two people end up at a
+                    // locked door: when the hours run out, it says so closed.
+                    if !stop.isOpenThroughout {
+                        Text(hoursLine(stop))
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.limestone)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
@@ -1322,63 +1341,111 @@ struct DatePlannerView: View {
                 // Only where there is somewhere else to go. A Swap that lands on
                 // the same place looks like a button that does not work.
                 if stop.canSwap {
-                    ArchTextButton(title: "Swap") { swap(index, from: stop.venue) }
+                    Button { swap(index, from: stop.venue) } label: {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.9))
                     .accessibilityLabel("Swap \(stop.venue.name)")
                 }
+                Button(action: toggle) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ArchColor.mortar)
+                        .rotationEffect(.degrees(isOpen ? 180 : 0))
+                        .frame(width: 28, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressScaleStyle(scale: 0.9))
+                .accessibilityLabel(isOpen ? "Hide details for \(stop.venue.name)" : "Show details for \(stop.venue.name)")
+                .accessibilityIdentifier("planner.open.\(index)")
             }
+            .contentShape(Rectangle())
+            .onTapGesture(perform: toggle)
 
-            // How long: one, two or three hours. Everything after it moves.
-            HStack(spacing: ArchSpacing.xxs) {
-                ForEach(PlanItem.hourChoices, id: \.self) { hours in
-                    let isOn = items.indices.contains(index) && items[index].hours == hours
-                    Button {
-                        if items.indices.contains(index) { items[index].hours = hours }
-                        sentTo = nil
-                    } label: {
-                        Text("\(hours) hr")
+            if isOpen {
+                VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                    Rectangle().fill(ArchColor.quietBorder).frame(height: 1)
+                    if !kept {
+                        Text(stop.reason)
                             .archText(.footnote)
-                            .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
-                            .frame(width: 48, height: 32)
-                            .background(
-                                RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                                    .fill(isOn ? ArchColor.stoneRaised : ArchColor.night)
-                            )
+                            .foregroundStyle(ArchColor.limestone)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .buttonStyle(PressScaleStyle(scale: 0.97))
-                    .accessibilityLabel(hours == 1 ? "One hour" : "\(hours) hours")
-                    .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
-                    .accessibilityIdentifier("planner.hours.\(index).\(hours)")
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.leading, 64 + ArchSpacing.s)
+                    if stop.isOpenThroughout {
+                        Text(hoursLine(stop))
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    if !stop.canSwap {
+                        Text(onlyFit(stop, in: plan))
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
 
-            // What to do about the place: look it up, never again, or not in
-            // this plan. Across the whole card, a third each: each button
-            // already fills the width it is given, so with no spacing they
-            // share the line equally and each sits in the middle of its third.
-            HStack(spacing: 0) {
-                // The place in Apple Maps: its hours, its photos, how to get
-                // there. One word, because three of these share a line.
-                if stop.venue.mapsURL != nil {
-                    // The place itself, by Apple's identifier where there is
-                    // one -- not a search for its name (`VenueSearch.openInMaps`).
-                    ArchTextButton(title: "Maps") {
-                        Task { await VenueSearch.openInMaps(stop.venue) { openURL($0) } }
+                    // How long: one, two or three hours. Everything after it
+                    // moves. Labelled, so the buttons say what they set.
+                    HStack(spacing: ArchSpacing.xxs) {
+                        Text("Duration")
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(minWidth: 64, alignment: .leading)
+                            .padding(.trailing, ArchSpacing.xxs)
+                        ForEach(PlanItem.hourChoices, id: \.self) { hours in
+                            let isOn = items.indices.contains(index) && items[index].hours == hours
+                            Button {
+                                if items.indices.contains(index) { items[index].hours = hours }
+                                sentTo = nil
+                            } label: {
+                                Text("\(hours) hr")
+                                    .archText(.footnote)
+                                    .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
+                                    .frame(width: 48, height: 32)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                            .fill(isOn ? ArchColor.stoneRaised : ArchColor.night)
+                                    )
+                            }
+                            .buttonStyle(PressScaleStyle(scale: 0.97))
+                            .accessibilityLabel(hours == 1 ? "One hour" : "\(hours) hours")
+                            .accessibilityAddTraits(isOn ? [.isButton, .isSelected] : .isButton)
+                            .accessibilityIdentifier("planner.hours.\(index).\(hours)")
+                        }
+                        Spacer(minLength: 0)
                     }
-                        .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
-                        .accessibilityIdentifier("planner.maps.\(index)")
+                    .padding(.top, ArchSpacing.xxs)
+
+                    // What to do about the place: look it up, never again, or
+                    // not in this plan -- a third of the line each.
+                    HStack(spacing: 0) {
+                        if stop.venue.mapsURL != nil {
+                            // The place itself, by Apple's identifier where there
+                            // is one -- not a search for its name.
+                            ArchTextButton(title: "Maps") {
+                                Task { await VenueSearch.openInMaps(stop.venue) { openURL($0) } }
+                            }
+                                .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
+                                .accessibilityIdentifier("planner.maps.\(index)")
+                        }
+                        // Not this place, ever: for the corner Apple Maps calls
+                        // a park. Remove is for the item; this is for the place.
+                        ArchTextButton(title: "Not for us") {
+                            withAnimation(ArchMotion.standard) { hide(stop.venue, at: index) }
+                        }
+                        .accessibilityLabel("Never suggest \(stop.venue.name)")
+                        .accessibilityIdentifier("planner.hide.\(index)")
+                        ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+                            .accessibilityLabel("Remove \(stop.venue.name)")
+                            .accessibilityIdentifier("planner.remove.\(index)")
+                    }
                 }
-                // Not this place, ever: for the corner Apple Maps calls a park.
-                // Remove is for the item; this is for the place.
-                ArchTextButton(title: "Not for us") {
-                    withAnimation(ArchMotion.standard) { hide(stop.venue, at: index) }
-                }
-                .accessibilityLabel("Never suggest \(stop.venue.name)")
-                .accessibilityIdentifier("planner.hide.\(index)")
-                ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
-                    .accessibilityLabel("Remove \(stop.venue.name)")
-                    .accessibilityIdentifier("planner.remove.\(index)")
+                .padding(.leading, 64 + ArchSpacing.s)
+                .padding(.top, ArchSpacing.s)
             }
         }
         .padding(ArchSpacing.m)
@@ -1423,73 +1490,43 @@ struct DatePlannerView: View {
         .padding(.vertical, ArchSpacing.xxs)
     }
 
-    @ViewBuilder
-    private func footer(_ plan: DatePlan, with candidate: PlannerCandidate) -> some View {
-
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(summary(plan))
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
-
-            ArchButton(title: "Share this plan") { sharing = plan }
-
-            if let sentTo {
-                Text("Sent to \(sentTo). It is in your conversation.")
+    /// **The rest of the facts in one line** -- when it is done, how far the
+    /// first stop is -- with the finer print a tap away.
+    private func facts(_ plan: DatePlan) -> some View {
+        var line = ["Done about \(DatePlanner.clockTime(plan.endsAt))"]
+        if let km = plan.fromYou { line.append(String(format: "%.1f km from you", km)) }
+        return VStack(spacing: ArchSpacing.xs) {
+            HStack(spacing: ArchSpacing.xxs) {
+                Text(line.joined(separator: " \u{00B7} ") + " \u{00B7}")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
-                    .frame(maxWidth: .infinity)
+                Button {
+                    withAnimation(ArchMotion.standard) { showingDetails.toggle() }
+                } label: {
+                    Text(showingDetails ? "Less" : "Details")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.lamp)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("planner.details")
+            }
+            if showingDetails {
+                Text(fineprint(plan))
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.top, ArchSpacing.l)
-        .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
-            ShareWithSheet(
-                candidates: candidates,
-                plannedWith: candidate.id,
-                onPick: { picked in
-                    if let sharing {
-                        onSend(picked.conversation,
-                               DatePlanner.message(for: sharing),
-                               SharedPlan(sharing, sharedWith: picked.person,
-                                          plannedWith: candidate.person))
-                    }
-                    sentTo = picked.person.name
-                    self.sharing = nil
-                },
-                onCancel: { sharing = nil }
-            )
-        }
-    }
-
-    /// The end of a self plan: when it is done, and Confirm -- which settles
-    /// it on the same screen as an agreed date. No "Share this plan" into
-    /// Messages; once confirmed, Export sends it anywhere you like.
-    private func selfFooter(_ plan: DatePlan) -> some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(summary(plan))
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
-            ArchButton(title: changingSelf ? "Confirm the changes" : "Confirm this plan") {
-                withAnimation(ArchMotion.standard) { confirmSelf(plan) }
-            }
-            .accessibilityIdentifier("planner.self.confirm")
-            Text("A plan just for you. Confirm it to add it to your calendar or export it.")
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
-                .frame(maxWidth: .infinity)
-                .multilineTextAlignment(.center)
-                .accessibilityIdentifier("planner.selfNote")
-        }
+        .frame(maxWidth: .infinity)
         .padding(.top, ArchSpacing.l)
     }
 
-    private func summary(_ plan: DatePlan) -> String {
-        var parts = ["Done by about \(DatePlanner.clockTime(plan.endsAt))."]
-        if let day = plan.day { parts.insert("\(day.long).", at: 0) }
-        if let km = plan.fromYou {
-            parts.append(String(format: "The first stop is %.1f km from you.", km))
-        }
+    /// The day, whether it is fair, and -- in a real build -- that the hours
+    /// are what places like these usually keep.
+    private func fineprint(_ plan: DatePlan) -> String {
+        var parts: [String] = []
+        if let day = plan.day { parts.append("\(day.long), \(plan.time.title.lowercased()).") }
         if let fairness = plan.fairness { parts.append(fairness) }
         // Apple Maps does not give an app opening hours, so the plan cannot
         // know them. Better said than discovered at a locked door.
@@ -1497,6 +1534,62 @@ struct DatePlannerView: View {
             parts.append("Places are from Apple Maps, which does not share opening hours, so the hours shown are what places like these usually keep. Check before you go.")
         }
         return parts.joined(separator: " ")
+    }
+
+    /// Pinned at the bottom: Share this plan -- or, on a self plan, Confirm --
+    /// and the line about what happened.
+    ///
+    /// **"Share this plan" shares only into Messages.** It opens the people you
+    /// are talking to, the one you planned with first, and sends into the
+    /// conversation you pick. A self plan has nobody to share it with; once
+    /// confirmed, Export sends it anywhere you like.
+    @ViewBuilder
+    private func bottomBar(_ plan: DatePlan) -> some View {
+        VStack(spacing: ArchSpacing.xs) {
+            if let chosen {
+                ArchButton(title: "Share this plan") { sharing = plan }
+                if let sentTo {
+                    Text("Sent to \(sentTo). It is in your conversation.")
+                        .archText(.caption)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+                Color.clear.frame(height: 0)
+                    .sheet(isPresented: Binding(get: { sharing != nil }, set: { if !$0 { sharing = nil } })) {
+                        ShareWithSheet(
+                            candidates: candidates,
+                            plannedWith: chosen.id,
+                            onPick: { picked in
+                                if let sharing {
+                                    onSend(picked.conversation,
+                                           DatePlanner.message(for: sharing),
+                                           SharedPlan(sharing, sharedWith: picked.person,
+                                                      plannedWith: chosen.person))
+                                }
+                                sentTo = picked.person.name
+                                self.sharing = nil
+                            },
+                            onCancel: { sharing = nil }
+                        )
+                    }
+            } else {
+                ArchButton(title: changingSelf ? "Confirm the changes" : "Confirm this plan") {
+                    withAnimation(ArchMotion.standard) { confirmSelf(plan) }
+                }
+                .accessibilityIdentifier("planner.self.confirm")
+                Text("Just for you. Confirm it to add it to your calendar or export it.")
+                    .archText(.caption)
+                    .foregroundStyle(ArchColor.mortar)
+                    .multilineTextAlignment(.center)
+                    .accessibilityIdentifier("planner.selfNote")
+            }
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.top, ArchSpacing.s)
+        .padding(.bottom, ArchSpacing.s)
+        .frame(maxWidth: .infinity)
+        .background(ArchColor.night)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planner.bottomBar")
     }
 
     /// While Apple Maps is asked, and if it could not be.
