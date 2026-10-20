@@ -10,7 +10,7 @@ struct BlockedSetting: View {
                 Text("Nobody blocked")
                     .archText(.titleM)
                     .foregroundStyle(ArchColor.limestone)
-                SettingNote("Blocking someone takes them out of \(store.rosterName), stops them appearing again, and stops you appearing in theirs. They are not told.")
+                SettingNote("Blocked people leave your matches for good. They\u{2019}re never told.")
             } else {
                 VStack(spacing: 0) {
                     ForEach(Array(store.blocked.enumerated()), id: \.offset) { index, name in
@@ -45,13 +45,12 @@ struct BlockedSetting: View {
     }
 }
 
-/// A copy of everything Arch holds.
+/// A copy of everything Arch holds, as one file you save or send.
 ///
-/// **A zip, not a single file.** `index.html` anybody can open and read, the same
-/// content as JSON for anybody who wants to machine-read it, and the photographs
-/// themselves. The two audiences for this are the person who is curious about what
-/// an app knows about them and the person exercising a right, and JSON alone
-/// serves only the second while a web page alone is not really an export.
+/// **What it is, said plainly.** The page used to promise a folder with your
+/// photographs at full size; what is built is one JSON file from
+/// `private.export_payload`, which lists your photos rather than including
+/// them. The page now says what the file is.
 ///
 /// What it deliberately leaves out is the more interesting half, and it lives in
 /// `private.export_payload` where it can be tested rather than in the exporter
@@ -81,22 +80,14 @@ struct DataSetting: View {
                 .foregroundStyle(ArchColor.limestone)
 
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
-                line("Your profile, including photos and answers.")
-                line("Your questionnaire answers.")
-                line("Every message you have sent and received.")
-                line("Who has been in \(store.rosterName), and when.")
+                line("Your profile and answers")
+                line("Your messages")
+                line("Who you\u{2019}ve been matched with, and when")
             }
 
-            // **The file is made here and handed straight over.** It was going to
-            // be emailed, which needed a mail provider that does not exist yet --
-            // so the button sat there setting a flag and doing nothing at all.
-            // Building it on the phone needs no provider, and arrives in seconds
-            // rather than "never more than 30 days".
-            SettingNote("The file is a folder of plain text and your photos at full "
-                        + "size, readable without Arch and without any special software. "
-                        + "It is built on your phone rather than sent to a server, so "
-                        + "nothing is emailed and no copy is kept. Close the share sheet "
-                        + "and it is gone; build it again whenever you like.")
+            // **Made here and handed straight over.** It was going to be emailed,
+            // which needed a mail provider that does not exist yet.
+            SettingNote("One file, made on your phone. Save it to Files or send it anywhere.")
 
             switch stage {
             case .ready:
@@ -110,7 +101,7 @@ struct DataSetting: View {
                 // the reader's business, and the share sheet already knows every
                 // answer including "into Files".
                 ShareLink(item: url) {
-                    Text("Save or send it")
+                    Text("Save or send the file")
                         .archText(.subhead)
                         .foregroundStyle(ArchColor.onLamp)
                         .frame(maxWidth: .infinity, minHeight: ArchSpacing.minimumTapTarget)
@@ -127,6 +118,7 @@ struct DataSetting: View {
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings.dataFailed")
                 ArchButton(title: "Try again", kind: .quiet, action: build)
             }
         }
@@ -150,17 +142,23 @@ struct DataSetting: View {
         Task { @MainActor in
             do {
                 let data = try await ArchBackend.myData()
+                // Not an empty or broken answer saved as if it were the file.
+                guard !data.isEmpty,
+                      (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                    stage = .failed("Arch got an empty answer. Try again in a moment.")
+                    return
+                }
                 // Written where the share sheet can reach it. A temporary
                 // directory is right: this is a copy of what the server already
                 // holds, and leaving copies of somebody's messages lying around
                 // the device is the opposite of what this screen is for.
                 let url = FileManager.default.temporaryDirectory
-                    .appendingPathComponent("arch-my-data.json")
+                    .appendingPathComponent("Arch data.json")
                 try data.write(to: url, options: .atomic)
                 stage = .made(url)
             } catch {
-                stage = .failed("Arch could not build the file just now. "
-                                + "It needs a connection, and nothing was sent.")
+                // Says what went wrong, so "it doesn't work" can be fixed.
+                stage = .failed("Couldn\u{2019}t make the file: \(error.localizedDescription)")
             }
         }
     }

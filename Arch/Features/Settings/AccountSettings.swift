@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Your email.
 ///
@@ -28,9 +29,7 @@ struct EmailSetting: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if isRelay {
-                SettingNote("You chose Hide My Email when you signed in, so this is "
-                            + "Apple's forwarding address. Anything sent here reaches "
-                            + "your real inbox, and Arch never sees the address behind it.")
+                SettingNote("Apple\u{2019}s Hide My Email address. Mail sent here reaches your inbox.")
             }
 
         }
@@ -45,6 +44,8 @@ struct PremiumSetting: View {
     let store: SettingsStore
     var onOpen: () -> Void = {}
 
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         SettingsPage(title: "Arch Premium") {
             Text(store.premiumText)
@@ -52,12 +53,17 @@ struct PremiumSetting: View {
                 .foregroundStyle(ArchColor.limestone)
 
             if store.isSubscribed {
-                SettingNote("Renews on the 14th. You can cancel any time in your Apple account settings, and premium runs until the end of the period you have paid for.")
-                ArchButton(title: "Manage in Apple settings", kind: .quiet) {}
+                SettingNote("Cancel any time in your Apple account. Premium runs to the end of what you paid for.")
+                // Apple's own subscriptions page, where cancelling happens.
+                ArchButton(title: "Manage in Apple settings", kind: .quiet) {
+                    if let url = URL(string: "https://apps.apple.com/account/subscriptions") { openURL(url) }
+                }
             } else {
-                SettingNote("Premium changes how many people you can hold and how many conversations you can keep open. It does not change who sees you.")
+                SettingNote("More matches and more open conversations. It doesn\u{2019}t change who sees you.")
                 ArchButton(title: "See what premium changes", action: onOpen)
-                ArchTextButton(title: "Restore purchases") {}
+                ArchTextButton(title: "Restore purchases") {
+                    Task { await Purchases.shared.restore() }
+                }
             }
         }
     }
@@ -70,13 +76,14 @@ struct PremiumSetting: View {
 /// nobody expects: the people you are mid-conversation with watch it disappear
 /// from their phone.
 ///
-/// **No red and no lurid styling.** Arch has no red anywhere, and dressing this up
-/// as a hazard would be a way of discouraging something you are entitled to do.
-/// The row in Settings is the same stone as every other row.
+/// **Short, and the button is red.** Three lines say what happens; the button
+/// is the one red thing in Arch (`ArchColor.danger`), because this is the one
+/// thing that cannot be taken back. The row in Settings stays the same stone as
+/// every other row.
 ///
-/// Pause is mentioned once, quietly, because a good share of people reaching for
-/// this want a break rather than an ending. Once — not as a competing button, and
-/// never standing between you and the thing you came here to do.
+/// Pause is mentioned once, in a line, because a good share of people reaching
+/// for this want a break rather than an ending -- never standing between you
+/// and the thing you came here to do.
 struct DeleteAccountSetting: View {
     let store: SettingsStore
     var onDelete: () -> Void = {}
@@ -85,22 +92,18 @@ struct DeleteAccountSetting: View {
 
     var body: some View {
         SettingsPage(title: "Delete your account") {
-            VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                line("Your profile, photos and answers are deleted.")
-                line("The people you are talking to can still read your messages, but cannot reply. They will not be told why.")
-                // **Said the opposite of what happens, and made it true.**
-                // `delete_account` set `status = 'removed'`, which `register`
-                // refuses, so this sentence was accurate and the behaviour it
-                // described was a bug -- deleting burned the Apple ID with no
-                // route back. `backend/016` separated the moderation state from
-                // the fact of having deleted; somebody who leaves can sign in
-                // again and start over, and only moderation refuses anybody.
-                line("You cannot undo this. Nothing here comes back, and starting again means building a profile from scratch.")
+            VStack(alignment: .leading, spacing: ArchSpacing.s) {
+                point("person.crop.circle.badge.xmark", "Your profile, photos and answers are deleted.")
+                point("bubble.left", "People you\u{2019}re talking to keep what was said, but can\u{2019}t reply.")
+                // Deleting does not burn the Apple ID (`backend/016`): signing
+                // in again starts a new profile from scratch.
+                point("arrow.uturn.backward", "This can\u{2019}t be undone.")
             }
 
-            SettingNote("If you want to stop for a while rather than leave, pause your profile instead. When paused, you will receive no new matches and you will not appear in anyone else's match list. Your conversations will keep working.")
+            SettingNote("Need a break instead? Pause your profile in Discovery.")
 
-            ArchButton(title: "Delete my account", kind: .quiet) { isConfirming = true }
+            ArchButton(title: "Delete my account", kind: .destructive) { isConfirming = true }
+                .accessibilityIdentifier("settings.delete")
         }
         .sheet(isPresented: $isConfirming) {
             DeleteConfirmSheet(
@@ -113,11 +116,18 @@ struct DeleteAccountSetting: View {
         }
     }
 
-    private func line(_ text: String) -> some View {
-        Text(text)
-            .archText(.body)
-            .foregroundStyle(ArchColor.limestone)
-            .fixedSize(horizontal: false, vertical: true)
+    private func point(_ symbol: String, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
+            Image(systemName: symbol)
+                .font(.system(size: 15))
+                .foregroundStyle(ArchColor.mortar)
+                .frame(width: 22)
+                .accessibilityHidden(true)
+            Text(text)
+                .archText(.body)
+                .foregroundStyle(ArchColor.limestone)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
@@ -134,7 +144,7 @@ struct DeleteConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("Your profile goes now, and every conversation you are in stops. There is no undo and no grace period.")
+            Text("Your profile goes now, and your conversations stop. This can\u{2019}t be undone.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -142,7 +152,8 @@ struct DeleteConfirmSheet: View {
 
             Spacer(minLength: ArchSpacing.xl)
 
-            ArchButton(title: "Delete my account", kind: .quiet, action: onConfirm)
+            ArchButton(title: "Delete my account", kind: .destructive, action: onConfirm)
+                .accessibilityIdentifier("settings.deleteConfirm")
             ArchTextButton(title: "Cancel", action: onCancel)
                 .padding(.top, ArchSpacing.xxs)
         }
@@ -150,7 +161,7 @@ struct DeleteConfirmSheet: View {
         .padding(.bottom, ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ArchColor.stone)
-        .presentationDetents([.height(300)])
+        .presentationDetents([.height(260)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .archSheetBackground()
@@ -165,6 +176,8 @@ struct DeleteConfirmSheet: View {
 struct NotificationsBlockedSetting: View {
     let store: SettingsStore
 
+    @Environment(\.openURL) private var openURL
+
     var body: some View {
         SettingsPage(title: "Notifications are off") {
             Text("Arch cannot send you anything")
@@ -172,11 +185,11 @@ struct NotificationsBlockedSetting: View {
                 .foregroundStyle(ArchColor.limestone)
                 .fixedSize(horizontal: false, vertical: true)
 
-            SettingNote("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that — turn them back on there and your choices come back exactly as you left them.")
+            SettingNote("Turn them on for Arch in iPhone Settings. Arch only notifies you when someone writes.")
 
-            ArchButton(title: "Open iPhone settings", kind: .quiet) {}
-
-            SettingNote("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.")
+            ArchButton(title: "Open iPhone settings", kind: .quiet) {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            }
         }
     }
 }
@@ -199,7 +212,7 @@ struct SignOutConfirmSheet: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
 
-            Text("Your profile, your conversations and your matches all stay exactly as they are. Nothing is deleted. Signing back in with Apple brings you straight back to it.")
+            Text("Nothing is deleted. Sign back in any time to pick up where you left off.")
                 .archText(.body)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
@@ -215,7 +228,7 @@ struct SignOutConfirmSheet: View {
         .padding(.bottom, ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(ArchColor.stone)
-        .presentationDetents([.height(320)])
+        .presentationDetents([.height(260)])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(ArchRadius.sheet)
         .archSheetBackground()
@@ -224,7 +237,7 @@ struct SignOutConfirmSheet: View {
 
 #Preview("Signing out") {
     SignOutConfirmSheet(onConfirm: {}, onCancel: {})
-        .frame(height: 320)
+        .frame(height: 260)
         .preferredColorScheme(.dark)
 }
 
@@ -235,7 +248,7 @@ struct SignOutConfirmSheet: View {
 
 #Preview("Deleting, confirming") {
     DeleteConfirmSheet(onConfirm: {}, onCancel: {})
-        .frame(height: 300)
+        .frame(height: 260)
         .preferredColorScheme(.dark)
 }
 

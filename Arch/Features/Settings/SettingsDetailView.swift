@@ -88,7 +88,6 @@ struct SettingsDetailView: View {
         case "p-blocked":  BlockedSetting(store: store)
         case "p-data":     DataSetting(store: store)
         case "h-how":      HelpPage(topic: .how)
-        case "h-safety":   HelpPage(topic: .safety)
         case "h-contact":  HelpPage(topic: .contact)
         default:
             // Not dead code: a `switch` over a `String` has no exhaustive form, so

@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// The three written pages.
 ///
@@ -6,13 +7,14 @@ import SwiftUI
 /// rules in full, and it is worth being plain about the parts people find strange —
 /// that five is the whole thing, and that dismissing costs you.
 struct HelpPage: View {
+    /// Safety is a page on the website (`ArchConfig.safetyURL`), opened from the
+    /// Settings row, so it is not one of these.
     enum Topic {
-        case how, safety, contact
+        case how, contact
 
         var title: String {
             switch self {
             case .how:     return "How Arch works"
-            case .safety:  return "Safety"
             case .contact: return "Contact us"
             }
         }
@@ -20,11 +22,14 @@ struct HelpPage: View {
 
     let topic: Topic
 
+    @Environment(\.openURL) private var openURL
+    /// Said after the address was copied, when there is no Mail app to open.
+    @State private var copied = false
+
     var body: some View {
         SettingsPage(title: topic.title) {
             switch topic {
             case .how:     how
-            case .safety:  safety
             case .contact: contact
             }
         }
@@ -32,127 +37,62 @@ struct HelpPage: View {
 
     // MARK: How
 
+    /// **One line each.** These were eight paragraphs; the rules fit in a
+    /// sentence apiece, and the page is for scanning.
     @ViewBuilder
     private var how: some View {
-        section(
-            "Five people, held",
-            "You have five spots in your match list, or seven with Arch Premium. Arch is always looking for people you might genuinely connect with and fills those spots with its best matches. Once someone is found, they stay until you choose to dismiss them."
-        )
-        section(
-            "Dismissing someone opens a spot",
-            "Dismiss someone and their spot opens up for the next match cycle. It is meant to be a serious decision, so Arch asks you to confirm before dismissing. There are no swipes and no endless replacements throughout the day."
-        )
-        section(
-            "There is no matching step",
-            "If you are matched with someone, you can message them. They do not need to like you first. If you want to talk, just send them a message."
-        )
-        section(
-            "Dismissals are anonymous",
-            "When someone leaves your match list, Arch only tells you that a spot has opened. You will not be told who left or why."
-        )
-        section(
-            "New matches appear every morning",
-            "Arch is constantly evaluating potential matches throughout the day. Each morning at \(RefillCopy.batchHour()), your matches are refreshed with the people Arch thinks are the best fit for you. Everyone receives their new matches at the same time, so there is no waiting for a queue or wondering when someone new will appear."
-        )
-        section(
-            "Someone writing to you is a request",
-            "When someone messages you first, their message appears in Requests and you can choose whether to answer. Once they write, they leave your match list, because they are no longer someone you are considering: they have made the choice to reach out. You can dismiss them if you are not interested."
-        )
-        section(
-            "Conversations can end without a reason",
-            "Someone can leave a conversation, block you, or delete their account. From your side, all three look the same: you will still be able to read the conversation, but you will not be able to reply. We keep them looking the same so you are never left wondering exactly what happened."
-        )
-        section(
-            "The questions help with matching",
-            "The questions you answer help Arch understand what you are looking for and who you might connect with. They are not about finding the perfect person. They simply give Arch more context to make better matches."
-        )
-    }
-
-    // MARK: Safety
-
-    @ViewBuilder
-    private var safety: some View {
-        // Rewritten when email sign-in arrived, because the old line stopped
-        // being true the moment it did: an email address costs nothing, so
-        // "a new Apple ID and usually a new phone" was no longer the price. The
-        // device is what still costs something, and that is what this now says.
-        section(
-            "Every account is tied to a device",
-            "An account being verified does not guarantee someone is who they say they are. Signing in with Apple connects your account to an Apple ID, and adding an email connects it to that address. Underneath both, everything is tied to the physical device. So if someone gets removed, starting over is not as simple as signing up again: it usually means getting a new phone. That is by design, as it makes it genuinely inconvenient to create throwaway accounts."
-        )
-        section(
-            "Blocking is silent and complete",
-            "Block someone and they are gone for good: removed from your matches, unable to reappear, and unable to see your profile any more. No notification is sent. They will simply never know it happened."
-        )
-        section(
-            "Reporting",
-            "Spotted something concerning? Report it right from the conversation. A real person reviews every report, not a bot, and you are free to report someone without blocking them first."
-        )
-        meeting
+        section("Five people at a time",
+                "Seven with Premium. They stay until you dismiss them.")
+        section("New matches at \(RefillCopy.batchHour())",
+                "Every morning, for everyone at once.")
+        section("No matching step",
+                "Write to anyone in your five. They don\u{2019}t have to like you first.")
+        section("Dismissing opens a spot",
+                "It refills the next morning. Nobody is told who left.")
+        section("Writing first sends a request",
+                "They choose whether to answer.")
+        section("Conversations can end quietly",
+                "Leaving, blocking and deleting look the same from the other side.")
+        section("Your answers are private",
+                "They shape your matches. Nobody else sees them.")
     }
 
     // MARK: Contact
 
     @ViewBuilder
     private var contact: some View {
-        section(
-            "Write to a person",
-            "Email help@arch.app and you will reach an actual person, usually within a day. No chatbot standing in the way."
-        )
-        section(
-            "Something is broken",
-            "Let us know what you were trying to do and what happened instead. A screenshot tells us more than a description ever could."
-        )
-        section(
-            "Something is wrong with someone",
-            "If it is about another person, report them directly from your conversation instead of emailing us. That way your report arrives with the full context attached, so we can act on it faster."
-        )
-        ArchButton(title: "Email help@arch.app", kind: .quiet) {}
-    }
+        section("Write to a person",
+                "\(ArchConfig.supportEmail) reaches a real person, usually within a day.")
+        section("About someone?",
+                "Report them from your conversation instead. It arrives with the context.")
 
-    /// The one part of Safety that is a list rather than a paragraph: these are
-    /// five separate habits, and a reader scanning for them should find five
-    /// lines rather than one block to parse.
-    private var meeting: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-            Text("Meeting")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
-
-            Text("Meeting for the first time? A few habits go a long way:")
-                .archText(.body)
+        // **It did nothing.** The button had no action, and the address was
+        // `help@arch.app` while the site and the privacy policy say
+        // support@archdating.com. Now it opens Mail; with no Mail app set up,
+        // it copies the address instead and says so.
+        ArchButton(title: "Email \(ArchConfig.supportEmail)", kind: .quiet) { email() }
+            .accessibilityIdentifier("help.email")
+        if copied {
+            Text("Address copied. Paste it into any email app.")
+                .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
-
-            VStack(alignment: .leading, spacing: ArchSpacing.xs) {
-                habit("Choose a public place: a coffee shop, a restaurant, or somewhere with other people around.")
-                habit("Tell a friend or family member where you are going, who you are meeting, and when you expect to be back.")
-                habit("Arrange your own transport there and back, rather than relying on the other person for a ride.")
-                habit("Keep your phone charged and easy to reach.")
-                habit("Trust your gut. If something feels off, it is okay to leave.")
-            }
-            .padding(.top, ArchSpacing.xxs)
+                .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func habit(_ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.xs) {
-            Circle()
-                .fill(ArchColor.mortar)
-                .frame(width: 4, height: 4)
-                .padding(.top, 8)
-            Text(text)
-                .archText(.body)
-                .foregroundStyle(ArchColor.mortar)
-                .fixedSize(horizontal: false, vertical: true)
+    private func email() {
+        guard let url = URL(string: "mailto:\(ArchConfig.supportEmail)?subject=Arch") else { return }
+        openURL(url) { opened in
+            guard !opened else { return }
+            UIPasteboard.general.string = ArchConfig.supportEmail
+            copied = true
         }
     }
 
     // MARK: Shared
 
     private func section(_ title: String, _ body: String) -> some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+        VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
             Text(title)
                 .archText(.subhead)
                 .foregroundStyle(ArchColor.limestone)
@@ -168,11 +108,6 @@ struct HelpPage: View {
 
 #Preview("How Arch works") {
     NavigationStack { HelpPage(topic: .how) }
-        .preferredColorScheme(.dark)
-}
-
-#Preview("Safety") {
-    NavigationStack { HelpPage(topic: .safety) }
         .preferredColorScheme(.dark)
 }
 

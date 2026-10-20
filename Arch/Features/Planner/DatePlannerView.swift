@@ -166,6 +166,9 @@ struct DatePlannerView: View {
     @State private var notFoundAgain: Set<String> = []
     /// The place just hidden, for the line that offers to undo it.
     @State private var justHidden: (id: String, name: String)?
+    /// The last Swap, for Undo: which item, what it was before, and the place
+    /// it moved off. Cleared by anything that changes the plan another way.
+    @State private var lastSwap: (itemID: UUID, previous: PlanItem, name: String)?
     /// The agreed plan being changed, by its message's id. While it matches
     /// the plan agreed with the person on screen, the planner shows, under a
     /// line saying what is being changed; otherwise the agreed plan does.
@@ -448,6 +451,7 @@ struct DatePlannerView: View {
     /// Every item back to the best place in its ranking. Places kept from a
     /// plan that was sent stay kept.
     private func restartSwaps() {
+        lastSwap = nil
         items = items.map { item in
             var item = item
             item.skips = 0
@@ -460,6 +464,8 @@ struct DatePlannerView: View {
     /// -- is let go, and the planner chooses, starting past it.
     private func swap(_ index: Int, from venue: Venue) {
         guard items.indices.contains(index) else { return }
+        // Kept for Undo: a Swap tapped by accident should cost one tap back.
+        lastSwap = (items[index].id, items[index], venue.name)
         if items[index].pinned != nil {
             items[index].pinned = nil
             items[index].pinnedFrom = nil
@@ -472,9 +478,19 @@ struct DatePlannerView: View {
         sentTo = nil
     }
 
+    /// Undo the last Swap: the item exactly as it was, so the place comes back.
+    private func undoSwap() {
+        guard let last = lastSwap,
+              let index = items.firstIndex(where: { $0.id == last.itemID }) else { return }
+        items[index] = last.previous
+        lastSwap = nil
+        sentTo = nil
+    }
+
     /// "Not for us": never this place again, and the item moves on at once.
     /// Saved for your account in a real build, so it holds on every phone.
     private func hide(_ venue: Venue, at index: Int) {
+        lastSwap = nil
         notToOffer.insert(venue.id)
         if items.indices.contains(index), items[index].pinned?.id == venue.id {
             items[index].pinned = nil
@@ -863,6 +879,7 @@ struct DatePlannerView: View {
 
     /// Never down to nothing: the last one removed leaves a blank one.
     private func remove(_ index: Int) {
+        lastSwap = nil
         guard items.indices.contains(index) else { return }
         items.remove(at: index)
         if items.isEmpty { items = [PlanItem()] }
@@ -1365,6 +1382,26 @@ struct DatePlannerView: View {
             }
             .contentShape(Rectangle())
             .onTapGesture(perform: toggle)
+
+            // Right after a Swap, the way back -- on the stop it changed.
+            if let last = lastSwap, last.itemID == stop.itemID {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Swapped from \(last.name).")
+                        .archText(.caption)
+                        .foregroundStyle(ArchColor.mortar)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: ArchSpacing.s)
+                    ArchTextButton(title: "Undo") {
+                        withAnimation(ArchMotion.standard) { undoSwap() }
+                    }
+                    .fixedSize()
+                    .frame(height: 32)
+                    .accessibilityLabel("Undo swap, back to \(last.name)")
+                    .accessibilityIdentifier("planner.undoSwap")
+                }
+                .padding(.leading, 64 + ArchSpacing.s)
+                .padding(.top, ArchSpacing.xxs)
+            }
 
             if isOpen {
                 VStack(alignment: .leading, spacing: ArchSpacing.xs) {
