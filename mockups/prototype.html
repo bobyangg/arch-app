@@ -2079,7 +2079,7 @@ function plannerRoot(){
     /* Right after a Swap, the way back -- on the stop it changed. */
     if(P_.lastSwap&&P_.lastSwap.id===it.id)
       h+=`<div class="spread" style="align-items:baseline; margin:6px 0 0 72px"><div class="caption mortar">Swapped from ${esc(P_.lastSwap.name)}.</div>
-        <button class="btntext" style="width:auto; padding:0 4px" data-a="planUndoSwap">Undo</button></div>`;
+        <button class="btntext" style="width:auto; padding:0 6px; font-size:18px; color:var(--limestone)" data-a="planUndoSwap" aria-label="Undo swap, back to ${esc(P_.lastSwap.name)}">↶</button></div>`;
     if(open){
       h+=`<div class="pmore">
         ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}
