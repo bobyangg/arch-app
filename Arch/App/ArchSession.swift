@@ -213,9 +213,15 @@ final class ArchSession {
 
     /// Onboarding finished. Everything it wrote is already on the server, so this
     /// reloads rather than trusting what the flow had in memory.
+    ///
+    /// First, the server is asked to match them with people who have a slot
+    /// open today -- before the reload, so the roster it loads already has them.
     func finishedOnboarding(allowing notifications: Bool) async {
         allowsNotifications = notifications
         introducePlanner = true
+        if ArchConfig.isConfigured {
+            await ArchBackend.matchOnArrival()
+        }
         await refresh()
     }
 
