@@ -1904,8 +1904,13 @@ const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div clas
   +`<button class="pwho" data-a="planWith" data-id="${SELF_PLAN}" aria-pressed="${!!cur&&!!cur.solo}" aria-label="Self plan">
     <div class="face" style="${tone(S.you.photos[0])}"></div><div class="nm">Self plan</div>
     ${selfConfirmed()?`<div class="ok">Confirmed</div>`:""}</button></div>`
-  +(cands.length?"":`<div class="spread mt-s" style="align-items:baseline"><div class="footnote mortar">Plans with somebody are for people you are talking to.</div>
-    <button class="btntext" style="width:auto; padding:0 4px" data-a="tab" data-k="daily">See your matches</button></div>`);
+  /* With nobody else yet: one tidy row to the Daily 5. */
+  +(cands.length?"":`<button class="pcard mt-s" data-a="tab" data-k="daily" aria-label="Plan with someone. Write to one of your matches first."
+      style="display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px 16px">
+      <span style="width:24px; text-align:center; color:var(--mortar); font-size:16px">☺</span>
+      <span class="v" style="flex:1; gap:2px"><span class="subhead">Plan with someone</span>
+        <span class="footnote mortar">Write to one of your matches first.</span></span>
+      <span style="color:var(--mortar)">›</span></button>`);
 
 /* The plan you both said yes to: when, where, for how long, each place a tap
    from Apple Maps -- and the way into changing it. A change is a new plan sent
@@ -2078,8 +2083,8 @@ function plannerRoot(){
           :`<span class="chev" aria-hidden="true">\u25BE</span>`}</div>`;
     /* Right after a Swap, the way back -- on the stop it changed. */
     if(P_.lastSwap&&P_.lastSwap.id===it.id)
-      h+=`<div class="spread" style="align-items:baseline; margin:6px 0 0 72px"><div class="caption mortar">Swapped from ${esc(P_.lastSwap.name)}.</div>
-        <button class="btntext" style="width:auto; padding:0 6px; font-size:18px; color:var(--limestone)" data-a="planUndoSwap" aria-label="Undo swap, back to ${esc(P_.lastSwap.name)}">↶</button></div>`;
+      h+=`<div class="spread" style="align-items:center; margin:4px 0 0 72px"><div class="caption mortar">Swapped from ${esc(P_.lastSwap.name)}.</div>
+        <button class="swap" style="padding:0 0 0 8px; margin-top:0; color:var(--limestone)" data-a="planUndoSwap" aria-label="Undo swap, back to ${esc(P_.lastSwap.name)}">↶</button></div>`;
     if(open){
       h+=`<div class="pmore">
         ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}

@@ -1012,17 +1012,40 @@ struct DatePlannerView: View {
             .accessibilityIdentifier("planner.picker")
 
             // With nobody else yet, the self plan is the plan -- and the way
-            // to somebody to plan with is said.
+            // to somebody to plan with is one tidy row: what it is, what to
+            // do, and a tap to the Daily 5. It was a sentence with a link
+            // squeezed beside it.
             if candidates.isEmpty {
-                HStack(alignment: .firstTextBaseline) {
-                    Text("Plans with somebody are for people you are talking to.")
-                        .archText(.footnote)
-                        .foregroundStyle(ArchColor.mortar)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Spacer(minLength: ArchSpacing.s)
-                    ArchTextButton(title: "See your matches", action: onOpenDaily)
-                        .fixedSize()
+                Button(action: onOpenDaily) {
+                    HStack(spacing: ArchSpacing.s) {
+                        Image(systemName: "person.2")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Plan with someone")
+                                .archText(.subhead)
+                                .foregroundStyle(ArchColor.limestone)
+                            Text("Write to one of your matches first.")
+                                .archText(.footnote)
+                                .foregroundStyle(ArchColor.mortar)
+                        }
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(ArchColor.mortar)
+                    }
+                    .padding(.horizontal, ArchSpacing.m)
+                    .padding(.vertical, ArchSpacing.s)
+                    .background(
+                        RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                            .fill(ArchColor.stone)
+                    )
+                    .contentShape(Rectangle())
                 }
+                .buttonStyle(PressScaleStyle(scale: 0.99))
+                .accessibilityHint("Opens your Daily 5")
+                .accessibilityIdentifier("planner.seeMatches")
             }
         }
         .padding(.bottom, ArchSpacing.l)
@@ -1407,6 +1430,9 @@ struct DatePlannerView: View {
                     .accessibilityIdentifier("planner.undoSwap")
                 }
                 .padding(.leading, 64 + ArchSpacing.s)
+                // Stops short of the open/close arrow, so Undo sits exactly
+                // under Swap: same width, same column.
+                .padding(.trailing, 28 + ArchSpacing.s)
                 .padding(.top, ArchSpacing.xxs)
             }
 
