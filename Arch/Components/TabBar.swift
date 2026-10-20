@@ -148,6 +148,8 @@ private struct TabBarItem: View {
         }
         .buttonStyle(.plain)
         .animation(ArchMotion.glass, value: isActive)
+        // Where this tab is, for the tour to cut it out (`ArchTourOverlay`).
+        .anchorPreference(key: ArchTabFramesKey.self, value: .bounds) { [tab: $0] }
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier(tab.identifier)
         .accessibilityLabel(tab.title)

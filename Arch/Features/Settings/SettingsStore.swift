@@ -205,6 +205,9 @@ final class SettingsStore {
     var maxAge = 36 { didSet { scheduleSave() } }
     var lookingFor = "Something serious"
     var isPaused = false { didSet { scheduleSave() } }
+    /// Goes up when "Take the tour again" is tapped; the app shell hears it and
+    /// starts the tour. A count, because it is an event, and nothing to save.
+    var tourRequests = 0
 
     // The questionnaire
 
@@ -355,6 +358,7 @@ final class SettingsStore {
                 .init(id: "p-data", title: "Download your data", control: .push)
             ]),
             SettingsSection(id: "help", title: "Help", rows: [
+                .init(id: "h-tour", title: "Take the tour again", control: .push),
                 .init(id: "h-how", title: "How Arch works", control: .push),
                 .init(id: "h-safety", title: "Safety", control: .push),
                 .init(id: "h-contact", title: "Contact us", control: .push)
