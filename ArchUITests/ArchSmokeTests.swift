@@ -346,19 +346,24 @@ final class ArchSmokeTests: XCTestCase {
                       "The planner should open on a blank item.")
         XCTAssertEqual(stops.count, 0, "Nothing is planned before anything is chosen.")
 
-        // An activity, given three hours.
+        // An activity, given three hours. A stop opens to its length and its
+        // actions; closed, it is two lines.
         app.buttons["planner.choose.activity"].tap()
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
         XCTAssertEqual(stops.count, 1)
-        app.buttons["planner.hours.0.3"].tap()
+        XCTAssertFalse(app.buttons["planner.hours.0.3"].exists, "A stop should open closed.")
+        tapClearOfTheBar(app.buttons["planner.open.0"], in: app)
+        XCTAssertTrue(app.buttons["planner.hours.0.3"].waitForExistence(timeout: 5), "Opening a stop showed no length.")
+        tapClearOfTheBar(app.buttons["planner.hours.0.3"], in: app)
         XCTAssertTrue(app.buttons["planner.hours.0.3"].isSelected, "The three-hour block did not stick.")
 
-        // Something to eat, then whatever the planner suggests.
-        app.buttons["planner.addItem"].tap()
-        app.buttons["planner.choose.food"].tap()
+        // Something to eat, then whatever the planner suggests. A new item
+        // lands at the end of the list, which can be under Share.
+        tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
+        tapClearOfTheBar(app.buttons["planner.choose.food"], in: app)
         XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
-        app.buttons["planner.addItem"].tap()
-        app.buttons["planner.choose.surprise"].tap()
+        tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
+        tapClearOfTheBar(app.buttons["planner.choose.surprise"], in: app)
         XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
         XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
 
@@ -386,17 +391,38 @@ final class ArchSmokeTests: XCTestCase {
 
         // "Not for us": the place goes, another takes the item, and the
         // planner offers to undo it.
-        app.buttons["planner.hide.0"].tap()
+        tapClearOfTheBar(app.buttons["planner.hide.0"], in: app)
         XCTAssertTrue(app.buttons["planner.undoHide"].waitForExistence(timeout: 5),
                       "Hiding a place did not offer to undo it.")
         XCTAssertEqual(stops.count, 3, "Hiding a place lost the stop instead of replacing it.")
-        app.buttons["planner.undoHide"].tap()
+        tapClearOfTheBar(app.buttons["planner.undoHide"], in: app)
 
         // Removing one leaves room to add again.
-        app.buttons["planner.remove.2"].tap()
+        tapClearOfTheBar(app.buttons["planner.open.2"], in: app)
+        XCTAssertTrue(app.buttons["planner.remove.2"].waitForExistence(timeout: 5), "Opening the third stop showed no Remove.")
+        tapClearOfTheBar(app.buttons["planner.remove.2"], in: app)
         XCTAssertEqual(stops.count, 2, "Remove did not take the stop off.")
         XCTAssertTrue(app.buttons["planner.addItem"].exists, "With two items there is room for a third.")
         XCTAssertEqual(app.state, .runningForeground, "Arch stopped running on the Date planner.")
+    }
+
+    /// Taps a control in the planner after scrolling it clear of the bar pinned
+    /// at the bottom. Share stays put while the plan scrolls under it, so a
+    /// control that is on screen can still be behind it -- and a tap there is
+    /// a tap on Share.
+    private func tapClearOfTheBar(
+        _ element: XCUIElement, in app: XCUIApplication,
+        file: StaticString = #filePath, line: UInt = #line
+    ) {
+        XCTAssertTrue(element.waitForExistence(timeout: 5),
+                      "\(element) never appeared.", file: file, line: line)
+        let bar = app.otherElements["planner.bottomBar"]
+        var tries = 0
+        while tries < 4, bar.exists, element.frame.maxY > bar.frame.minY - 4 {
+            app.swipeUp()
+            tries += 1
+        }
+        element.tap()
     }
 
     /// Through "Get started" and the five questions, taking the first option
@@ -423,40 +449,53 @@ final class ArchSmokeTests: XCTestCase {
                       file: file, line: line)
     }
 
-    /// Straight after onboarding the planner is introduced in a popup, and its
-    /// "Get started" goes to the first question in the planner tab.
+    /// Straight after onboarding, the tour: a welcome, then a tab at a time --
+    /// the app moving to each tab as the tour reaches it -- and on the Date
+    /// planner's step, the five questions the planner's popup used to offer.
     ///
     /// The design build has no onboarding to finish, so `-introducePlanner`
     /// stands in for having just finished it -- the same flag finishing sets.
-    func testThePlannerIsIntroducedAfterOnboarding() {
+    func testTheTourFollowsOnboarding() {
         let app = launch(arguments: ["-introducePlanner"])
 
-        let start = app.buttons["planner.getStarted"]
-        XCTAssertTrue(start.waitForExistence(timeout: 10),
-                      "No Date planner popup after onboarding.")
-        start.tap()
+        let next = app.buttons["tour.next"]
+        XCTAssertTrue(next.waitForExistence(timeout: 10), "No tour after onboarding.")
+        next.tap()  // Show me
+        XCTAssertTrue(app.buttons["tour.back"].waitForExistence(timeout: 5), "The tour did not move on.")
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "The tour's first step is not the Daily 5.")
+        next.tap()
+        XCTAssertTrue(app.buttons["tab.messages"].isSelected, "The tour did not move the app to Messages.")
+        app.buttons["tour.back"].tap()
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "Back did not go back to the Daily 5.")
+        next.tap()
+        next.tap()
+        XCTAssertTrue(app.buttons["tab.planner"].isSelected, "The tour did not move the app to the Date planner.")
 
+        let questions = app.buttons["tour.questions"]
+        XCTAssertTrue(questions.waitForExistence(timeout: 5),
+                      "The planner's step does not offer the questions.")
+        questions.tap()
         XCTAssertTrue(app.staticTexts["1 of 5"].waitForExistence(timeout: 5),
-                      "Get started in the popup did not open the first question.")
-        XCTAssertTrue(app.buttons["tab.planner"].isSelected,
-                      "Get started in the popup did not go to the Date planner tab.")
+                      "The questions did not open from the tour.")
+        XCTAssertFalse(app.buttons["tour.next"].exists, "The tour stayed up over the questions.")
     }
 
-    /// "Not now" leaves the questions waiting where they belong: on the
-    /// planner tab's Get started screen.
-    func testThePlannerPopupCanWait() {
+    /// Skip leaves at once, back on the roster -- and the questions wait
+    /// where they belong, on the planner tab's Get started screen.
+    func testTheTourCanBeSkipped() {
         let app = launch(arguments: ["-introducePlanner"])
 
-        let later = app.buttons["plannerIntro.later"]
-        XCTAssertTrue(later.waitForExistence(timeout: 10),
-                      "No Date planner popup after onboarding.")
-        later.tap()
-        XCTAssertTrue(app.buttons["tab.daily"].isSelected,
-                      "Not now should leave you where you were.")
+        let skip = app.buttons["tour.skip"]
+        XCTAssertTrue(skip.waitForExistence(timeout: 10), "No tour after onboarding.")
+        app.buttons["tour.next"].tap()
+        app.buttons["tour.next"].tap()
+        skip.tap()
+        XCTAssertFalse(app.buttons["tour.next"].waitForExistence(timeout: 2), "Skip did not end the tour.")
+        XCTAssertTrue(app.buttons["tab.daily"].isSelected, "Skip should leave you on the roster.")
 
         app.buttons["tab.planner"].tap()
         XCTAssertTrue(app.buttons["planner.getStarted"].waitForExistence(timeout: 5),
-                      "After Not now, the planner tab should still ask first.")
+                      "After the tour, the planner tab should still ask first.")
     }
 
     /// Editing your interests changes the plan.
@@ -473,7 +512,8 @@ final class ArchSmokeTests: XCTestCase {
         // By identifier: "Hana" is also the label of her row in Messages, and
         // the first run of this test failed on exactly that ambiguity.
         app.buttons["planner.with.hana"].tap()
-        let bothWrote = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'You both wrote'"))
+        // In the line under the settings: "... · you both wrote “Street trees” · ..."
+        let bothWrote = app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'you both wrote'"))
         XCTAssertEqual(bothWrote.count, 0, "Nothing you wrote matches Hana's words yet.")
 
         app.buttons["tab.you"].tap()

@@ -1057,6 +1057,18 @@ enum ArchBackend {
         )
     }
 
+    /// Somebody who has just finished onboarding, matched with people who still
+    /// have a slot open today (`backend/037`), so their first roster is not empty
+    /// until 9am. The server only does it for an account that has never been
+    /// matched, and only with people who have room, by the 9am run's own rules.
+    ///
+    /// Never stands in the way of onboarding: if it fails, or finds nobody,
+    /// tomorrow's run takes them as it always did.
+    static func matchOnArrival() async {
+        struct NoArguments: Encodable {}
+        _ = try? await SupabaseClient.shared.rpcRaw("match_on_arrival", NoArguments())
+    }
+
     static func accept(_ conversationID: String) async throws {
         struct StateChange: Encodable { let state: String }
         try await SupabaseClient.shared.update(

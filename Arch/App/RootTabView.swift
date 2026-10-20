@@ -25,9 +25,10 @@ struct RootTabView: View {
     /// What iOS answered when onboarding asked. Seeded here so "Not now" is
     /// reflected in Settings from the first launch rather than the second.
     var allowsNotifications: Bool = true
-    /// True once, straight after onboarding: the Date planner is introduced in
-    /// a popup over the roster. `onPlannerIntroduced` is told as soon as it is
-    /// shown, so it is never shown twice.
+    /// True once, straight after onboarding: the tour of Arch starts over the
+    /// roster (`ArchTourOverlay`), and its Date planner step offers the
+    /// questions the planner's own popup used to. `onPlannerIntroduced` is
+    /// told as soon as it starts, so it never starts twice.
     var introducePlanner: Bool = false
     var onPlannerIntroduced: () -> Void = {}
     /// Deleting an account puts you back where you came from.
@@ -64,9 +65,10 @@ struct RootTabView: View {
 
     /// Set by "Change it" on a plan in a thread; the Date planner hears it.
     @State private var plannerPreset: PlannerPreset?
-    @State private var showingPlannerIntro = false
-    /// Goes up when the popup's "Get started" is tapped; the planner hears it
-    /// and opens on its first question.
+    /// The tour's step, while it is showing.
+    @State private var tourStep: Int?
+    /// Goes up when the tour's "Answer 5 quick questions" is tapped; the
+    /// planner hears it and opens on its first question.
     @State private var plannerStarts = 0
 
     /// A conversation the Messages tab should open, from a tapped notification.
@@ -160,18 +162,56 @@ struct RootTabView: View {
         }
         .onChange(of: introducePlanner, initial: true) { _, introduce in
             guard introduce else { return }
-            showingPlannerIntro = true
+            tour(0)
             onPlannerIntroduced()
         }
-        .sheet(isPresented: $showingPlannerIntro) {
-            PlannerIntroSheet(
-                onStart: {
-                    showingPlannerIntro = false
-                    selection = .planner
-                    plannerStarts += 1
-                },
-                onLater: { showingPlannerIntro = false }
-            )
+        // Settings > Help > Take the tour again. Settings closes first, so the
+        // You step shows your profile rather than the list you came from.
+        .onChange(of: settings.tourRequests) { _, _ in
+            youPops += 1
+            tour(0)
+        }
+        // **The tour, over everything**, with the tab it is about cut out. The
+        // tab bar says where each tab is; the frames are resolved here, over
+        // the whole screen, so the cut-out lands on the tab.
+        .overlayPreferenceValue(ArchTabFramesKey.self) { frames in
+            if let step = tourStep {
+                GeometryReader { proxy in
+                    ArchTourOverlay(
+                        index: step,
+                        name: profile.person.name,
+                        tabFrame: ArchTourStep.all[step].tab.flatMap { frames[$0] }.map { proxy[$0] },
+                        offersQuestions: profile.person.datePreferences == nil,
+                        onNext: { tour(step + 1) },
+                        onBack: { tour(step - 1) },
+                        onSkip: { tour(nil) },
+                        onQuestions: {
+                            withAnimation(ArchMotion.standard) { tourStep = nil }
+                            selection = .planner
+                            plannerStarts += 1
+                        }
+                    )
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+
+    /// To a step of the tour, moving the app to the tab it is about -- or, past
+    /// either end, out of it and back to the roster.
+    private func tour(_ step: Int?) {
+        withAnimation(ArchMotion.standard) {
+            guard let step, ArchTourStep.all.indices.contains(step) else {
+                tourStep = nil
+                selection = .daily
+                return
+            }
+            tourStep = step
+            if let tab = ArchTourStep.all[step].tab {
+                selection = tab
+            } else if step == ArchTourStep.all.count - 1 {
+                selection = .daily
+            }
         }
     }
 

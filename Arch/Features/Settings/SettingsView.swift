@@ -122,14 +122,23 @@ struct SettingsView: View {
 
     @ViewBuilder
     private func rowView(_ row: SettingsRow) -> some View {
-        switch row.control {
-        case .push:
-            NavigationLink(value: row) {
+        // The tour is not a page: it is shown over the app, by the app shell.
+        if row.id == "h-tour" {
+            Button { store.tourRequests += 1 } label: {
                 SettingsRowView(row: row)
             }
             .buttonStyle(PressScaleStyle(scale: 1))
-        case .toggle:
-            SettingsToggleRow(row: row, store: store)
+            .accessibilityIdentifier("settings.tour")
+        } else {
+            switch row.control {
+            case .push:
+                NavigationLink(value: row) {
+                    SettingsRowView(row: row)
+                }
+                .buttonStyle(PressScaleStyle(scale: 1))
+            case .toggle:
+                SettingsToggleRow(row: row, store: store)
+            }
         }
     }
 
