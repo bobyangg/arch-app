@@ -385,6 +385,13 @@ final class ArchSmokeTests: XCTestCase {
         swaps.firstMatch.tap()
         XCTAssertEqual(stops.count, 3, "Swapping a stop lost the plan.")
 
+        // A Swap tapped by accident is one tap back.
+        let undo = app.buttons["planner.undoSwap"]
+        XCTAssertTrue(undo.waitForExistence(timeout: 5), "A swap offered no Undo.")
+        tapClearOfTheBar(undo, in: app)
+        XCTAssertFalse(undo.waitForExistence(timeout: 1), "Undo stayed after undoing.")
+        XCTAssertEqual(stops.count, 3, "Undoing a swap lost the plan.")
+
         // Every stop can be looked up in Apple Maps. Not tapped: that would
         // leave the app.
         XCTAssertTrue(app.buttons["planner.maps.0"].exists, "A stop has no way to open it in Maps.")

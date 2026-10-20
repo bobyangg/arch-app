@@ -219,6 +219,12 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .btn.primary{background:var(--lamp); color:var(--onLamp);}
 .btn.primary[disabled]{background:var(--stoneRaised); color:var(--mortar); cursor:default;}
 .btn.quiet{background:var(--quietFill); color:var(--mortar);}
+/* Red: deleting your account, and nothing else. */
+.btn.danger{background:#B3261E; color:#fff;}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .btn.danger{background:#E46A5E;} }
+:root[data-theme="dark"] .btn.danger{background:#E46A5E;}
+.dpoint{display:flex; gap:12px; align-items:baseline;}
+.dpoint i{font-style:normal; width:22px; flex:none; color:var(--mortar); text-align:center;}
 .btntext{height:44px; display:flex; align-items:center; justify-content:center;
          font-size:15px; font-weight:600; color:var(--mortar); width:100%;}
 
@@ -1502,7 +1508,7 @@ const VENUES=[
 
 /* Every item back to the best place in its ranking: what you added, the kinds
    and the hours, stays. */
-const restartSwaps=()=>S.planner.items.map(it=>({...it,skips:0,passed:[]}));
+const restartSwaps=()=>{S.planner.lastSwap=null; return S.planner.items.map(it=>({...it,skips:0,passed:[]}));};
 
 /* The day a date is on, as "2026-10-10": the day itself, not an instant, so a
    plan for Saturday is Saturday on both phones. From tomorrow, for a week --
@@ -1898,8 +1904,13 @@ const pickerRow=(cands,cur)=>`<div class="subhead mt-l">Plan with</div><div clas
   +`<button class="pwho" data-a="planWith" data-id="${SELF_PLAN}" aria-pressed="${!!cur&&!!cur.solo}" aria-label="Self plan">
     <div class="face" style="${tone(S.you.photos[0])}"></div><div class="nm">Self plan</div>
     ${selfConfirmed()?`<div class="ok">Confirmed</div>`:""}</button></div>`
-  +(cands.length?"":`<div class="spread mt-s" style="align-items:baseline"><div class="footnote mortar">Plans with somebody are for people you are talking to.</div>
-    <button class="btntext" style="width:auto; padding:0 4px" data-a="tab" data-k="daily">See your matches</button></div>`);
+  /* With nobody else yet: one tidy row to the Daily 5. */
+  +(cands.length?"":`<button class="pcard mt-s" data-a="tab" data-k="daily" aria-label="Plan with someone. Write to one of your matches first."
+      style="display:flex; align-items:center; gap:12px; width:100%; text-align:left; padding:12px 16px">
+      <span style="width:24px; text-align:center; color:var(--mortar); font-size:16px">☺</span>
+      <span class="v" style="flex:1; gap:2px"><span class="subhead">Plan with someone</span>
+        <span class="footnote mortar">Write to one of your matches first.</span></span>
+      <span style="color:var(--mortar)">›</span></button>`);
 
 /* The plan you both said yes to: when, where, for how long, each place a tap
    from Apple Maps -- and the way into changing it. A change is a new plan sent
@@ -2068,8 +2079,12 @@ function plannerRoot(){
           <div class="footnote mortar">${KINDS[st.v.kind][0]} \u00B7 ${esc(st.v.hood)} \u00B7 ${it.hours} hr</div>
           ${kept?`<div class="caption" style="color:var(--lamp)">${esc(st.reason)}</div>`:""}
           ${st.openThroughout?"":`<div class="caption">Closes at ${clockAt(hrs.c)}, before this ends. Swap it or shorten the time.</div>`}</div>
-        ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}" aria-label="Swap ${esc(st.v.name)}">\u21BB</button>`
+        ${st.canSwap?`<button class="swap" data-a="planSwap" data-i="${i}" data-n="${esc(st.v.name)}" aria-label="Swap ${esc(st.v.name)}">\u21BB</button>`
           :`<span class="chev" aria-hidden="true">\u25BE</span>`}</div>`;
+    /* Right after a Swap, the way back -- on the stop it changed. */
+    if(P_.lastSwap&&P_.lastSwap.id===it.id)
+      h+=`<div class="spread" style="align-items:center; margin:4px 0 0 72px"><div class="caption mortar">Swapped from ${esc(P_.lastSwap.name)}.</div>
+        <button class="swap" style="padding:0 0 0 8px; margin-top:0; color:var(--limestone)" data-a="planUndoSwap" aria-label="Undo swap, back to ${esc(P_.lastSwap.name)}">↶</button></div>`;
     if(open){
       h+=`<div class="pmore">
         ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}
@@ -2620,10 +2635,10 @@ function answersDetail(){
       ${x.answeredAt?`<div class="footnote mortar">You last answered on ${shortDate(x.answeredAt)}.</div>`:""}</div>`
     +(opens
       ? `<div class="v gap-s"><div class="body">You can answer again from ${shortDate(opens)}.</div>`
-        +NOTE("Arch waits a month between one set of answers and the next, so that the people it chooses for you were chosen against something that held. Arch Premium lets you answer whenever you like.")
+        +NOTE("Once a month, or any time with Premium.")
         +`<button class="btntext" data-a="goPremium">See Arch Premium</button></div>`
       : `<button class="btn primary" data-a="answerAgain">Answer again</button>`)
-    +NOTE("Your answers are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and "+rosterName()+" from tomorrow is chosen against the new answers.");
+    +NOTE("Private: not on your profile, and not a score. New answers shape tomorrow&rsquo;s matches.");
 }
 function settingDetail(id){
   const x=S.set; let b="";
@@ -2632,8 +2647,7 @@ function settingDetail(id){
      +'<input class="slider" type="range" min="5" max="100" value="'+x.distance+'" data-s="distance">'
      +'<div style="display:flex; justify-content:space-between" class="footnote mortar">'
      +'<span>5 miles</span><span>Anywhere</span></div></div>'
-     +NOTE("Everyone in "+rosterName()+" is inside this. Widening it gives Arch more people to choose from &mdash; it does not give you more slots.")
-     +NOTE("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.");
+     +NOTE("Wider gives Arch more people to choose from. Nobody sees how far away you are.");
   } else if(id==="d-age"){
     b='<div class="v gap-s">'+HEADING(x.minAge+" to "+x.maxAge)
      +'<div id="rangeTrack" class="rangetrack"><div class="rangefill"></div>'
@@ -2643,72 +2657,74 @@ function settingDetail(id){
      +NOTE("Arch will not put anyone outside this in "+rosterName()+", and will not put you in theirs.");
   } else if(id==="d-seeking"){
     b=multiOpts(GENDERS.map(g=>[g[0],g[2]]),x.seeking,"setSeeking")
-     +NOTE("Arch will not put anyone outside this in "+rosterName()+", whatever else lines up. It is not shown on your profile, and nobody is told what you picked.");
+     +NOTE("Only these people are matched with you. Not shown on your profile.");
   } else if(id==="a-delete"){
-    /* Three consequences, named. "This cannot be undone" on its own says nothing;
-       the one that matters is the one nobody expects. No red anywhere — dressing
-       this up as a hazard would discourage something you are entitled to do. */
-    b='<div class="v gap-m">'
-     +'<div class="body">Your profile, photos and answers are deleted.</div>'
-     +'<div class="body">The people you are talking to can still read what was said, and cannot reply. They are not told why.</div>'
-     +'<div class="body">You cannot undo this, and this Apple ID cannot make another account.</div></div>'
-     +NOTE("If you want to stop for a while rather than leave, pause your profile instead. Paused, nobody new arrives and you are not in anyone else&rsquo;s matches, but your conversations keep working.")
-     +'<button class="btn quiet" data-a="deleteOpen">Delete my account</button>';
+    /* Three short lines and a red button: the one red thing in Arch, for the
+       one thing that cannot be taken back. Pause gets one line. */
+    b='<div class="v gap-s">'
+     +'<div class="dpoint"><i>\u2715</i><div class="body">Your profile, photos and answers are deleted.</div></div>'
+     +'<div class="dpoint"><i>\u2709</i><div class="body">People you&rsquo;re talking to keep what was said, but can&rsquo;t reply.</div></div>'
+     +'<div class="dpoint"><i>\u21BA</i><div class="body">This can&rsquo;t be undone.</div></div></div>'
+     +NOTE("Need a break instead? Pause your profile in Discovery.")
+     +'<button class="btn danger" data-a="deleteOpen">Delete my account</button>';
   } else if(id==="n-blocked"){
     b='<div class="titleM">Arch cannot send you anything</div>'
-     +NOTE("Notifications are turned off for Arch in your iPhone settings. Nothing here can change that &mdash; turn them back on there and your choices come back exactly as you left them.")
-     +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>'
-     +NOTE("Arch only ever sends one, and only when a person writes to you. It has never had a reason to tell you to come back.");
+     +NOTE("Turn them on for Arch in iPhone Settings. Arch only notifies you when someone writes.")
+     +'<button class="btn quiet" data-a="allowNotifs">Open iPhone settings</button>';
   } else if(id==="x-theme"){
     b=themeSpecimen()
      +opts(THEMES,x.theme,"setTheme")
      +NOTE(THEME_NOTES[x.theme]);
   } else if(id==="d-location"){
     b='<div class="titleM">'+(S.you.place?esc(placeLabel(S.you.place)):"Not set")+'</div>'
-     +NOTE("This is the chip under your name, and with your distance it decides who could plausibly meet you. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+     +NOTE("Shown under your name. Nobody sees how far away you are.")
      +'<button class="btn primary" data-a="youPlace">Change</button>'
-     +(x.sub?"":NOTE("Without Premium this puts you where your phone says you are. Choosing somewhere else is part of Arch Premium."));
+     +(x.sub?"":NOTE("Using your phone&rsquo;s location is always free. Choosing somewhere else is part of Premium."));
   } else if(id==="d-answers"){
     b=answersDetail();
   } else if(id==="d-intent"){
     b=opts(["Something serious","Still working it out","Something casual"],x.intent,"setIntent")
-     +NOTE("This is used to choose "+rosterName()+". It is not shown on your profile, and nobody is told what you picked.");
+     +NOTE("Used to choose your matches. Not shown on your profile.");
   } else if(id==="p-blocked"){
     b='<div class="titleM">Nobody blocked</div>'
-     +NOTE("Blocking someone takes them out of "+rosterName()+", stops them appearing again, and stops you appearing in theirs. They are not told.");
+     +NOTE("Blocked people leave your matches for good. They&rsquo;re never told.");
   } else if(id==="p-data"){
+    /* As the app does it: one file, made on the phone, then the share sheet. */
     b='<div class="titleM">Everything Arch holds about you</div><div class="v gap-s">'
-     +'<div class="body">Your profile, including photos and answers.</div>'
-     +'<div class="body">Your questionnaire answers.</div>'
-     +'<div class="body">Every message you have sent and received.</div>'
-     +'<div class="body">Who has been in '+rosterName()+', and when.</div></div>'
-     +NOTE("Sent as a file to "+esc(x.email)+". It usually takes a few minutes and never more than 30 days.")
-     +'<button class="btn quiet">Request my data</button>';
+     +'<div class="body">Your profile and answers</div>'
+     +'<div class="body">Your messages</div>'
+     +'<div class="body">Who you&rsquo;ve been matched with, and when</div></div>'
+     +NOTE("One file, made on your phone. Save it to Files or send it anywhere.")
+     +(x.dataMade
+       ?'<button class="btn primary" data-a="dataShare">Save or send the file</button><button class="btntext" data-a="dataBuild">Build it again</button>'
+       :'<button class="btn quiet" data-a="dataBuild">Build my file</button>');
   } else if(id==="a-email"){
     b='<div class="field onNight"><input value="'+esc(x.email)+'" data-s="email"></div>'
-     +NOTE("Used for signing in and account notices. Never shown to anyone, and Arch does not send anything else here.");
+     +NOTE("Used for signing in. Never shown to anyone.");
   } else if(id==="a-premium"){
     b=HEADING(x.sub?"Subscribed":"Not subscribed")
-     +NOTE("Premium changes what you can do with your slots and how much you can say about yourself. It does not change who sees you.")
+     +NOTE("More matches and more open conversations. It doesn&rsquo;t change who sees you.")
      +'<button class="btn primary" data-a="goPremium">See what premium changes</button>'
      +'<div class="btntext">Restore purchases</div>';
   } else if(id==="h-how"){
-    b=sect("Five people, held","You have five slots. Arch fills them with people it thinks you would actually like, and they stay there. There is nothing to work through and no queue to clear &mdash; if you do nothing, they stay.")
-     +sect("Dismissing costs you a slot","If you dismiss someone, that slot sits open until tomorrow morning. It is meant to be a real decision, which is why Arch asks you to confirm it and why there is no way to swipe.")
-     +sect("There is no match step","Nobody has to like you back before you can write. If you want to talk to one of your matches, you write to them.")
-     +sect("You are never told who dismissed whom","People leave your matches. Sometimes that is you, sometimes it is them, and Arch does not tell you which. An open slot looks the same either way, on purpose.")
-     +sect("Conversations end without a reason","Somebody can leave a conversation, block you, or delete their account. All three look identical from your side &mdash; you can read what was said and you cannot reply &mdash; because if they looked different, the difference would tell you which one happened.")
-     +sect("The questions do the choosing","Your questionnaire answers are how Arch decides who reaches you. They are not on your profile, nobody else sees them, and they do not add up to a score.");
+    /* One line each: the rules fit in a sentence apiece. */
+    b=sect("Five people at a time","Seven with Premium. They stay until you dismiss them.")
+     +sect("New matches at 9am","Every morning, for everyone at once.")
+     +sect("No matching step","Write to anyone in your five. They don&rsquo;t have to like you first.")
+     +sect("Dismissing opens a spot","It refills the next morning. Nobody is told who left.")
+     +sect("Writing first sends a request","They choose whether to answer.")
+     +sect("Conversations can end quietly","Leaving, blocking and deleting look the same from the other side.")
+     +sect("Your answers are private","They shape your matches. Nobody else sees them.");
   } else if(id==="h-safety"){
     b=sect("Every account is tied to a device","It is not a guarantee that somebody is who they say. Signing in with Apple ties an account to an Apple ID as well, and an email address ties it to nothing on its own &mdash; but both are checked against the device, so starting again after being removed usually costs a new phone rather than thirty seconds. Making throwaway accounts expensive is most of the problem.")
      +sect("Blocking is silent and complete","A blocked person leaves your matches, stops appearing again, and stops seeing you. They are not told.")
      +sect("Reporting","Report anyone from the top of a conversation. Reports go to a person, not a filter.")
      +sect("Meeting","Meet somewhere public the first time, tell someone where you are going, and get yourself home.");
   } else if(id==="h-contact"){
-    b=sect("Write to a person","help@arch.app reaches a small team, usually within a day. There is no chatbot in front of it.")
-     +sect("Something is broken","Tell us what you were doing and what happened instead. Screenshots help more than descriptions.")
-     +sect("Something is wrong with someone","Report them from the conversation rather than emailing &mdash; it comes through with the context attached.")
-     +'<button class="btn quiet">Email help@arch.app</button>';
+    /* The button opens Mail, to the address the site and the policy use. */
+    b=sect("Write to a person","support@archdating.com reaches a real person, usually within a day.")
+     +sect("About someone?","Report them from your conversation instead. It arrives with the context.")
+     +'<a class="btn quiet" style="text-decoration:none" href="mailto:support@archdating.com?subject=Arch">Email support@archdating.com</a>';
   }
   return navbar(SET_TITLES[id]||"Setting")
     +'<div class="screen"><div class="pad v gap-xl mt-xl pb-xxxl">'+b+'</div></div>';
@@ -3521,13 +3537,17 @@ document.addEventListener("click",e=>{
     /* Swap: the next place along. A kept place is let go, and the planner
        chooses, starting past it. */
     planSwap:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice(), it=items[i];
+      /* Kept for Undo: a Swap tapped by accident costs one tap back. */
+      const lastSwap={id:it.id, prev:it, name:el.dataset.n||""};
       items[i]=it.pin?{...it,pin:null,pinFrom:null,passed:it.passed.concat([it.pin.id])}:{...it,skips:it.skips+1};
-      S.planner={...P_,items,sent:null,replanned:null,hidden:null}; render();},
+      S.planner={...P_,items,sent:null,replanned:null,hidden:null,lastSwap}; render();},
+    planUndoSwap:()=>{const P_=S.planner, l=P_.lastSwap; if(!l) return;
+      S.planner={...P_,items:P_.items.map(it=>it.id===l.id?l.prev:it),lastSwap:null,sent:null}; render();},
     /* "Not for us": never this place again; the item moves on at once. */
     planHide:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice(), vid=el.dataset.k, name=el.dataset.n;
       S.hiddenPlaces=S.hiddenPlaces||new Set(); S.hiddenPlaces.add(vid);
       if(items[i]&&items[i].pin&&items[i].pin.id===vid) items[i]={...items[i],pin:null,pinFrom:null};
-      S.planner={...P_,items,sent:null,replanned:null,hidden:{id:vid,name}}; render();},
+      S.planner={...P_,items,sent:null,replanned:null,hidden:{id:vid,name},lastSwap:null}; render();},
     planUnhide:()=>{const h=S.planner.hidden; if(!h) return; S.hiddenPlaces.delete(h.id);
       S.planner={...S.planner,hidden:null}; render();},
     planShare:()=>{const cands=plannerCandidates(), cur=cands.find(c=>c.p.id===S.planner.with)||cands[0];
@@ -3661,6 +3681,8 @@ document.addEventListener("click",e=>{
     arrange:()=>push({name:"arrange"}),
     settings:()=>push({name:"settings"}),
     setting:()=>{ if(el.dataset.id==="h-tour"){ S.stacks.you=[]; tourGo(0); return; }
+      /* Safety is a page on the website, not a screen in the app. */
+      if(el.dataset.id==="h-safety"){ window.open("https://archdating.com/safety","_blank","noopener"); return; }
       push({name:"settingDetail",id:el.dataset.id}); },
     tourNext:()=>tourGo(S.tour+1),
     tourBack:()=>tourGo(S.tour-1),
@@ -3702,18 +3724,21 @@ document.addEventListener("click",e=>{
     },
     allowNotifs:()=>{S.set.notifsAllowed=true; S.stacks.you=[{name:"settings"}]; render();},
     deleteOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Delete your account?</div>
-      <div class="body mortar mt-s">Your profile goes now, and every conversation you are
-        in stops. There is no undo and no grace period.</div>
-      <button class="btn quiet mt-xxl" data-a="deleteDo">Delete my account</button>
+      <div class="body mortar mt-s">Your profile goes now, and your conversations stop. This can&rsquo;t be undone.</div>
+      <button class="btn danger mt-xxl" data-a="deleteDo">Delete my account</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    dataBuild:()=>{S.set.dataMade=true; render();},
+    dataShare:()=>{const blob=new Blob([JSON.stringify({profile:{name:S.you.name},note:"Prototype stand-in for the export"},null,2)],{type:"application/json"});
+      const f=new File([blob],"Arch data.json",{type:"application/json"});
+      if(navigator.canShare&&navigator.canShare({files:[f]})) navigator.share({files:[f]}).catch(()=>{});
+      else openSheet(`<div class="titleM">Share</div><div class="body mortar mt-s">On a phone this is the share sheet: Files, Mail, AirDrop.</div>
+        <button class="btntext mt-m" data-a="closeSheet">Done</button>`);},
     /* Not the same thing as deleting, even though both land in the same place:
        the way back in is the screen a new account starts on, because Continue with
        Apple is both the sign-up and the sign-in. */
     signOutOpen:()=>openSheet(`<div class="titleM" style="padding-top:8px">Sign out?</div>
-      <div class="body mortar mt-s">Your profile, your conversations and your
-        matches all stay exactly as they are. Nothing is deleted. Signing back in with Apple
-        brings you straight back to it.</div>
+      <div class="body mortar mt-s">Nothing is deleted. Sign back in any time to pick up where you left off.</div>
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
     signOutDo:()=>{ closeSheet(); startOnboarding(); },
