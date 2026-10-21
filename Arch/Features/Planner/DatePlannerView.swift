@@ -191,6 +191,8 @@ struct DatePlannerView: View {
     @AppStorage("arch.savedPlans") private var savedPlansJSON = ""
     /// The list of saved plans, while its sheet is open.
     @State private var showingSaved = false
+    /// The item a custom spot is being chosen for, while its sheet is open.
+    @State private var customFor: UUID?
     /// **One plan in progress per person.** What you built with somebody --
     /// the items, their hours and swaps, the time of day and the day -- is
     /// kept when you switch to somebody else, and is there when you come back.
@@ -912,6 +914,22 @@ struct DatePlannerView: View {
 
     // MARK: Items
 
+    /// "Custom spot": the place you named, kept as it is in this item -- as
+    /// food or an activity by what it is, for the time it usually takes.
+    private func addCustom(_ venue: Venue, to itemID: UUID) {
+        guard let index = items.firstIndex(where: { $0.id == itemID }) else { return }
+        let category = venue.kind.category
+        withAnimation(ArchMotion.standard) {
+            items[index].category = category
+            items[index].hours = category.defaultHours
+            items[index].skips = 0
+            items[index].pinned = venue
+            items[index].pinnedFrom = "Your pick."
+        }
+        replanned = nil
+        sentTo = nil
+    }
+
     private func fill(_ index: Int, with category: DatePlan.Category) {
         guard items.indices.contains(index) else { return }
         items[index].category = category
@@ -1329,6 +1347,18 @@ struct DatePlannerView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planner.itinerary")
+        .sheet(isPresented: Binding(get: { customFor != nil }, set: { if !$0 { customFor = nil } })) {
+            CustomSpotSheet(
+                isLive: isLive,
+                near: you.matchPoint,
+                library: venues,
+                onPick: { venue in
+                    if let id = customFor { addCustom(venue, to: id) }
+                    customFor = nil
+                },
+                onCancel: { customFor = nil }
+            )
+        }
     }
 
     /// An item added and not yet told what it is.
@@ -1354,11 +1384,17 @@ struct DatePlannerView: View {
                     .accessibilityIdentifier("planner.choose.\(category.rawValue)")
                 }
             }
-            // Food & drink or Activity, chosen by you. There was a "Surprise
-            // me" beside them; it is gone.
-            if items.count > 1 {
-                HStack {
-                    Spacer(minLength: 0)
+            // Food & drink or Activity, chosen by the planner -- or a place
+            // you name yourself, where "Surprise me" used to be.
+            HStack {
+                ArchTextButton(title: "Custom spot") {
+                    if items.indices.contains(index) { customFor = items[index].id }
+                }
+                .fixedSize()
+                .accessibilityHint("Search for a place and add it to the date")
+                .accessibilityIdentifier("planner.choose.custom")
+                Spacer(minLength: 0)
+                if items.count > 1 {
                     ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
                         .fixedSize()
                         .accessibilityLabel("Remove this item")
@@ -1942,6 +1978,108 @@ struct DatePlannerView: View {
             ArchButton(title: "See your matches", kind: .quiet, action: onOpenDaily)
                 .padding(.top, ArchSpacing.s)
         }
+    }
+}
+
+/// "Custom spot": a place you name, found in Apple Maps near you -- or, in a
+/// design build, in the bundled places. Tapping one adds it to the item.
+struct CustomSpotSheet: View {
+    let isLive: Bool
+    let near: Coordinate?
+    /// The design build's places, searched by name instead of Apple Maps.
+    let library: [Venue]
+    let onPick: (Venue) -> Void
+    let onCancel: () -> Void
+
+    @State private var query = ""
+    @State private var results: [Venue] = []
+    @State private var unreachable = false
+    @State private var searching = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Add your own spot")
+                    .archText(.titleM)
+                    .foregroundStyle(ArchColor.limestone)
+                Spacer(minLength: 0)
+                ArchTextButton(title: "Cancel", action: onCancel)
+                    .fixedSize()
+            }
+            .padding(.top, ArchSpacing.xl)
+
+            ArchField(text: $query, placeholder: "Search for a place", surface: ArchColor.night)
+                .accessibilityIdentifier("planner.custom.search")
+                .padding(.top, ArchSpacing.m)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: ArchSpacing.xs) {
+                    if unreachable {
+                        note("Arch could not reach Apple Maps just now.")
+                    } else if query.trimmingCharacters(in: .whitespaces).count < 2 {
+                        note("A caf\u{00E9}, a park, a restaurant: whatever you have in mind.")
+                    } else if results.isEmpty {
+                        note(searching ? "Looking\u{2026}" : "Nothing by that name nearby.")
+                    } else {
+                        ForEach(results) { venue in
+                            Button { onPick(venue) } label: {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(venue.name)
+                                        .archText(.subhead)
+                                        .foregroundStyle(ArchColor.limestone)
+                                    Text([venue.kind.label, venue.neighbourhood]
+                                            .filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                                        .archText(.footnote)
+                                        .foregroundStyle(ArchColor.mortar)
+                                }
+                                .padding(ArchSpacing.m)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(
+                                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                                        .fill(ArchColor.stoneRaised)
+                                )
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(PressScaleStyle(scale: 0.99))
+                            .accessibilityLabel("Add \(venue.name)")
+                            .accessibilityIdentifier("planner.custom.result")
+                        }
+                    }
+                }
+                .padding(.top, ArchSpacing.m)
+            }
+            .scrollIndicators(.hidden)
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
+        .archSheetBackground()
+        // A beat after the last keystroke, so a word is one search, not five.
+        .task(id: query) {
+            let words = query.trimmingCharacters(in: .whitespaces)
+            guard words.count >= 2 else { results = []; return }
+            guard isLive else {
+                results = library.filter { $0.name.localizedCaseInsensitiveContains(words) }
+                return
+            }
+            searching = true
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else { return }
+            let found = await VenueSearch.find(words, near: near)
+            guard !Task.isCancelled else { return }
+            unreachable = found == nil
+            results = found ?? []
+            searching = false
+        }
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .archText(.footnote)
+            .foregroundStyle(ArchColor.mortar)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

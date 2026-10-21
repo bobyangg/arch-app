@@ -2113,8 +2113,9 @@ function plannerRoot(){
       h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
         <div class="pchoose mt-s">${["food","activity"].map(c=>
           `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
-        ${P_.items.length>1?`<div class="spread mt-s" style="align-items:center; justify-content:flex-end">
-          <button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button></div>`:""}</div>`;
+        <div class="spread mt-s" style="align-items:center">
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="customSpot" data-i="${i}">Custom spot</button>
+          ${P_.items.length>1?`<button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button>`:""}</div></div>`;
       return;
     }
     if(!st){
@@ -3263,6 +3264,15 @@ function tourGo(i){
 }
 
 /* ============================ sheets ============================ */
+function customSpotResults(q){
+  q=q.trim().toLowerCase();
+  if(q.length<2) return `<div class="footnote mortar">A caf&eacute;, a park, a restaurant: whatever you have in mind.</div>`;
+  const found=VENUES.filter(v=>v.name.toLowerCase().includes(q)).slice(0,15);
+  if(!found.length) return `<div class="footnote mortar">Nothing by that name nearby.</div>`;
+  return found.map(v=>`<button class="pcard" style="text-align:left; width:100%" data-a="customPick" data-v="${v.id}">
+      <div class="subhead">${esc(v.name)}</div>
+      <div class="footnote mortar">${esc([KINDS[v.kind][0],v.hood].filter(Boolean).join(" \u00B7 "))}</div></button>`).join("");
+}
 function openSheet(html){
   const s=document.getElementById("sheet"), sc=document.getElementById("scrim");
   s.innerHTML=`<div class="grabber"></div>`+html;
@@ -3561,16 +3571,26 @@ document.addEventListener("click",e=>{
       S.planner={...P_,with:id,items:next.items,time:next.time,day:next.day,sessions,
         sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null,savedNote:null,lastSwap:null,open:{}};
       render();},
-    /* What a blank item is: food, an activity, or "Surprise me" -- an
-       activity if there is none (a date with nothing to do is a meal), then
-       food if there is none, then the other kind from the item before it, so
-       two dinners never sit back to back. */
-    planChoose:()=>{const P_=S.planner, i=+el.dataset.i; let c=el.dataset.k;
-      if(c==="surprise"){const kinds=P_.items.map(x=>x.cat).filter(Boolean);
-        const before=P_.items.slice(0,i).map(x=>x.cat).filter(Boolean).pop();
-        c=!kinds.includes("activity")?"activity":!kinds.includes("food")?"food":before==="food"?"activity":"food";}
+    /* What a blank item is: food or an activity, for the planner to choose. */
+    planChoose:()=>{const P_=S.planner, i=+el.dataset.i, c=el.dataset.k;
       const items=P_.items.slice(); items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0};
       S.planner={...P_,items,sent:null,replanned:null}; render();},
+    /* "Custom spot": a place you name. The app searches Apple Maps near you;
+       the prototype searches its own places by name. */
+    customSpot:()=>{S.customFor=S.planner.items[+el.dataset.i].id;
+      openSheet(`<div class="spread" style="align-items:center"><div class="titleM">Add your own spot</div>
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="closeSheet">Cancel</button></div>
+        <div class="field onNight mt-m"><input id="customSpotQ" placeholder="Search for a place" autocomplete="off"></div>
+        <div id="customSpotResults" class="v mt-m" style="gap:8px">${customSpotResults("")}</div>`);
+      setTimeout(()=>{const q=document.getElementById("customSpotQ"); if(q) q.focus();},250);},
+    /* Picked: kept as it is in that item, as food or an activity by what it
+       is, for the time that usually takes. */
+    customPick:()=>{const P_=S.planner, v=VENUES.find(x=>x.id===el.dataset.v);
+      const i=P_.items.findIndex(x=>x.id===S.customFor); S.customFor=null;
+      if(!v||i<0){ closeSheet(); return; }
+      const c=CAT(v.kind), items=P_.items.slice();
+      items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0,pin:v,pinFrom:"Your pick."};
+      S.planner={...P_,items,sent:null,replanned:null}; closeSheet(); render();},
     planAddItem:()=>{const P_=S.planner; if(P_.items.length>=MAX_ITEMS) return;
       S.planner={...P_,items:P_.items.concat([newItem()]),replanned:null}; render();},
     planRemove:()=>{const P_=S.planner, i=+el.dataset.i; let items=P_.items.filter((x,k)=>k!==i);
@@ -4124,6 +4144,7 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
+  if(t.id==="customSpotQ"){ const r=document.getElementById("customSpotResults"); if(r) r.innerHTML=customSpotResults(t.value); return; }
   if(t.id==="planDateInput"){ if(t.value){ S.planner={...S.planner,day:plannerDay(t.value),items:restartSwaps(),sent:null}; render(); } return; }
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
