@@ -19,6 +19,12 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
+    /// The label under the icon. Premium has seven slots, so its roster is the
+    /// Daily 7, and the tab says so rather than promising five.
+    func title(isSubscribed: Bool) -> String {
+        self == .daily && isSubscribed ? "Daily 7" : title
+    }
+
     /// What a UI test addresses this tab by.
     ///
     /// Deliberately not the title. Two screens already put their own name on a
@@ -51,6 +57,7 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
 struct TabBar: View {
     @Binding var selection: ArchTab
     var unreadCount: Int = 0
+    var isSubscribed: Bool = false
 
     @Namespace private var pill
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -60,6 +67,7 @@ struct TabBar: View {
             ForEach(ArchTab.allCases) { tab in
                 TabBarItem(
                     tab: tab,
+                    title: tab.title(isSubscribed: isSubscribed),
                     isActive: selection == tab,
                     badge: tab == .messages ? unreadCount : 0,
                     pill: pill
@@ -82,6 +90,7 @@ struct TabBar: View {
 
 private struct TabBarItem: View {
     let tab: ArchTab
+    let title: String
     let isActive: Bool
     let badge: Int
     let pill: Namespace.ID
@@ -116,7 +125,7 @@ private struct TabBarItem: View {
                                 .offset(x: 9, y: -5)
                         }
                     }
-                Text(tab.title)
+                Text(title)
                     .archText(.caption)
                     .foregroundStyle(tint)
                     // Five across a phone is about 78pt each, and "Date planner"
@@ -152,7 +161,7 @@ private struct TabBarItem: View {
         .anchorPreference(key: ArchTabFramesKey.self, value: .bounds) { [tab: $0] }
         .accessibilityElement(children: .ignore)
         .accessibilityIdentifier(tab.identifier)
-        .accessibilityLabel(tab.title)
+        .accessibilityLabel(title)
         .accessibilityValue(badge > 0 ? "\(badge) unread" : "")
         .accessibilityAddTraits(isActive ? [.isButton, .isSelected] : .isButton)
     }
