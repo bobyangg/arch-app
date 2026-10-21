@@ -1603,7 +1603,8 @@ struct DatePlannerView: View {
                     .padding(.top, ArchSpacing.xxs)
 
                     // What to do about the place: look it up, never again, or
-                    // not in this plan -- a third of the line each.
+                    // not in this plan -- spread edge to edge, Maps under the
+                    // name and Remove at the right, the gaps between them even.
                     HStack(spacing: 0) {
                         if stop.venue.mapsURL != nil {
                             // The place itself, by Apple's identifier where there
@@ -1611,17 +1612,22 @@ struct DatePlannerView: View {
                             ArchTextButton(title: "Maps") {
                                 Task { await VenueSearch.openInMaps(stop.venue) { openURL($0) } }
                             }
+                                .fixedSize()
                                 .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
                                 .accessibilityIdentifier("planner.maps.\(index)")
+                            Spacer(minLength: ArchSpacing.s)
                         }
                         // Not this place, ever: for the corner Apple Maps calls
                         // a park. Remove is for the item; this is for the place.
                         ArchTextButton(title: "Not for us") {
                             withAnimation(ArchMotion.standard) { hide(stop.venue, at: index) }
                         }
+                        .fixedSize()
                         .accessibilityLabel("Never suggest \(stop.venue.name)")
                         .accessibilityIdentifier("planner.hide.\(index)")
+                        Spacer(minLength: ArchSpacing.s)
                         ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+                            .fixedSize()
                             .accessibilityLabel("Remove \(stop.venue.name)")
                             .accessibilityIdentifier("planner.remove.\(index)")
                     }
