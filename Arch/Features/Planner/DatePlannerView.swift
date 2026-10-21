@@ -937,18 +937,6 @@ struct DatePlannerView: View {
         sentTo = nil
     }
 
-    /// "Surprise me": an activity if there is none -- a date with nothing to
-    /// do is a meal -- then something to eat if there is none, and after that
-    /// the other kind from the item before it, so two dinners never sit
-    /// back to back.
-    private func surprise(for index: Int) -> DatePlan.Category {
-        let kinds = items.compactMap(\.category)
-        if !kinds.contains(.activity) { return .activity }
-        if !kinds.contains(.food) { return .food }
-        let before = items[..<min(index, items.count)].compactMap(\.category).last
-        return before == .food ? .activity : .food
-    }
-
     /// Into the questions, starting from what you said last time if you have
     /// said anything.
     private func startAsking() {
@@ -1366,14 +1354,13 @@ struct DatePlannerView: View {
                     .accessibilityIdentifier("planner.choose.\(category.rawValue)")
                 }
             }
-            HStack {
-                ArchTextButton(title: "Surprise me") {
-                    withAnimation(ArchMotion.standard) { fill(index, with: surprise(for: index)) }
-                }
-                .accessibilityIdentifier("planner.choose.surprise")
-                Spacer(minLength: 0)
-                if items.count > 1 {
+            // Food & drink or Activity, chosen by you. There was a "Surprise
+            // me" beside them; it is gone.
+            if items.count > 1 {
+                HStack {
+                    Spacer(minLength: 0)
                     ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
+                        .fixedSize()
                         .accessibilityLabel("Remove this item")
                 }
             }
