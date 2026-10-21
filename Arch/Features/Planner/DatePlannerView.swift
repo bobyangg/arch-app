@@ -79,6 +79,8 @@ struct DatePlannerView: View {
     var venues: [Venue] = VenueLibrary.all
     var preset: PlannerPreset? = nil
     var onSend: (Conversation, String, SharedPlan) -> Void = { _, _, _ in }
+    /// Removes a plan you already sent, when the same plan is sent again.
+    var onUnsend: (Conversation, String) -> Void = { _, _ in }
     var onOpenDaily: () -> Void = {}
     /// Goes up when the popup after onboarding says "Get started": the planner
     /// opens straight onto the first question. A count, because it is an event.
@@ -183,6 +185,39 @@ struct DatePlannerView: View {
     /// conversation, so there is nowhere on the server it belongs. Empty when
     /// there is none.
     @AppStorage("arch.selfPlan") private var savedSelfPlan = ""
+    /// Plans saved for later, as JSON, kept on this phone like the confirmed
+    /// self plan: nothing is sent until you share one. Every account's are in
+    /// here, each marked with its owner, and only yours are shown.
+    @AppStorage("arch.savedPlans") private var savedPlansJSON = ""
+    /// The list of saved plans, while its sheet is open.
+    @State private var showingSaved = false
+    /// **One plan in progress per person.** What you built with somebody --
+    /// the items, their hours and swaps, the time of day and the day -- is
+    /// kept when you switch to somebody else, and is there when you come back.
+    /// For as long as the app is open; a saved plan is the one that lasts.
+    @State private var sessions: [String: PlanSession] = [:]
+
+    private struct PlanSession {
+        var items: [PlanItem]
+        var time: DatePlan.TimeOfDay?
+        var day: PlanDay?
+    }
+    /// A share that found the same plan already sent to that person, while
+    /// the question about it is up.
+    @State private var repeatShare: RepeatShare?
+
+    /// The same plan, already in the conversation: the person, the plan about
+    /// to go, and the earlier copies -- removable unless one was answered.
+    private struct RepeatShare: Identifiable {
+        let id = UUID()
+        let candidate: PlannerCandidate
+        let text: String
+        let plan: SharedPlan
+        let earlier: [String]
+        /// Somebody said "I'm in" to it, or it was cancelled: it is history,
+        /// not something to resend.
+        let settled: Bool
+    }
     /// While a confirmed self plan is being changed.
     @State private var changingSelf = false
 
@@ -342,26 +377,22 @@ struct DatePlannerView: View {
             guard isLive else { return }
             notToOffer.formUnion(await ArchBackend.placesNotToOffer())
         }
-        // Somebody else, another time or another day: the rankings underneath
-        // have changed, so every item starts again from its best place. What
-        // you added -- the kinds and the hours -- stays.
+        // Somebody else: their own session comes back (`switchPlanning`), so
+        // nothing here resets the items -- only what was said about the last
+        // person's plan. Another time or another day resets the swaps, from
+        // the controls that change them, not from here: restoring a session
+        // sets the time and day too, and must not undo its swaps.
         .onChange(of: chosenID) { _, _ in
             openStops = []
             showingDetails = false
-            restartSwaps()
+            lastSwap = nil
             sentTo = nil
             replanned = nil
             cancelledNote = nil
             changingSelf = false
         }
-        .onChange(of: pickedTime) { _, _ in
-            restartSwaps()
-            sentTo = nil
-        }
-        .onChange(of: pickedDay) { _, _ in
-            restartSwaps()
-            sentTo = nil
-        }
+        .onChange(of: pickedTime) { _, _ in sentTo = nil }
+        .onChange(of: pickedDay) { _, _ in sentTo = nil }
         // **Interests changed: plan again, and say so.** The plan is computed
         // from both of you on every draw, so it always followed an edit -- but
         // a swap count from the old rankings pointed at an arbitrary place in
@@ -385,6 +416,7 @@ struct DatePlannerView: View {
         .onChange(of: preset) { _, preset in
             guard let preset else { return }
             questionIndex = nil
+            if preset.personID != planningID { keepSession() }
             chosenID = preset.personID
             sentTo = nil
             cancelledNote = nil
@@ -446,6 +478,24 @@ struct DatePlannerView: View {
             .compactMap(\.plan?.stops)
             .joined()
             .map(\.name))
+    }
+
+    /// To somebody else's plan: this one is put aside as it is, and theirs
+    /// comes back -- or, for somebody you have not planned with yet, a blank
+    /// item.
+    private func switchPlanning(to id: String) {
+        guard id != planningID else { return }
+        keepSession()
+        chosenID = id
+        let session = sessions[id] ?? PlanSession(items: [PlanItem()], time: nil, day: nil)
+        items = session.items
+        pickedTime = session.time
+        pickedDay = session.day
+    }
+
+    /// The plan on screen, put aside under whoever it is with.
+    private func keepSession() {
+        sessions[planningID] = PlanSession(items: items, time: pickedTime, day: pickedDay)
     }
 
     /// Every item back to the best place in its ranking. Places kept from a
@@ -942,13 +992,47 @@ struct DatePlannerView: View {
     // MARK: Pieces
 
     private var masthead: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+        HStack(alignment: .center) {
             Text("Date planner")
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
+            Spacer(minLength: ArchSpacing.s)
+            // Plans saved for later, a tap from the title. Not over the
+            // questions, which are a screen of their own.
+            if questionIndex == nil {
+                Button { showingSaved = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: savedPlans.isEmpty ? "bookmark" : "bookmark.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text(savedPlans.isEmpty ? "Saved" : "Saved \u{00B7} \(savedPlans.count)")
+                            .archText(.footnote)
+                    }
+                    .foregroundStyle(ArchColor.limestone)
+                    .padding(.horizontal, ArchSpacing.s)
+                    .frame(height: 36)
+                    .background(Capsule().fill(ArchColor.stone))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(PressScaleStyle(scale: 0.97))
+                .accessibilityLabel("Saved plans, \(savedPlans.count)")
+                .accessibilityIdentifier("planner.saved")
+            }
         }
         .padding(.top, ArchSpacing.xs)
         .padding(.bottom, ArchSpacing.l)
+        .sheet(isPresented: $showingSaved) {
+            SavedPlansSheet(
+                plans: savedPlans,
+                person: { id in id == Self.selfPlanID ? you : candidates.first { $0.id == id }?.person },
+                title: savedTitle,
+                onOpen: { saved in
+                    showingSaved = false
+                    open(saved)
+                },
+                onDelete: { saved in unsave(saved.key) },
+                onClose: { showingSaved = false }
+            )
+        }
     }
 
     /// Your matches and the people you are talking to, in one row. Faces rather
@@ -968,8 +1052,7 @@ struct DatePlannerView: View {
                         let isChosen = candidate.id == chosen?.id
                         let hasAgreed = candidate.conversation.agreedPlan != nil
                         Button {
-                            chosenID = candidate.id
-                            pickedTime = nil
+                            switchPlanning(to: candidate.id)
                         } label: {
                             VStack(spacing: ArchSpacing.xs) {
                                 PhotoPlaceholder(toneIndex: candidate.person.avatarToneIndex,
@@ -1056,8 +1139,7 @@ struct DatePlannerView: View {
     /// you it is planned for.
     private var selfPlanButton: some View {
         Button {
-            chosenID = Self.selfPlanID
-            pickedTime = nil
+            switchPlanning(to: Self.selfPlanID)
         } label: {
             VStack(spacing: ArchSpacing.xs) {
                 PhotoPlaceholder(toneIndex: you.avatarToneIndex,
@@ -1119,7 +1201,11 @@ struct DatePlannerView: View {
             HStack(spacing: 0) {
                 ForEach(DatePlan.TimeOfDay.allCases) { option in
                     let isOn = option == time
-                    Button { pickedTime = option } label: {
+                    Button {
+                        guard pickedTime != option else { return }
+                        pickedTime = option
+                        restartSwaps()
+                    } label: {
                         Text(option.title)
                             .archText(.footnote)
                             .foregroundStyle(isOn ? ArchColor.limestone : ArchColor.mortar)
@@ -1157,7 +1243,10 @@ struct DatePlannerView: View {
             PlanDatePicker(
                 selection: Binding(
                     get: { day ?? PlanDay.earliest() },
-                    set: { pickedDay = $0 }
+                    set: { day in
+                        pickedDay = day
+                        restartSwaps()
+                    }
                 ),
                 onDone: { choosingDate = false }
             )
@@ -1618,6 +1707,7 @@ struct DatePlannerView: View {
         VStack(spacing: ArchSpacing.xs) {
             if let chosen {
                 ArchButton(title: "Share this plan") { sharing = plan }
+                saveLine(plan)
                 if let sentTo {
                     Text("Sent to \(sentTo). It is in your conversation.")
                         .archText(.caption)
@@ -1630,12 +1720,8 @@ struct DatePlannerView: View {
                             plannedWith: chosen.id,
                             onPick: { picked in
                                 if let sharing {
-                                    onSend(picked.conversation,
-                                           DatePlanner.message(for: sharing),
-                                           SharedPlan(sharing, sharedWith: picked.person,
-                                                      plannedWith: chosen.person))
+                                    share(sharing, to: picked, plannedWith: chosen.person)
                                 }
-                                sentTo = picked.person.name
                                 self.sharing = nil
                             },
                             onCancel: { sharing = nil }
@@ -1646,11 +1732,7 @@ struct DatePlannerView: View {
                     withAnimation(ArchMotion.standard) { confirmSelf(plan) }
                 }
                 .accessibilityIdentifier("planner.self.confirm")
-                Text("Just for you. Confirm it to add it to your calendar or export it.")
-                    .archText(.caption)
-                    .foregroundStyle(ArchColor.mortar)
-                    .multilineTextAlignment(.center)
-                    .accessibilityIdentifier("planner.selfNote")
+                saveLine(plan)
             }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
@@ -1660,6 +1742,169 @@ struct DatePlannerView: View {
         .background(ArchColor.night)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("planner.bottomBar")
+        .alert(
+            repeatShare.map { r in
+                r.settled ? "\(r.candidate.person.name) already said yes to this plan"
+                          : "You already sent this plan to \(r.candidate.person.name)"
+            } ?? "",
+            isPresented: Binding(get: { repeatShare != nil }, set: { if !$0 { repeatShare = nil } }),
+            presenting: repeatShare
+        ) { repeated in
+            if repeated.settled {
+                Button("Confirm", role: .cancel) {}
+            } else {
+                Button("Send it again") { resend(repeated) }
+                Button("Cancel", role: .cancel) {}
+            }
+        } message: { repeated in
+            Text(repeated.settled
+                 ? "It\u{2019}s in your conversation. Change something to send a new plan."
+                 : "The earlier one is removed, so only this one shows.")
+        }
+    }
+
+    // MARK: Saved plans
+
+    /// A plan kept for later: who it is with, and the plan as it was.
+    struct SavedDatePlan: Codable, Identifiable, Hashable {
+        let id: String
+        /// Whose phone-side list it is in.
+        let owner: String
+        /// The match's id, or the self plan's.
+        let withID: String
+        let name: String
+        let plan: SharedPlan
+        let savedAt: Date
+        /// The same plan however it was reached: who, when, and the places.
+        let key: String
+    }
+
+    /// Yours, newest first.
+    private var savedPlans: [SavedDatePlan] {
+        allSavedPlans.filter { $0.owner == you.id }.sorted { $0.savedAt > $1.savedAt }
+    }
+
+    private var allSavedPlans: [SavedDatePlan] {
+        guard let data = savedPlansJSON.data(using: .utf8),
+              let plans = try? JSONDecoder().decode([SavedDatePlan].self, from: data) else { return [] }
+        return plans
+    }
+
+    private func storeSavedPlans(_ plans: [SavedDatePlan]) {
+        guard let data = try? JSONEncoder().encode(plans),
+              let json = String(data: data, encoding: .utf8) else { return }
+        savedPlansJSON = json
+    }
+
+    /// The plan on screen, frozen for keeping: with the reasons, since it is
+    /// only ever yours.
+    private func frozen(_ plan: DatePlan) -> SharedPlan {
+        let other = chosen?.person ?? you
+        return SharedPlan(plan, sharedWith: other, plannedWith: other)
+    }
+
+    private func savedKey(_ plan: SharedPlan) -> String {
+        [planningID, plan.time ?? "", plan.day ?? "",
+         (plan.stops ?? []).map { $0.placeID ?? $0.name }.joined(separator: ",")]
+            .joined(separator: "|")
+    }
+
+    /// "Thursday evening with Hana", "Monday afternoon, just you".
+    private func savedTitle(_ saved: SavedDatePlan) -> String {
+        let part = saved.plan.timeOfDay == .evening ? "evening" : "afternoon"
+        let when = saved.plan.planDay.map { "\($0.weekdayName) \(part)" } ?? "An \(part)"
+        return saved.withID == Self.selfPlanID ? "\(when), just you" : "\(when) with \(saved.name)"
+    }
+
+    /// Save the plan on screen, or unsave it if it is already kept.
+    private func toggleSave(_ plan: DatePlan) {
+        let shared = frozen(plan)
+        let key = savedKey(shared)
+        if savedPlans.contains(where: { $0.key == key }) {
+            unsave(key)
+            return
+        }
+        let saved = SavedDatePlan(id: UUID().uuidString, owner: you.id, withID: planningID,
+                                  name: chosen?.person.name ?? you.name, plan: shared,
+                                  savedAt: .now, key: key)
+        storeSavedPlans(allSavedPlans + [saved])
+    }
+
+    private func unsave(_ key: String) {
+        storeSavedPlans(allSavedPlans.filter { !($0.owner == you.id && $0.key == key) })
+    }
+
+    /// Back into the planner, on that person, with its places kept.
+    private func open(_ saved: SavedDatePlan) {
+        if saved.withID != planningID { keepSession() }
+        chosenID = saved.withID
+        items = saved.plan.planItems(from: "From your saved plan.") ?? [PlanItem()]
+        pickedTime = saved.plan.timeOfDay
+        pickedDay = saved.plan.planDay
+        changingAgreed = nil
+        changingSelf = false
+        lastSwap = nil
+        replanned = nil
+        sentTo = nil
+    }
+
+    /// **Save, under the main button, quietly.** A line that says what it
+    /// does; once saved, the bookmark fills and it says so. Tap again to
+    /// unsave. Change the plan and it is a different plan, not saved.
+    private func saveLine(_ plan: DatePlan) -> some View {
+        let isSaved = savedPlans.contains { $0.key == savedKey(frozen(plan)) }
+        return Button {
+            withAnimation(ArchMotion.quick) { toggleSave(plan) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
+                    .font(.system(size: 14, weight: .semibold))
+                Text(isSaved ? "Saved" : "Save for later")
+                    .archText(.footnote)
+            }
+            .foregroundStyle(isSaved ? ArchColor.lamp : ArchColor.mortar)
+            .frame(height: 32)
+            .padding(.horizontal, ArchSpacing.s)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScaleStyle(scale: 0.97))
+        .accessibilityLabel(isSaved ? "Saved. Tap to remove" : "Save this plan for later")
+        .accessibilityAddTraits(isSaved ? [.isButton, .isSelected] : .isButton)
+        .accessibilityIdentifier("planner.save")
+    }
+
+    // MARK: Sending the same plan twice
+
+    /// Shares a plan -- unless the very same plan, every field of it, is
+    /// already in that conversation from you. Then it asks first.
+    private func share(_ plan: DatePlan, to picked: PlannerCandidate, plannedWith: Person) {
+        let text = DatePlanner.message(for: plan)
+        let shared = SharedPlan(plan, sharedWith: picked.person, plannedWith: plannedWith)
+        let messages = picked.conversation.messages
+        let earlier = messages.filter { $0.isOutgoing && $0.plan == shared }
+        guard !earlier.isEmpty else {
+            onSend(picked.conversation, text, shared)
+            sentTo = picked.person.name
+            return
+        }
+        let settled = earlier.contains { copy in
+            messages.contains { $0.plan?.answering == copy.id || $0.plan?.cancelling == copy.id }
+        }
+        // After the share sheet has gone, so the two do not collide.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            repeatShare = RepeatShare(candidate: picked, text: text, plan: shared,
+                                      earlier: earlier.map(\.id), settled: settled)
+        }
+    }
+
+    /// "Send it again": the earlier copies go, and this one is sent -- so the
+    /// conversation shows the plan once, as the newest message.
+    private func resend(_ repeated: RepeatShare) {
+        for id in repeated.earlier {
+            onUnsend(repeated.candidate.conversation, id)
+        }
+        onSend(repeated.candidate.conversation, repeated.text, repeated.plan)
+        sentTo = repeated.candidate.person.name
     }
 
     /// While Apple Maps is asked, and if it could not be.
@@ -1710,6 +1955,119 @@ struct DatePlannerView: View {
             ArchButton(title: "See your matches", kind: .quiet, action: onOpenDaily)
                 .padding(.top, ArchSpacing.s)
         }
+    }
+}
+
+/// Plans saved for later: who each is with, when, and its stops. Open puts it
+/// back in the planner with its places kept; the cross deletes it. A plan
+/// with somebody no longer in Messages can be deleted and not opened.
+struct SavedPlansSheet: View {
+    let plans: [DatePlannerView.SavedDatePlan]
+    let person: (String) -> Person?
+    let title: (DatePlannerView.SavedDatePlan) -> String
+    let onOpen: (DatePlannerView.SavedDatePlan) -> Void
+    let onDelete: (DatePlannerView.SavedDatePlan) -> Void
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Saved plans")
+                    .archText(.titleM)
+                    .foregroundStyle(ArchColor.limestone)
+                Spacer(minLength: 0)
+                ArchTextButton(title: "Done", action: onClose)
+                    .fixedSize()
+            }
+            .padding(.top, ArchSpacing.xl)
+            .padding(.bottom, ArchSpacing.m)
+
+            if plans.isEmpty {
+                Text("Nothing saved yet")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                Text("Tap \u{201C}Save for later\u{201D} under Share to keep a plan.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .padding(.top, ArchSpacing.xxs)
+                Spacer(minLength: 0)
+            } else {
+                ScrollView {
+                    VStack(spacing: ArchSpacing.s) {
+                        ForEach(plans) { saved in card(saved) }
+                    }
+                }
+                .scrollIndicators(.hidden)
+            }
+        }
+        .padding(.horizontal, ArchSpacing.screenMargin)
+        .padding(.bottom, ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+        .archSheetBackground()
+    }
+
+    private func card(_ saved: DatePlannerView.SavedDatePlan) -> some View {
+        let who = person(saved.withID)
+        return VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            HStack(spacing: ArchSpacing.s) {
+                PhotoPlaceholder(toneIndex: who?.avatarToneIndex ?? 0,
+                                 url: who?.mainPhoto?.url, data: who?.mainPhoto?.local)
+                    .frame(width: 32, height: 32)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title(saved))
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.limestone)
+                    if let day = saved.plan.planDay {
+                        Text(day.long)
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.mortar)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button { onDelete(saved) } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(ArchColor.mortar)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressScaleStyle(scale: 0.9))
+                .accessibilityLabel("Delete this saved plan")
+                .accessibilityIdentifier("planner.savedDelete")
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(Array((saved.plan.stops ?? []).enumerated()), id: \.offset) { _, stop in
+                    HStack(spacing: ArchSpacing.s) {
+                        Text(DatePlanner.clockTime(stop.start))
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(width: 64, alignment: .leading)
+                        Text(stop.name)
+                            .archText(.footnote)
+                            .foregroundStyle(ArchColor.limestone)
+                    }
+                }
+            }
+            if who == nil {
+                Text("No longer in Messages.")
+                    .archText(.caption)
+                    .foregroundStyle(ArchColor.mortar)
+            } else {
+                ArchButton(title: "Open in the planner", kind: .quiet) { onOpen(saved) }
+                    .accessibilityIdentifier("planner.savedOpen")
+            }
+        }
+        .padding(ArchSpacing.m)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
+                .fill(ArchColor.stone)
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("planner.savedCard")
     }
 }
 

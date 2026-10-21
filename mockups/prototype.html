@@ -348,6 +348,17 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .xform{border-radius:var(--r-control); background:var(--stone); padding:4px 16px;}
 .xform div{display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--quiet); font-size:14px;}
 .xform div:last-child{border-bottom:none;}
+/* Saved plans: the bookmark beside Share, the button by the title, the list. */
+.psave{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 10px;
+  font-size:14px; font-weight:500; color:var(--mortar);}
+.psave svg{width:17px; height:17px;}
+.psave[aria-pressed="true"]{color:var(--lamp);}
+.psaved svg{width:18px; height:18px;}
+.psaved{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:999px;
+  background:var(--stone); font-size:13px; color:var(--limestone);}
+.savedcard{padding:16px; border-radius:var(--r-card); background:var(--stone); width:100%; text-align:left;}
+.savedcard .who{display:flex; align-items:center; gap:10px;}
+.savedcard .face{width:32px; height:32px; border-radius:8px; flex:none;}
 .pwho .ok{font-size:11px; line-height:14px; font-weight:600; color:var(--lamp); margin-top:-6px;}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
@@ -1273,6 +1284,7 @@ function thread(id){
      the whole thread is clutter answering something nobody is still asking. */
   let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
   c.msgs.forEach((m,i)=>{
+    if(m.gone) return;
     if(m[4]&&m[4].plan){
       h+=`<div class="msg ${m[0]==="out"?"out":""}">${planCard(c,m,i)}
         <div class="footnote mortar">${esc(m[2])}</div></div>`;
@@ -1724,7 +1736,7 @@ const lastDay=()=>{const t=new Date(); t.setHours(12,0,0,0); t.setDate(t.getDate
 const plannerDay=d=>d&&d>=firstDay()&&d<=lastDay()?d:firstDay();
 
 /* Places in plans you have already sent this person. */
-const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
+const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
 
 /* A plan as it travels in a message. The reasons go only to the person it was
    made for: they quote what that person wrote, and "Share this plan" can send it
@@ -1815,6 +1827,48 @@ function openPlanIn(c,i,from,editing){
   S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,
     items:shape.length?shape:[newItem()],sent:null,q:null,draft:[],replanned:null,editing:editing||null};
   S.stacks.planner=[]; S.tab="planner"; render();
+}
+
+/* ============================ saved plans ============================ */
+/* **A plan kept for later.** While you build a plan -- with a match, or a
+   self plan -- the bookmark beside Share saves it as it is: who it is with,
+   the day, the time and the places. Saved plans are listed behind "Saved" by
+   the title; one opens back in the planner with its places kept, and goes
+   when you delete it. Nothing is sent: a saved plan is yours until you share
+   it. Kept on the phone, per account. */
+const BOOKMARK=(filled)=>`<svg viewBox="0 0 24 24" fill="${filled?"currentColor":"none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg>`;
+/* The same plan, however it was reached: who, when, and the places in order. */
+const savedKey=(withId,time,day,stops)=>[withId,time,day||"",stops.map(x=>x.placeID||x.name).join(",")].join("|");
+function savedTitle(sp){
+  const part=sp.plan.time==="evening"?"evening":"afternoon";
+  const when=sp.plan.day?`${dayName(sp.plan.day)} ${part}`:`An ${part}`;
+  return sp.with===SELF_PLAN?`${when}, just you`:`${when} with ${sp.name}`;
+}
+/* Stops back into items, each place kept, saying where it came from. */
+function itemsFromStops(stops,from){
+  const placeOf=x=>x.placeID&&x.lat!=null?(VENUES.find(v=>v.id===x.placeID)
+    ||VN(x.placeID,x.name,x.kindKey||(x.category==="food"?"food":"show"),x.hood,x.lat,x.lon,[],["afternoon","evening"],[])):null;
+  return (stops||[]).filter(x=>x.category).map(x=>newItem(x.category,
+    Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),from));
+}
+function savedRoot(){
+  const list=S.saved||[];
+  let h=navbar("Saved plans")+`<div class="screen"><div class="pad pb-xxxl mt-m">`;
+  if(!list.length) return h+`<div class="v gap-s mt-xl"><div class="titleM">Nothing saved yet</div>
+    <div class="body mortar">Tap the bookmark beside Share to keep a plan for later.</div></div></div></div>`;
+  h+=`<div class="v gap-s">`;
+  list.slice().sort((a,b)=>b.savedAt-a.savedAt).forEach(sp=>{
+    const person=sp.with===SELF_PLAN?S.you:(S.convos.find(c=>c.person.id===sp.with)||{}).person;
+    const stops=sp.plan.stops||[];
+    h+=`<div class="savedcard" data-k="savedCard">
+      <div class="who"><div class="face" style="${person?tone(person.photos[0]):""}"></div>
+        <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(savedTitle(sp))}</div>
+          ${sp.plan.day?`<div class="caption mortar">${esc(dayLong(sp.plan.day))}</div>`:""}</div>
+        <button class="btntext" style="width:auto; padding:0 4px; color:var(--mortar)" data-a="savedDelete" data-id="${sp.id}" aria-label="Delete this saved plan">\u2715</button></div>
+      <div class="v gap-xxs mt-s">${stops.map(st=>`<div class="footnote"><span class="mortar" style="display:inline-block; width:64px">${clockAt(st.start)}</span>${esc(st.name)}</div>`).join("")}</div>
+      <button class="btn quiet mt-m" data-a="savedOpen" data-id="${sp.id}">Open in the planner</button></div>`;
+  });
+  return h+`</div></div></div>`;
 }
 
 /* Hana's thread ends on a plan she sent, so there is a card to answer. Built at
@@ -1984,9 +2038,11 @@ const editingBanner=(cur,ag)=>{const part=ag.plan.time==="evening"?"evening":"af
 
 function plannerRoot(){
   const cands=plannerCandidates(), P_=S.planner;
+  const nSaved=(S.saved||[]).length;
   let h=`<div class="screen"><div class="pad pb-xxxl">
-    <div class="v gap-s" style="padding-top:8px">
-      <div class="titleL">Date planner</div></div>`;
+    <div class="spread" style="padding-top:8px; align-items:center">
+      <div class="titleL">Date planner</div>
+      ${P_.q!=null?"":`<button class="psaved" data-a="savedList" aria-label="Saved plans, ${nSaved}">${BOOKMARK(nSaved>0)}Saved${nSaved?` \u00B7 ${nSaved}`:""}</button>`}</div>`;
   if(P_.q!=null) return h+plannerQuestion()+`</div></div>`;
   /* **The plan you agreed on comes first.** Picking somebody you have said
      yes with -- or saying "I'm in" in a thread -- opens on that plan, as it
@@ -2122,13 +2178,22 @@ function plannerRoot(){
   }
 
   /* Share -- or, on a self plan, Confirm -- kept in reach at the bottom. */
+  const frozen=frozenPlan(plan,time,true);
+  const key=savedKey(solo?SELF_PLAN:cur.p.id,time,day,frozen.stops);
+  const isSaved=(S.saved||[]).some(sp=>sp.key===key);
+  /* **Save, under the main button, quietly.** A square bookmark beside
+     Share made two buttons compete; a line under it says what it does, and
+     once saved, says so -- the bookmark fills and the words change. */
+  const save=`<button class="psave" data-a="planSave" aria-pressed="${isSaved}"
+    aria-label="${isSaved?"Saved. Tap to remove":"Save this plan for later"}">${BOOKMARK(isSaved)}${isSaved?"Saved":"Save for later"}</button>`;
   h+=`<div class="psticky">`;
   if(solo){
     h+=`<button class="btn primary" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
-      <div class="caption mortar center" style="margin-top:6px" data-k="selfNote">Just for you. Confirm it to add it to your calendar or export it.</div>`;
+      <div class="center" style="margin-top:4px">${save}</div>`;
   } else {
-    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>`;
-    if(P_.sent) h+=`<div class="caption mortar center" style="margin-top:6px">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
+    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>
+      <div class="center" style="margin-top:4px">${save}</div>`;
+    if(P_.sent) h+=`<div class="caption mortar center">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   }
   return h+`</div></div></div>`;
 }
@@ -3111,6 +3176,7 @@ function render(){
   else if(t.name==="settings") screen=settings();
   else if(t.name==="review") screen=reviewRoot();
   else if(t.name==="settingDetail") screen=settingDetail(t.id);
+  else if(t.name==="saved") screen=savedRoot();
 
   const hideTabs=t&&(t.name==="thread");
   const unread=S.convos.reduce((a,c)=>a+c.unread,0);
@@ -3485,7 +3551,17 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null}; render();},
+    /* **One plan in progress per person.** The plan on screen is put aside
+       under whoever it is with, and the next person's comes back -- or a blank
+       item, for somebody you have not planned with yet. */
+    planWith:()=>{const P_=S.planner, cands=plannerCandidates();
+      const was=P_.with||(cands.length?cands[0].p.id:SELF_PLAN);
+      if(id===was) return;
+      const sessions={...(P_.sessions||{}), [was]:{items:P_.items,time:P_.time,day:P_.day}};
+      const next=sessions[id]||{items:[newItem()],time:null,day:null};
+      S.planner={...P_,with:id,items:next.items,time:next.time,day:next.day,sessions,
+        sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null,savedNote:null,lastSwap:null,open:{}};
+      render();},
     /* What a blank item is: food, an activity, or "Surprise me" -- an
        activity if there is none (a date with nothing to do is a meal), then
        food if there is none, then the other kind from the item before it, so
@@ -3541,6 +3617,32 @@ document.addEventListener("click",e=>{
       const lastSwap={id:it.id, prev:it, name:el.dataset.n||""};
       items[i]=it.pin?{...it,pin:null,pinFrom:null,passed:it.passed.concat([it.pin.id])}:{...it,skips:it.skips+1};
       S.planner={...P_,items,sent:null,replanned:null,hidden:null,lastSwap}; render();},
+    /* Save, or unsave: the plan as it is on screen, frozen. */
+    planSave:()=>{const P_=S.planner, cands=plannerCandidates();
+      const cur=P_.with===SELF_PLAN||!cands.length?selfCandidate():cands.find(c=>c.p.id===P_.with)||cands[0];
+      const time=plannerTime(cur), day=plannerDay(P_.day);
+      const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
+      if(!plan.stops.length) return;
+      const frozen=frozenPlan(plan,time,true), withId=cur.solo?SELF_PLAN:cur.p.id;
+      const key=savedKey(withId,time,day,frozen.stops);
+      S.saved=S.saved||[];
+      if(S.saved.some(sp=>sp.key===key)){
+        S.saved=S.saved.filter(sp=>sp.key!==key);
+        S.planner={...P_,savedNote:"Removed from Saved.",savedNoteKey:key};
+      } else {
+        S.saved=S.saved.concat([{id:"sv"+Date.now(),key,with:withId,name:cur.p.name,plan:frozen,savedAt:Date.now()}]);
+        S.planner={...P_,savedNote:"Saved. Find it under Saved, by the title.",savedNoteKey:key};
+      }
+      render();},
+    savedList:()=>{S.planner={...S.planner,savedNote:null}; push({name:"saved"});},
+    /* Back into the planner, on that person, with the places kept. */
+    savedOpen:()=>{const sp=(S.saved||[]).find(x=>x.id===id); if(!sp) return;
+      const items=itemsFromStops(sp.plan.stops,"From your saved plan.");
+      S.planner={...S.planner,with:sp.with,time:sp.plan.time,day:sp.plan.day||null,
+        items:items.length?items:[newItem()],sent:null,q:null,replanned:null,editing:null,selfEditing:false,
+        savedNote:null,lastSwap:null,open:{}};
+      S.stacks.planner=[]; S.tab="planner"; render();},
+    savedDelete:()=>{S.saved=(S.saved||[]).filter(x=>x.id!==id); render();},
     planUndoSwap:()=>{const P_=S.planner, l=P_.lastSwap; if(!l) return;
       S.planner={...P_,items:P_.items.map(it=>it.id===l.id?l.prev:it),lastSwap:null,sent:null}; render();},
     /* "Not for us": never this place again; the item moves on at once. */
@@ -3654,10 +3756,27 @@ document.addEventListener("click",e=>{
       if(!cur||!to) return;
       const day=plannerDay(S.planner.day);
       const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
-      to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
-        {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
-      to.convo.when="Just now";
-      S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
+      const frozen=frozenPlan(plan,time,to.p.id===cur.p.id), same=JSON.stringify(frozen);
+      /* The very same plan, every field, already sent to them by you. */
+      const earlier=to.convo.msgs.map((m,i)=>[m,i]).filter(([m])=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan&&JSON.stringify(m[4].plan)===same);
+      const send=()=>{to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,{plan:frozen}]);
+        to.convo.when="Just now"; S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();};
+      if(!earlier.length){ send(); return; }
+      const settled=earlier.some(([m,i])=>to.convo.msgs.some(x=>x[4]&&(x[4].answering===i||x[4].cancelling===i)));
+      S.resend={to:to.p.id, earlier:earlier.map(([m,i])=>i), send};
+      openSheet(settled
+        ?`<div class="titleM">${esc(to.p.name)} already said yes to this plan</div>
+          <div class="body mortar mt-s">It&rsquo;s in your conversation. Change something to send a new plan.</div>
+          <button class="btn quiet mt-m" data-a="closeSheet">Confirm</button>`
+        :`<div class="titleM">You already sent this plan to ${esc(to.p.name)}</div>
+          <div class="body mortar mt-s">The earlier one is removed, so only this one shows.</div>
+          <button class="btn primary mt-m" data-a="resendPlan">Send it again</button>
+          <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
+    /* "Send it again": the earlier copies go -- marked, so the indices other
+       messages point at stay put -- and this one is sent. */
+    resendPlan:()=>{const r=S.resend; if(!r) return;
+      const c=S.convos.find(x=>x.person.id===r.to); r.earlier.forEach(i=>{ if(c.msgs[i]) c.msgs[i].gone=true; });
+      S.resend=null; r.send();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
     dismiss:()=>dismissSheet(id),
