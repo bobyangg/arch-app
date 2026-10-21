@@ -432,6 +432,36 @@ final class ArchSmokeTests: XCTestCase {
         element.tap()
     }
 
+    /// A plan saved for later is in Saved, and opens back in the planner with
+    /// its places kept.
+    func testAPlanCanBeSavedAndOpened() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["planner.choose.activity"].tap()
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
+
+        let save = app.buttons["planner.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "The plan has no Save for later.")
+        // A phone's saved plans outlive a launch; start from this plan unsaved.
+        if save.isSelected { save.tap() }
+        save.tap()
+        XCTAssertTrue(save.isSelected, "Save for later did not save.")
+
+        app.buttons["planner.saved"].tap()
+        let open = app.buttons["planner.savedOpen"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "The saved plan is not in Saved.")
+        open.tap()
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Opening a saved plan planned nothing.")
+        let kept = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From your saved plan'"))
+        XCTAssertGreaterThan(kept.count, 0, "The saved plan did not open on its places.")
+
+        // Tidy up, so the next launch starts with nothing saved from here.
+        if save.isSelected { save.tap() }
+    }
+
     /// Through "Get started" and the five questions, taking the first option
     /// each time. Waits for each question by its "N of 5" line, because the
     /// questions move on by themselves a beat after a tap, and a tap that lands
@@ -569,7 +599,7 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["planner.choose.activity"].tap()
         let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "A self plan planned nothing.")
-        XCTAssertTrue(app.staticTexts["planner.selfNote"].exists, "A self plan does not say it is yours alone.")
+        XCTAssertTrue(app.buttons["planner.save"].exists, "A self plan cannot be saved for later.")
 
         // Confirmed, it is settled like an agreed date: calendar, export,
         // change and cancel. Neither sheet is opened -- both are the system's.
