@@ -329,7 +329,7 @@ final class ArchSmokeTests: XCTestCase {
     // MARK: The Date planner
 
     /// The planner opens on one blank item, and a date is built from there:
-    /// an activity, something to eat, and a surprise -- three, and no more.
+    /// an activity, something to eat, and another activity -- three, and no more.
     ///
     /// No stop on screen means the engine found nowhere to go, or the tab drew
     /// nothing -- either way the tab bar would still look fine in a screenshot.
@@ -363,14 +363,21 @@ final class ArchSmokeTests: XCTestCase {
         tapClearOfTheBar(app.buttons["planner.choose.food"], in: app)
         XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
         tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
-        tapClearOfTheBar(app.buttons["planner.choose.surprise"], in: app)
-        XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
+        tapClearOfTheBar(app.buttons["planner.choose.activity"], in: app)
+        XCTAssertEqual(stops.count, 3, "A second activity did not add a stop.")
         XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
 
         // The date opens a calendar, and closing it still leaves the whole
         // plan. Which day is tapped is left alone: a calendar shows the month
-        // of the date it opens on, and tomorrow may be its last day.
-        app.buttons["planner.date"].tap()
+        // of the date it opens on, and tomorrow may be its last day. Three
+        // items scroll the date off the top, so back up to it first.
+        let date = app.buttons["planner.date"]
+        var upward = 0
+        while upward < 4, !date.isHittable || date.frame.minY < 120 {
+            app.swipeDown()
+            upward += 1
+        }
+        date.tap()
         XCTAssertTrue(app.datePickers["planner.calendar"].waitForExistence(timeout: 5),
                       "The date did not open a calendar.")
         app.buttons["planner.dateDone"].tap()
@@ -430,6 +437,134 @@ final class ArchSmokeTests: XCTestCase {
             tries += 1
         }
         element.tap()
+    }
+
+    /// "Custom spot" opens on a map of places to tap, and adds a place you
+    /// name: searched for in the list, tapped, and on the plan as your pick.
+    func testACustomSpotGoesOnThePlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        let custom = app.buttons["planner.choose.custom"]
+        XCTAssertTrue(custom.waitForExistence(timeout: 5), "A blank item has no Custom spot.")
+        custom.tap()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 5), "Custom spot did not open on a map.")
+        app.buttons["planner.custom.mode.list"].tap()
+        let search = app.textFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "Custom spot opened no search.")
+        search.tap()
+        // The design build searches its own places; "park" is in several.
+        search.typeText("park")
+        let result = app.buttons["planner.custom.result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5), "Searching found nothing to add.")
+        result.tap()
+
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "The custom spot is not on the plan.")
+        let yours = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Your pick'"))
+        XCTAssertGreaterThan(yours.count, 0, "The custom spot does not say it is your pick.")
+    }
+
+    /// A plan in progress stays with its person: switch to somebody else and
+    /// back, and it is as you left it.
+    func testAPlanStaysWithItsPersonWhenYouSwitch() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["planner.choose.activity"].tap()
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
+        tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
+        tapClearOfTheBar(app.buttons["planner.choose.food"], in: app)
+        XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
+
+        // Somebody else starts blank.
+        let me = app.buttons["planner.with.self"]
+        var tries = 0
+        while !me.isHittable && tries < 4 { app.scrollViews["planner.picker"].swipeLeft(); tries += 1 }
+        me.tap()
+        XCTAssertTrue(app.buttons["planner.choose.activity"].waitForExistence(timeout: 5),
+                      "Somebody new did not start on a blank plan.")
+        XCTAssertEqual(stops.count, 0, "The last person's plan followed you to somebody else.")
+
+        // And back: the two stops are still there.
+        let first = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'planner.with.'")).firstMatch
+        tries = 0
+        while !first.isHittable && tries < 4 { app.scrollViews["planner.picker"].swipeRight(); tries += 1 }
+        first.tap()
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Going back lost the plan.")
+        XCTAssertEqual(stops.count, 2, "Going back did not bring the plan back as it was.")
+    }
+
+    /// Sharing the very same plan to the same person again asks first, and
+    /// "Send it again" sends it -- the earlier copy is removed.
+    ///
+    /// On Hana's plan opened with Change it, so the places are held: a plan
+    /// the planner made itself moves on to new places once it has been sent,
+    /// and is not the same plan the second time.
+    func testSendingTheSamePlanTwiceAsksFirst() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["tab.messages"].tap()
+        let hana = app.buttons["messages.thread.hana"]
+        XCTAssertTrue(hana.waitForExistence(timeout: 5), "No conversation with Hana in Messages.")
+        hana.tap()
+        let change = app.buttons["thread.plan.change"]
+        XCTAssertTrue(change.waitForExistence(timeout: 5), "Hana's plan has no Change it.")
+        var tries = 0
+        while !change.isHittable && tries < 4 { app.swipeUp(); tries += 1 }
+        change.tap()
+
+        let share = app.buttons["Share this plan"]
+        let toHana = app.buttons["Share with Hana"]
+        XCTAssertTrue(share.waitForExistence(timeout: 5), "Change it did not open a plan to share.")
+        share.tap()
+        XCTAssertTrue(toHana.waitForExistence(timeout: 5), "Share this plan did not offer Hana.")
+        toHana.tap()
+
+        share.tap()
+        XCTAssertTrue(toHana.waitForExistence(timeout: 5), "Share this plan did not offer Hana the second time.")
+        toHana.tap()
+
+        let again = app.buttons["Send it again"]
+        XCTAssertTrue(again.waitForExistence(timeout: 5), "Sharing the same plan twice did not ask first.")
+        again.tap()
+        XCTAssertFalse(again.waitForExistence(timeout: 1), "The question stayed after Send it again.")
+        XCTAssertEqual(app.state, .runningForeground, "Arch stopped running after resending a plan.")
+    }
+
+    /// A plan saved for later is in Saved, and opens back in the planner with
+    /// its places kept.
+    func testAPlanCanBeSavedAndOpened() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["planner.choose.activity"].tap()
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
+
+        let save = app.buttons["planner.save"]
+        XCTAssertTrue(save.waitForExistence(timeout: 5), "The plan has no Save for later.")
+        // A phone's saved plans outlive a launch; start from this plan unsaved.
+        if save.isSelected { save.tap() }
+        save.tap()
+        XCTAssertTrue(save.isSelected, "Save for later did not save.")
+
+        app.buttons["planner.saved"].tap()
+        let open = app.buttons["planner.savedOpen"].firstMatch
+        XCTAssertTrue(open.waitForExistence(timeout: 5), "The saved plan is not in Saved.")
+        open.tap()
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Opening a saved plan planned nothing.")
+        let kept = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From your saved plan'"))
+        XCTAssertGreaterThan(kept.count, 0, "The saved plan did not open on its places.")
+
+        // Tidy up, so the next launch starts with nothing saved from here.
+        if save.isSelected { save.tap() }
     }
 
     /// Through "Get started" and the five questions, taking the first option
@@ -569,7 +704,7 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["planner.choose.activity"].tap()
         let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "A self plan planned nothing.")
-        XCTAssertTrue(app.staticTexts["planner.selfNote"].exists, "A self plan does not say it is yours alone.")
+        XCTAssertTrue(app.buttons["planner.save"].exists, "A self plan cannot be saved for later.")
 
         // Confirmed, it is settled like an agreed date: calendar, export,
         // change and cancel. Neither sheet is opened -- both are the system's.

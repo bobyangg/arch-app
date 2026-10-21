@@ -12,6 +12,7 @@
   --night:#F6F1E8; --stone:#FFFDF9; --stoneRaised:#ECE3D4;
   --limestone:#1E2621; --mortar:#6A665E;
   --lamp:#13615E; --ember:#A2622F; --verdigris:#52795F;
+  --mapLand:#EEEBE3; --mapRoad:#FFFFFF; --mapPark:#CFE3C6; --mapWater:#B9D7EA;
   --onLamp:#F4FBF8;
   --hairline:rgba(106,102,94,.12);
   --quiet:rgba(106,102,94,.28);
@@ -50,6 +51,7 @@ html[data-theme="dark"]{
   --night:#141A18; --stone:#1E2624; --stoneRaised:#28322F;
   --limestone:#EEF2EC; --mortar:#98A29A;
   --lamp:#5FAFA6; --ember:#D3904F; --verdigris:#86AD90;
+  --mapLand:#22292B; --mapRoad:#343D40; --mapPark:#26392E; --mapWater:#1B2C3A;
   --onLamp:#10201E;
   --hairline:rgba(152,162,154,.12);
   --quiet:rgba(152,162,154,.28);
@@ -302,6 +304,20 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
   border-radius:999px; background:var(--stone); font-size:13px; line-height:16px; color:var(--limestone);}
 .pchip input{position:absolute; inset:0; opacity:0; pointer-events:none;}
 .pchip .dim{color:var(--mortar);}
+/* "Custom spot": a drawn stand-in for Apple's map. The app shows the real one. */
+.cmap{position:relative; height:360px; border-radius:var(--r-card,20px); overflow:hidden; background:var(--mapLand);
+  background-image:repeating-linear-gradient(0deg,transparent 0 46px,var(--mapRoad) 46px 50px),
+    repeating-linear-gradient(90deg,transparent 0 58px,var(--mapRoad) 58px 62px);}
+.cmap .water{position:absolute; left:-30px; top:-20px; width:70px; height:120%; background:var(--mapWater); transform:rotate(8deg);}
+.cmap .park{position:absolute; border-radius:14px; background:var(--mapPark);}
+.cmap .poi{position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center; gap:4px;
+  font-size:10px; color:var(--mortar); white-space:nowrap; padding:4px;}
+.cmap .poi i{width:9px; height:9px; border-radius:50%; background:var(--ember); box-shadow:0 0 0 2px var(--mapRoad);}
+.cmap .pin{position:absolute; transform:translate(-50%,-100%); width:26px; height:26px; border-radius:50% 50% 50% 0;
+  rotate:-45deg; background:var(--lamp); box-shadow:0 2px 6px rgba(0,0,0,.25);}
+.cmap .pin.on{width:34px; height:34px;}
+.cmap .card{position:absolute; left:8px; right:8px; bottom:8px; padding:14px; border-radius:var(--r-card,20px);
+  background:var(--stone); box-shadow:0 4px 12px rgba(0,0,0,.12);}
 .pseg{display:inline-flex; height:36px; padding:3px; border-radius:999px; background:var(--stone);}
 .pseg button{padding:0 12px; border-radius:999px; font-size:13px; color:var(--mortar);}
 .pseg button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
@@ -338,6 +354,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .agreed{padding:16px; border-radius:var(--r-card); background:var(--stone);}
 .agreed .astop{display:flex; gap:12px; align-items:flex-start;}
 .agreed .astop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
+/* Maps, Not for us, Remove: edge to edge under the place, the gaps even. */
+.pacts{display:flex; justify-content:space-between; gap:12px; margin-top:4px}
+.pacts .btntext{width:auto; flex:none; padding:0}
 .agreed .astop .btntext{width:auto; flex:none; padding:0 0 0 8px; min-height:32px; margin-top:-6px; text-decoration:none;}
 /* Export: the plan as a picture, then the apps it can go to. */
 .xcard{padding:20px; border-radius:var(--r-card); background:var(--night); border:1px solid var(--quiet);}
@@ -348,6 +367,17 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .xform{border-radius:var(--r-control); background:var(--stone); padding:4px 16px;}
 .xform div{display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--quiet); font-size:14px;}
 .xform div:last-child{border-bottom:none;}
+/* Saved plans: the bookmark beside Share, the button by the title, the list. */
+.psave{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 10px;
+  font-size:14px; font-weight:500; color:var(--mortar);}
+.psave svg{width:17px; height:17px;}
+.psave[aria-pressed="true"]{color:var(--lamp);}
+.psaved svg{width:18px; height:18px;}
+.psaved{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:999px;
+  background:var(--stone); font-size:13px; color:var(--limestone);}
+.savedcard{padding:16px; border-radius:var(--r-card); background:var(--stone); width:100%; text-align:left;}
+.savedcard .who{display:flex; align-items:center; gap:10px;}
+.savedcard .face{width:32px; height:32px; border-radius:8px; flex:none;}
 .pwho .ok{font-size:11px; line-height:14px; font-weight:600; color:var(--lamp); margin-top:-6px;}
 .rowrule{height:.5px; background:var(--hairline); margin-left:64px;}
 
@@ -1273,6 +1303,7 @@ function thread(id){
      the whole thread is clutter answering something nobody is still asking. */
   let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
   c.msgs.forEach((m,i)=>{
+    if(m.gone) return;
     if(m[4]&&m[4].plan){
       h+=`<div class="msg ${m[0]==="out"?"out":""}">${planCard(c,m,i)}
         <div class="footnote mortar">${esc(m[2])}</div></div>`;
@@ -1724,7 +1755,7 @@ const lastDay=()=>{const t=new Date(); t.setHours(12,0,0,0); t.setDate(t.getDate
 const plannerDay=d=>d&&d>=firstDay()&&d<=lastDay()?d:firstDay();
 
 /* Places in plans you have already sent this person. */
-const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
+const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
 
 /* A plan as it travels in a message. The reasons go only to the person it was
    made for: they quote what that person wrote, and "Share this plan" can send it
@@ -1815,6 +1846,48 @@ function openPlanIn(c,i,from,editing){
   S.planner={with:c.person.id,time:m[4].plan.time,day:m[4].plan.day||null,
     items:shape.length?shape:[newItem()],sent:null,q:null,draft:[],replanned:null,editing:editing||null};
   S.stacks.planner=[]; S.tab="planner"; render();
+}
+
+/* ============================ saved plans ============================ */
+/* **A plan kept for later.** While you build a plan -- with a match, or a
+   self plan -- the bookmark beside Share saves it as it is: who it is with,
+   the day, the time and the places. Saved plans are listed behind "Saved" by
+   the title; one opens back in the planner with its places kept, and goes
+   when you delete it. Nothing is sent: a saved plan is yours until you share
+   it. Kept on the phone, per account. */
+const BOOKMARK=(filled)=>`<svg viewBox="0 0 24 24" fill="${filled?"currentColor":"none"}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg>`;
+/* The same plan, however it was reached: who, when, and the places in order. */
+const savedKey=(withId,time,day,stops)=>[withId,time,day||"",stops.map(x=>x.placeID||x.name).join(",")].join("|");
+function savedTitle(sp){
+  const part=sp.plan.time==="evening"?"evening":"afternoon";
+  const when=sp.plan.day?`${dayName(sp.plan.day)} ${part}`:`An ${part}`;
+  return sp.with===SELF_PLAN?`${when}, just you`:`${when} with ${sp.name}`;
+}
+/* Stops back into items, each place kept, saying where it came from. */
+function itemsFromStops(stops,from){
+  const placeOf=x=>x.placeID&&x.lat!=null?(VENUES.find(v=>v.id===x.placeID)
+    ||VN(x.placeID,x.name,x.kindKey||(x.category==="food"?"food":"show"),x.hood,x.lat,x.lon,[],["afternoon","evening"],[])):null;
+  return (stops||[]).filter(x=>x.category).map(x=>newItem(x.category,
+    Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),from));
+}
+function savedRoot(){
+  const list=S.saved||[];
+  let h=navbar("Saved plans")+`<div class="screen"><div class="pad pb-xxxl mt-m">`;
+  if(!list.length) return h+`<div class="v gap-s mt-xl"><div class="titleM">Nothing saved yet</div>
+    <div class="body mortar">Tap the bookmark beside Share to keep a plan for later.</div></div></div></div>`;
+  h+=`<div class="v gap-s">`;
+  list.slice().sort((a,b)=>b.savedAt-a.savedAt).forEach(sp=>{
+    const person=sp.with===SELF_PLAN?S.you:(S.convos.find(c=>c.person.id===sp.with)||{}).person;
+    const stops=sp.plan.stops||[];
+    h+=`<div class="savedcard" data-k="savedCard">
+      <div class="who"><div class="face" style="${person?tone(person.photos[0]):""}"></div>
+        <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(savedTitle(sp))}</div>
+          ${sp.plan.day?`<div class="caption mortar">${esc(dayLong(sp.plan.day))}</div>`:""}</div>
+        <button class="btntext" style="width:auto; padding:0 4px; color:var(--mortar)" data-a="savedDelete" data-id="${sp.id}" aria-label="Delete this saved plan">\u2715</button></div>
+      <div class="v gap-xxs mt-s">${stops.map(st=>`<div class="footnote"><span class="mortar" style="display:inline-block; width:64px">${clockAt(st.start)}</span>${esc(st.name)}</div>`).join("")}</div>
+      <button class="btn quiet mt-m" data-a="savedOpen" data-id="${sp.id}">Open in the planner</button></div>`;
+  });
+  return h+`</div></div></div>`;
 }
 
 /* Hana's thread ends on a plan she sent, so there is a card to answer. Built at
@@ -1950,9 +2023,9 @@ function settledScreen(d){
     h+=`<div class="astop"><div class="at">${clockAt(st.start)}</div>
       <div class="v" style="flex:1; min-width:0"><div class="subhead">${esc(st.name)}</div>
         <div class="footnote mortar">${[st.kind,st.hood].concat(st.minutes?[`${st.minutes/60} hr`]:[]).map(esc).join(" \u00B7 ")}</div></div>
-      ${st.lat!=null?`<a class="btntext" target="_blank" rel="noopener"
-        href="https://maps.apple.com/?q=${encodeURIComponent(st.name)}&sll=${st.lat},${st.lon}&z=17"
-        aria-label="Open ${esc(st.name)} in Apple Maps">Maps</a>`:""}</div>`;
+      ${st.lat!=null?`<button class="btntext" data-a="placeMap" data-n="${esc(st.name)}" data-k="${esc(st.kind)}"
+        data-h="${esc(st.hood||"")}" data-lat="${st.lat}" data-lon="${st.lon}"
+        aria-label="Show ${esc(st.name)} on a map">Maps</button>`:""}</div>`;
   });
   h+=`</div><div class="footnote mortar mt-m">${[ends!=null?`Done by about ${clockAt(ends)}.`:"",esc(d.closing)].join(" ")}</div></div>`;
   if(d.note) h+=`<div class="footnote mt-m">${esc(d.note)}</div>`;
@@ -1984,9 +2057,11 @@ const editingBanner=(cur,ag)=>{const part=ag.plan.time==="evening"?"evening":"af
 
 function plannerRoot(){
   const cands=plannerCandidates(), P_=S.planner;
+  const nSaved=(S.saved||[]).length;
   let h=`<div class="screen"><div class="pad pb-xxxl">
-    <div class="v gap-s" style="padding-top:8px">
-      <div class="titleL">Date planner</div></div>`;
+    <div class="spread" style="padding-top:8px; align-items:center">
+      <div class="titleL">Date planner</div>
+      ${P_.q!=null?"":`<button class="psaved" data-a="savedList" aria-label="Saved plans, ${nSaved}">${BOOKMARK(nSaved>0)}Saved${nSaved?` \u00B7 ${nSaved}`:""}</button>`}</div>`;
   if(P_.q!=null) return h+plannerQuestion()+`</div></div>`;
   /* **The plan you agreed on comes first.** Picking somebody you have said
      yes with -- or saying "I'm in" in a thread -- opens on that plan, as it
@@ -2057,9 +2132,9 @@ function plannerRoot(){
       h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
         <div class="pchoose mt-s">${["food","activity"].map(c=>
           `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
-        <div class="spread mt-s" style="align-items:center">
-          <button class="btntext" style="width:auto; padding:0 4px" data-a="planChoose" data-i="${i}" data-k="surprise">Surprise me</button>
-          ${P_.items.length>1?`<button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button>`:""}</div></div>`;
+        <div class="pchoose" style="margin-top:4px">
+          <button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button>
+          ${P_.items.length>1?`<button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="planRemove" data-i="${i}">Remove</button>`:`<span style="flex:1"></span>`}</div></div>`;
       return;
     }
     if(!st){
@@ -2092,13 +2167,13 @@ function plannerRoot(){
         ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}
         <div class="phours" role="group" aria-label="Duration"><span class="plabel" aria-hidden="true">Duration</span>${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
           aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}</div>
-        <div style="display:flex; margin-top:4px">
-          <a class="btntext" style="flex:1; text-decoration:none" target="_blank" rel="noopener"
-            href="https://maps.apple.com/?q=${encodeURIComponent(st.v.name)}&sll=${st.v.c.lat},${st.v.c.lon}&z=17"
-            aria-label="Open ${esc(st.v.name)} in Apple Maps">Maps</a>
-          <button class="btntext" style="flex:1" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
+        <div class="pacts">
+          <button class="btntext" data-a="placeMap" data-n="${esc(st.v.name)}" data-k="${esc(KINDS[st.v.kind][0])}"
+            data-h="${esc(st.v.hood)}" data-lat="${st.v.c.lat}" data-lon="${st.v.c.lon}"
+            aria-label="Show ${esc(st.v.name)} on a map">Maps</button>
+          <button class="btntext" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
             aria-label="Never suggest ${esc(st.v.name)}">Not for us</button>
-          <button class="btntext" style="flex:1" data-a="planRemove" data-i="${i}"
+          <button class="btntext" data-a="planRemove" data-i="${i}"
             aria-label="Remove ${esc(st.v.name)}">Remove</button></div></div>`;
     }
     h+=`</div>`;
@@ -2122,13 +2197,22 @@ function plannerRoot(){
   }
 
   /* Share -- or, on a self plan, Confirm -- kept in reach at the bottom. */
+  const frozen=frozenPlan(plan,time,true);
+  const key=savedKey(solo?SELF_PLAN:cur.p.id,time,day,frozen.stops);
+  const isSaved=(S.saved||[]).some(sp=>sp.key===key);
+  /* **Save, under the main button, quietly.** A square bookmark beside
+     Share made two buttons compete; a line under it says what it does, and
+     once saved, says so -- the bookmark fills and the words change. */
+  const save=`<button class="psave" data-a="planSave" aria-pressed="${isSaved}"
+    aria-label="${isSaved?"Saved. Tap to remove":"Save this plan for later"}">${BOOKMARK(isSaved)}${isSaved?"Saved":"Save for later"}</button>`;
   h+=`<div class="psticky">`;
   if(solo){
     h+=`<button class="btn primary" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
-      <div class="caption mortar center" style="margin-top:6px" data-k="selfNote">Just for you. Confirm it to add it to your calendar or export it.</div>`;
+      <div class="center" style="margin-top:4px">${save}</div>`;
   } else {
-    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>`;
-    if(P_.sent) h+=`<div class="caption mortar center" style="margin-top:6px">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
+    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>
+      <div class="center" style="margin-top:4px">${save}</div>`;
+    if(P_.sent) h+=`<div class="caption mortar center">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   }
   return h+`</div></div></div>`;
 }
@@ -3111,6 +3195,7 @@ function render(){
   else if(t.name==="settings") screen=settings();
   else if(t.name==="review") screen=reviewRoot();
   else if(t.name==="settingDetail") screen=settingDetail(t.id);
+  else if(t.name==="saved") screen=savedRoot();
 
   const hideTabs=t&&(t.name==="thread");
   const unread=S.convos.reduce((a,c)=>a+c.unread,0);
@@ -3198,6 +3283,41 @@ function tourGo(i){
 }
 
 /* ============================ sheets ============================ */
+const spotLine=v=>esc([KINDS[v.kind][0],v.hood].filter(Boolean).join(" \u00B7 "));
+/* "Custom spot": a map of places to tap (every place the prototype knows
+   stands in for Apple's), with what you search for pinned -- or the same
+   search as a list. */
+function customSpotBody(){
+  const c=S.custom, q=c.q.trim().toLowerCase();
+  const found=q.length<2?[]:VENUES.filter(v=>v.name.toLowerCase().includes(q)).slice(0,15);
+  let h=`<div class="pseg mt-s" role="group" aria-label="Map or list">${["map","list"].map(m=>
+    `<button data-a="customMode" data-k="${m}" aria-pressed="${c.mode===m}">${m==="map"?"Map":"List"}</button>`).join("")}</div>`;
+  if(c.mode==="list"){
+    h+=`<div class="v mt-m" style="gap:8px">`;
+    if(q.length<2) h+=`<div class="footnote mortar">A caf&eacute;, a park, a restaurant: whatever you have in mind.</div>`;
+    else if(!found.length) h+=`<div class="footnote mortar">Nothing by that name nearby.</div>`;
+    else h+=found.map(v=>`<button class="pcard" style="text-align:left; width:100%" data-a="customPick" data-v="${v.id}">
+      <div class="subhead">${esc(v.name)}</div><div class="footnote mortar">${spotLine(v)}</div></button>`).join("");
+    return h+`</div>`;
+  }
+  const lats=VENUES.map(v=>v.c.lat), lons=VENUES.map(v=>v.c.lon);
+  const [la0,la1,lo0,lo1]=[Math.min(...lats),Math.max(...lats),Math.min(...lons),Math.max(...lons)];
+  const xy=v=>`left:${8+84*(v.c.lon-lo0)/(lo1-lo0||1)}%; top:${6+68*(la1-v.c.lat)/(la1-la0||1)}%`;
+  const pinned=new Set(found.map(v=>v.id)), chosen=VENUES.find(v=>v.id===c.chosen);
+  h+=`<div class="cmap mt-m" role="group" aria-label="Map"><div class="water"></div>
+    <div class="park" style="left:52%; top:48%; width:70px; height:56px"></div>
+    <div class="park" style="left:30%; top:16%; width:44px; height:36px"></div>
+    ${VENUES.filter(v=>!pinned.has(v.id)).map(v=>`<button class="poi" style="${xy(v)}" data-a="customChoose" data-v="${v.id}"
+      aria-label="${esc(v.name)}"><i></i>${v.id===c.chosen?esc(v.name):""}</button>`).join("")}
+    ${found.map(v=>`<button class="pin${v.id===c.chosen?" on":""}" style="${xy(v)}" data-a="customChoose" data-v="${v.id}"
+      aria-label="${esc(v.name)}"></button>`).join("")}
+    <div class="card">${chosen
+      ?`<div class="subhead">${esc(chosen.name)}</div><div class="footnote mortar">${spotLine(chosen)}</div>
+        <button class="btn primary mt-s" data-a="customPick" data-v="${chosen.id}">Add to the date</button>`
+      :`<div class="footnote mortar">Tap a place on the map, or search for one.</div>`}</div></div>`;
+  return h;
+}
+const redrawCustom=()=>{const b=document.getElementById("customSpotBody"); if(b) b.innerHTML=customSpotBody();};
 function openSheet(html){
   const s=document.getElementById("sheet"), sc=document.getElementById("scrim");
   s.innerHTML=`<div class="grabber"></div>`+html;
@@ -3485,17 +3605,52 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null}; render();},
-    /* What a blank item is: food, an activity, or "Surprise me" -- an
-       activity if there is none (a date with nothing to do is a meal), then
-       food if there is none, then the other kind from the item before it, so
-       two dinners never sit back to back. */
-    planChoose:()=>{const P_=S.planner, i=+el.dataset.i; let c=el.dataset.k;
-      if(c==="surprise"){const kinds=P_.items.map(x=>x.cat).filter(Boolean);
-        const before=P_.items.slice(0,i).map(x=>x.cat).filter(Boolean).pop();
-        c=!kinds.includes("activity")?"activity":!kinds.includes("food")?"food":before==="food"?"activity":"food";}
+    /* **One plan in progress per person.** The plan on screen is put aside
+       under whoever it is with, and the next person's comes back -- or a blank
+       item, for somebody you have not planned with yet. */
+    planWith:()=>{const P_=S.planner, cands=plannerCandidates();
+      const was=P_.with||(cands.length?cands[0].p.id:SELF_PLAN);
+      if(id===was) return;
+      const sessions={...(P_.sessions||{}), [was]:{items:P_.items,time:P_.time,day:P_.day}};
+      const next=sessions[id]||{items:[newItem()],time:null,day:null};
+      S.planner={...P_,with:id,items:next.items,time:next.time,day:next.day,sessions,
+        sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null,savedNote:null,lastSwap:null,open:{}};
+      render();},
+    /* What a blank item is: food or an activity, for the planner to choose. */
+    planChoose:()=>{const P_=S.planner, i=+el.dataset.i, c=el.dataset.k;
       const items=P_.items.slice(); items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0};
       S.planner={...P_,items,sent:null,replanned:null}; render();},
+    /* "Custom spot": a place you name. It opens on a map -- Apple's, in the
+       app -- where any place can be tapped; the list is the same search as
+       rows. The app searches Apple Maps near you; the prototype, its places. */
+    customSpot:()=>{S.customFor=S.planner.items[+el.dataset.i].id; S.custom={mode:"map",q:"",chosen:null};
+      openSheet(`<div class="spread" style="align-items:center"><div class="titleM">Add your own spot</div>
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="closeSheet">Cancel</button></div>
+        <div class="field onNight mt-m"><input id="customSpotQ" placeholder="Search for a place" autocomplete="off"></div>
+        <div id="customSpotBody">${customSpotBody()}</div>`);},
+    customMode:()=>{S.custom.mode=el.dataset.k; redrawCustom();},
+    /* "Maps" on a stop: the place on a map, in the app. Apple Maps is a tap
+       further, for directions. (The app shows Apple's map; this one is drawn.) */
+    placeMap:()=>{const d=el.dataset;
+      openSheet(`<div class="spread" style="align-items:flex-start"><div class="v" style="min-width:0">
+          <div class="titleM">${esc(d.n)}</div><div class="footnote mortar">${esc([d.k,d.h].filter(Boolean).join(" \u00B7 "))}</div></div>
+          <button class="btntext" style="width:auto; padding:0 4px" data-a="closeSheet">Done</button></div>
+        <div class="cmap mt-m" style="height:300px" role="img" aria-label="${esc(d.n)} on a map"><div class="water"></div>
+          <div class="park" style="left:58%; top:20%; width:80px; height:60px"></div>
+          <div class="park" style="left:14%; top:62%; width:56px; height:44px"></div>
+          <span class="pin on" style="left:50%; top:50%"></span>
+          <div class="poi" style="left:50%; top:62%; font-size:12px; color:var(--limestone)">${esc(d.n)}</div></div>
+        <a class="btn quiet mt-m" style="text-decoration:none" target="_blank" rel="noopener"
+          href="https://maps.apple.com/?q=${encodeURIComponent(d.n)}&sll=${d.lat},${d.lon}&z=17">Open in Apple Maps</a>`);},
+    customChoose:()=>{S.custom.chosen=el.dataset.v; redrawCustom();},
+    /* Picked: kept as it is in that item, as food or an activity by what it
+       is, for the time that usually takes. */
+    customPick:()=>{const P_=S.planner, v=VENUES.find(x=>x.id===el.dataset.v);
+      const i=P_.items.findIndex(x=>x.id===S.customFor); S.customFor=null;
+      if(!v||i<0){ closeSheet(); return; }
+      const c=CAT(v.kind), items=P_.items.slice();
+      items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0,pin:v,pinFrom:"Your pick."};
+      S.planner={...P_,items,sent:null,replanned:null}; closeSheet(); render();},
     planAddItem:()=>{const P_=S.planner; if(P_.items.length>=MAX_ITEMS) return;
       S.planner={...P_,items:P_.items.concat([newItem()]),replanned:null}; render();},
     planRemove:()=>{const P_=S.planner, i=+el.dataset.i; let items=P_.items.filter((x,k)=>k!==i);
@@ -3541,6 +3696,32 @@ document.addEventListener("click",e=>{
       const lastSwap={id:it.id, prev:it, name:el.dataset.n||""};
       items[i]=it.pin?{...it,pin:null,pinFrom:null,passed:it.passed.concat([it.pin.id])}:{...it,skips:it.skips+1};
       S.planner={...P_,items,sent:null,replanned:null,hidden:null,lastSwap}; render();},
+    /* Save, or unsave: the plan as it is on screen, frozen. */
+    planSave:()=>{const P_=S.planner, cands=plannerCandidates();
+      const cur=P_.with===SELF_PLAN||!cands.length?selfCandidate():cands.find(c=>c.p.id===P_.with)||cands[0];
+      const time=plannerTime(cur), day=plannerDay(P_.day);
+      const plan=planDate(S.you,cur.p,time,P_.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
+      if(!plan.stops.length) return;
+      const frozen=frozenPlan(plan,time,true), withId=cur.solo?SELF_PLAN:cur.p.id;
+      const key=savedKey(withId,time,day,frozen.stops);
+      S.saved=S.saved||[];
+      if(S.saved.some(sp=>sp.key===key)){
+        S.saved=S.saved.filter(sp=>sp.key!==key);
+        S.planner={...P_,savedNote:"Removed from Saved.",savedNoteKey:key};
+      } else {
+        S.saved=S.saved.concat([{id:"sv"+Date.now(),key,with:withId,name:cur.p.name,plan:frozen,savedAt:Date.now()}]);
+        S.planner={...P_,savedNote:"Saved. Find it under Saved, by the title.",savedNoteKey:key};
+      }
+      render();},
+    savedList:()=>{S.planner={...S.planner,savedNote:null}; push({name:"saved"});},
+    /* Back into the planner, on that person, with the places kept. */
+    savedOpen:()=>{const sp=(S.saved||[]).find(x=>x.id===id); if(!sp) return;
+      const items=itemsFromStops(sp.plan.stops,"From your saved plan.");
+      S.planner={...S.planner,with:sp.with,time:sp.plan.time,day:sp.plan.day||null,
+        items:items.length?items:[newItem()],sent:null,q:null,replanned:null,editing:null,selfEditing:false,
+        savedNote:null,lastSwap:null,open:{}};
+      S.stacks.planner=[]; S.tab="planner"; render();},
+    savedDelete:()=>{S.saved=(S.saved||[]).filter(x=>x.id!==id); render();},
     planUndoSwap:()=>{const P_=S.planner, l=P_.lastSwap; if(!l) return;
       S.planner={...P_,items:P_.items.map(it=>it.id===l.id?l.prev:it),lastSwap:null,sent:null}; render();},
     /* "Not for us": never this place again; the item moves on at once. */
@@ -3654,10 +3835,27 @@ document.addEventListener("click",e=>{
       if(!cur||!to) return;
       const day=plannerDay(S.planner.day);
       const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
-      to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
-        {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
-      to.convo.when="Just now";
-      S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
+      const frozen=frozenPlan(plan,time,to.p.id===cur.p.id), same=JSON.stringify(frozen);
+      /* The very same plan, every field, already sent to them by you. */
+      const earlier=to.convo.msgs.map((m,i)=>[m,i]).filter(([m])=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan&&JSON.stringify(m[4].plan)===same);
+      const send=()=>{to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,{plan:frozen}]);
+        to.convo.when="Just now"; S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();};
+      if(!earlier.length){ send(); return; }
+      const settled=earlier.some(([m,i])=>to.convo.msgs.some(x=>x[4]&&(x[4].answering===i||x[4].cancelling===i)));
+      S.resend={to:to.p.id, earlier:earlier.map(([m,i])=>i), send};
+      openSheet(settled
+        ?`<div class="titleM">${esc(to.p.name)} already said yes to this plan</div>
+          <div class="body mortar mt-s">It&rsquo;s in your conversation. Change something to send a new plan.</div>
+          <button class="btn quiet mt-m" data-a="closeSheet">Confirm</button>`
+        :`<div class="titleM">You already sent this plan to ${esc(to.p.name)}</div>
+          <div class="body mortar mt-s">The earlier one is removed, so only this one shows.</div>
+          <button class="btn primary mt-m" data-a="resendPlan">Send it again</button>
+          <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
+    /* "Send it again": the earlier copies go -- marked, so the indices other
+       messages point at stay put -- and this one is sent. */
+    resendPlan:()=>{const r=S.resend; if(!r) return;
+      const c=S.convos.find(x=>x.person.id===r.to); r.earlier.forEach(i=>{ if(c.msgs[i]) c.msgs[i].gone=true; });
+      S.resend=null; r.send();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
     dismiss:()=>dismissSheet(id),
@@ -4006,6 +4204,7 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
+  if(t.id==="customSpotQ"){ S.custom.q=t.value; S.custom.chosen=null; redrawCustom(); return; }
   if(t.id==="planDateInput"){ if(t.value){ S.planner={...S.planner,day:plannerDay(t.value),items:restartSwaps(),sent:null}; render(); } return; }
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
