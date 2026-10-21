@@ -369,8 +369,15 @@ final class ArchSmokeTests: XCTestCase {
 
         // The date opens a calendar, and closing it still leaves the whole
         // plan. Which day is tapped is left alone: a calendar shows the month
-        // of the date it opens on, and tomorrow may be its last day.
-        app.buttons["planner.date"].tap()
+        // of the date it opens on, and tomorrow may be its last day. Three
+        // items scroll the date off the top, so back up to it first.
+        let date = app.buttons["planner.date"]
+        var upward = 0
+        while upward < 4, !date.isHittable || date.frame.minY < 120 {
+            app.swipeDown()
+            upward += 1
+        }
+        date.tap()
         XCTAssertTrue(app.datePickers["planner.calendar"].waitForExistence(timeout: 5),
                       "The date did not open a calendar.")
         app.buttons["planner.dateDone"].tap()
