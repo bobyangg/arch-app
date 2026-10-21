@@ -193,6 +193,8 @@ struct DatePlannerView: View {
     @State private var showingSaved = false
     /// The item a custom spot is being chosen for, while its sheet is open.
     @State private var customFor: UUID?
+    /// The place "Maps" is showing on a map, while its sheet is open.
+    @State private var mapping: Venue?
     /// **One plan in progress per person.** What you built with somebody --
     /// the items, their hours and swaps, the time of day and the day -- is
     /// kept when you switch to somebody else, and is there when you come back.
@@ -374,6 +376,9 @@ struct DatePlannerView: View {
             }
         }
         .background(ArchColor.night)
+        .sheet(item: $mapping) { venue in
+            PlaceMapSheet(venue: venue, onClose: { mapping = nil })
+        }
         .task(id: "\(planningID)#\(attempt)") { await findPlaces() }
         .task {
             guard isLive else { return }
@@ -842,12 +847,10 @@ struct DatePlannerView: View {
             }
             Spacer(minLength: 0)
             if let venue = stop.venue, venue.mapsURL != nil {
-                ArchTextButton(title: "Maps") {
-                    Task { await VenueSearch.openInMaps(venue) { openURL($0) } }
-                }
+                ArchTextButton(title: "Maps") { mapping = venue }
                     .fixedSize()
                     .frame(height: 32)
-                    .accessibilityLabel("Open \(stop.name) in Apple Maps")
+                    .accessibilityLabel("Show \(stop.name) on a map")
                     .accessibilityIdentifier("planner.agreed.maps.\(index)")
             }
         }
@@ -1607,13 +1610,11 @@ struct DatePlannerView: View {
                     // name and Remove at the right, the gaps between them even.
                     HStack(spacing: 0) {
                         if stop.venue.mapsURL != nil {
-                            // The place itself, by Apple's identifier where there
-                            // is one -- not a search for its name.
-                            ArchTextButton(title: "Maps") {
-                                Task { await VenueSearch.openInMaps(stop.venue) { openURL($0) } }
-                            }
+                            // The place on a map, in the app; Apple Maps is a
+                            // tap further, from there.
+                            ArchTextButton(title: "Maps") { mapping = stop.venue }
                                 .fixedSize()
-                                .accessibilityLabel("Open \(stop.venue.name) in Apple Maps")
+                                .accessibilityLabel("Show \(stop.venue.name) on a map")
                                 .accessibilityIdentifier("planner.maps.\(index)")
                             Spacer(minLength: ArchSpacing.s)
                         }

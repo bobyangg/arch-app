@@ -158,3 +158,5 @@ UIActivityViewController
 # MapKit for SwiftUI (iOS 17): the map in "Custom spot", with pins on it
 Map
 Annotation
+# A stop's place on a map, in the app ("Maps" on a stop)
+Marker
