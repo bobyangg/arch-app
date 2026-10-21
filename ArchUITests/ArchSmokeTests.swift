@@ -432,6 +432,31 @@ final class ArchSmokeTests: XCTestCase {
         element.tap()
     }
 
+    /// "Custom spot" adds a place you name: searched for, tapped, and on the
+    /// plan as your pick.
+    func testACustomSpotGoesOnThePlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        let custom = app.buttons["planner.choose.custom"]
+        XCTAssertTrue(custom.waitForExistence(timeout: 5), "A blank item has no Custom spot.")
+        custom.tap()
+        let search = app.textFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5), "Custom spot opened no search.")
+        search.tap()
+        // The design build searches its own places; "park" is in several.
+        search.typeText("park")
+        let result = app.buttons["planner.custom.result"].firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 5), "Searching found nothing to add.")
+        result.tap()
+
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "The custom spot is not on the plan.")
+        let yours = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Your pick'"))
+        XCTAssertGreaterThan(yours.count, 0, "The custom spot does not say it is your pick.")
+    }
+
     /// A plan in progress stays with its person: switch to somebody else and
     /// back, and it is as you left it.
     func testAPlanStaysWithItsPersonWhenYouSwitch() {
