@@ -31,6 +31,11 @@ struct OnboardingBirthday: View {
                 .init(id: "Year",
                       options: Birthday.years().map(String.init),
                       selection: store.birthYear.map(String.init),
+                      // Resting on this year would start everybody a toddler
+                      // and a long scroll from their answer. Twenty-five years
+                      // back is a few flicks from almost anybody using Arch,
+                      // and resting there still chooses nothing.
+                      resting: Birthday.years().dropFirst(25).first.map(String.init),
                       onPick: { store.birthYear = Int($0) }),
                 .init(id: "Month",
                       options: Birthday.months,
