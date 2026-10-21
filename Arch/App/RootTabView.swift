@@ -349,6 +349,9 @@ struct RootTabView: View {
                     onSend: { conversation, text, plan in
                         store.reply(to: conversation, text: text, plan: plan)
                     },
+                    onUnsend: { conversation, messageID in
+                        store.unsendPlan(messageID, in: conversation)
+                    },
                     onOpenDaily: { selection = .daily },
                     startQuestions: plannerStarts,
                     onSavePreferences: { profile.setDatePreferences($0) }

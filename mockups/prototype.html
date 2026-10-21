@@ -1284,6 +1284,7 @@ function thread(id){
      the whole thread is clutter answering something nobody is still asking. */
   let lastOut=-1; c.msgs.forEach((m,i)=>{ if(m[0]==="out") lastOut=i; });
   c.msgs.forEach((m,i)=>{
+    if(m.gone) return;
     if(m[4]&&m[4].plan){
       h+=`<div class="msg ${m[0]==="out"?"out":""}">${planCard(c,m,i)}
         <div class="footnote mortar">${esc(m[2])}</div></div>`;
@@ -1735,7 +1736,7 @@ const lastDay=()=>{const t=new Date(); t.setHours(12,0,0,0); t.setDate(t.getDate
 const plannerDay=d=>d&&d>=firstDay()&&d<=lastDay()?d:firstDay();
 
 /* Places in plans you have already sent this person. */
-const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
+const sharedPlaces=c=>new Set((c?c.msgs:[]).filter(m=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan).flatMap(m=>m[4].plan.stops.map(x=>x.name)));
 
 /* A plan as it travels in a message. The reasons go only to the person it was
    made for: they quote what that person wrote, and "Share this plan" can send it
@@ -3550,7 +3551,17 @@ document.addEventListener("click",e=>{
     tab:()=>{S.tab=el.dataset.k; S.selected=null; render();
       const r=document.getElementById("root"); r.classList.remove("tab-in"); void r.offsetWidth; r.classList.add("tab-in");},
     open:()=>{S.selected=null; push({name:"profile",id});},
-    planWith:()=>{S.planner={...S.planner,with:id,time:null,items:restartSwaps(),sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null,savedNote:null}; render();},
+    /* **One plan in progress per person.** The plan on screen is put aside
+       under whoever it is with, and the next person's comes back -- or a blank
+       item, for somebody you have not planned with yet. */
+    planWith:()=>{const P_=S.planner, cands=plannerCandidates();
+      const was=P_.with||(cands.length?cands[0].p.id:SELF_PLAN);
+      if(id===was) return;
+      const sessions={...(P_.sessions||{}), [was]:{items:P_.items,time:P_.time,day:P_.day}};
+      const next=sessions[id]||{items:[newItem()],time:null,day:null};
+      S.planner={...P_,with:id,items:next.items,time:next.time,day:next.day,sessions,
+        sent:null,replanned:null,cancelled:null,selfEditing:false,exported:null,savedNote:null,lastSwap:null,open:{}};
+      render();},
     /* What a blank item is: food, an activity, or "Surprise me" -- an
        activity if there is none (a date with nothing to do is a meal), then
        food if there is none, then the other kind from the item before it, so
@@ -3745,10 +3756,27 @@ document.addEventListener("click",e=>{
       if(!cur||!to) return;
       const day=plannerDay(S.planner.day);
       const time=plannerTime(cur), plan=planDate(S.you,cur.p,time,S.planner.items,day,sharedPlaces(cur.convo),S.hiddenPlaces);
-      to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,
-        {plan:frozenPlan(plan,time,to.p.id===cur.p.id)}]);
-      to.convo.when="Just now";
-      S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();},
+      const frozen=frozenPlan(plan,time,to.p.id===cur.p.id), same=JSON.stringify(frozen);
+      /* The very same plan, every field, already sent to them by you. */
+      const earlier=to.convo.msgs.map((m,i)=>[m,i]).filter(([m])=>!m.gone&&m[0]==="out"&&m[4]&&m[4].plan&&JSON.stringify(m[4].plan)===same);
+      const send=()=>{to.convo.msgs.push(["out",planMessage(plan),"Just now",undefined,{plan:frozen}]);
+        to.convo.when="Just now"; S.planner={...S.planner,sent:to.p.name}; closeSheet(); render();};
+      if(!earlier.length){ send(); return; }
+      const settled=earlier.some(([m,i])=>to.convo.msgs.some(x=>x[4]&&(x[4].answering===i||x[4].cancelling===i)));
+      S.resend={to:to.p.id, earlier:earlier.map(([m,i])=>i), send};
+      openSheet(settled
+        ?`<div class="titleM">${esc(to.p.name)} already said yes to this plan</div>
+          <div class="body mortar mt-s">It&rsquo;s in your conversation. Change something to send a new plan.</div>
+          <button class="btn quiet mt-m" data-a="closeSheet">OK</button>`
+        :`<div class="titleM">You already sent this plan to ${esc(to.p.name)}</div>
+          <div class="body mortar mt-s">The earlier one is removed, so only this one shows.</div>
+          <button class="btn primary mt-m" data-a="resendPlan">Send it again</button>
+          <button class="btntext mt-s" data-a="closeSheet">Cancel</button>`);},
+    /* "Send it again": the earlier copies go -- marked, so the indices other
+       messages point at stay put -- and this one is sent. */
+    resendPlan:()=>{const r=S.resend; if(!r) return;
+      const c=S.convos.find(x=>x.person.id===r.to); r.earlier.forEach(i=>{ if(c.msgs[i]) c.msgs[i].gone=true; });
+      S.resend=null; r.send();},
     back:()=>pop(),
     select:()=>{S.selected=S.selected===el.dataset.k?null:el.dataset.k; render();},
     dismiss:()=>dismissSheet(id),
