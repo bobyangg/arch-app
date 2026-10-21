@@ -573,6 +573,72 @@ enum VenueSearch {
         )
     }
 
+    // MARK: Your own spot
+
+    /// **A place you name**, for "Custom spot": Apple Maps' places matching
+    /// the words, near where you are. None of the planner's filters -- you
+    /// chose it, so a bar is a bar even if one of you does not drink -- and
+    /// what kind of place it is comes from Apple's category, so it lands as
+    /// food or an activity. Nil when Apple Maps could not be reached.
+    static func find(_ query: String, near point: Coordinate?) async -> [Venue]? {
+        let words = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard words.count >= 2 else { return [] }
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = words
+        request.resultTypes = .pointOfInterest
+        if let point {
+            request.region = MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: point.latitude, longitude: point.longitude),
+                latitudinalMeters: 30_000, longitudinalMeters: 30_000)
+        }
+        let items: [MKMapItem]
+        do {
+            items = try await MKLocalSearch(request: request).start().mapItems
+        } catch let error as MKError where error.code == .placemarkNotFound {
+            return []
+        } catch {
+            return nil
+        }
+        return items.prefix(15).compactMap { item in
+            guard let name = item.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else { return nil }
+            let mark = item.placemark
+            let at = Coordinate(latitude: mark.coordinate.latitude, longitude: mark.coordinate.longitude)
+            var mapsID: String?
+            if #available(iOS 18.0, *) {
+                mapsID = item.identifier?.rawValue
+            }
+            return Venue(
+                id: String(format: "mk:%@|%.4f|%.4f", name, at.latitude, at.longitude),
+                name: name,
+                kind: kind(of: item.pointOfInterestCategory),
+                neighbourhood: mark.subLocality ?? mark.locality ?? "",
+                coordinate: at,
+                themes: DateTheme.themes(in: name),
+                times: [.afternoon, .evening],
+                mapsID: mapsID
+            )
+        }
+    }
+
+    /// What kind of place Apple says it is, in the planner's own kinds.
+    static func kind(of category: MKPointOfInterestCategory?) -> Venue.Kind {
+        switch category {
+        case .cafe?, .bakery?:                        return .coffee
+        case .restaurant?, .foodMarket?:              return .food
+        case .brewery?, .winery?, .nightlife?:        return .bar
+        case .park?, .nationalPark?:                  return .park
+        case .beach?, .marina?:                       return .walk
+        case .museum?:                                return .museum
+        case .library?:                               return .library
+        case .theater?:                               return .show
+        case .movieTheater?:                          return .cinema
+        case .store?:                                 return .shop
+        case .aquarium?, .zoo?, .amusementPark?:      return .attraction
+        default:                                      return .attraction
+        }
+    }
+
     // MARK: Opening and checking a place
 
     /// **Opens the place itself**, not a search for its name: from iOS 18 by
@@ -665,7 +731,7 @@ enum VenueSearch {
     }
 
     /// What to call the halfway point: its neighbourhood, or its town.
-    private static func neighbourhood(at point: Coordinate) async -> String? {
+    static func neighbourhood(at point: Coordinate) async -> String? {
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
