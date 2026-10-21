@@ -1069,6 +1069,14 @@ enum ArchBackend {
         _ = try? await SupabaseClient.shared.rpcRaw("match_on_arrival", NoArguments())
     }
 
+    /// Removes a plan you sent, so a resend of the same plan replaces it
+    /// (`backend/039`). The server only allows a plan of yours that nobody has
+    /// answered or cancelled.
+    static func unsendPlan(_ messageID: String) async throws {
+        struct Arguments: Encodable { let target: String }
+        _ = try await SupabaseClient.shared.rpcRaw("unsend_plan", Arguments(target: messageID))
+    }
+
     static func accept(_ conversationID: String) async throws {
         struct StateChange: Encodable { let state: String }
         try await SupabaseClient.shared.update(

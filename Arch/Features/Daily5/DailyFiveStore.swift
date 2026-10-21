@@ -358,6 +358,18 @@ final class DailyFiveStore {
     /// than disappearing -- the thread is the only record that you wrote it.
     /// `plan` rides along when the message shares a Date planner plan, or
     /// answers one -- see `SharedPlan`.
+    /// A plan sent again replaces the first: the earlier card goes from this
+    /// phone at once -- the merge would otherwise keep it, as an outgoing
+    /// message the server no longer returns -- and from the server
+    /// (`backend/039`), and so from the other phone on its next refresh.
+    func unsendPlan(_ messageID: String, in conversation: Conversation) {
+        guard let index = conversations.firstIndex(where: { $0.id == conversation.id }) else { return }
+        conversations[index].messages.removeAll { $0.id == messageID }
+        // A copy still being sent has no server row to remove.
+        guard !messageID.hasPrefix(Self.localPrefix) else { return }
+        persist { try await ArchBackend.unsendPlan(messageID) }
+    }
+
     func reply(to conversation: Conversation, text: String, plan: SharedPlan? = nil) {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty,
