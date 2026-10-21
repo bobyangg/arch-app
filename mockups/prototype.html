@@ -2132,9 +2132,9 @@ function plannerRoot(){
       h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
         <div class="pchoose mt-s">${["food","activity"].map(c=>
           `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
-        <div class="spread mt-s" style="align-items:center">
-          <button class="btntext" style="width:auto; padding:0 4px" data-a="customSpot" data-i="${i}">Custom spot</button>
-          ${P_.items.length>1?`<button class="btntext" style="width:auto; padding:0 4px" data-a="planRemove" data-i="${i}">Remove</button>`:""}</div></div>`;
+        <div class="pchoose" style="margin-top:4px">
+          <button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button>
+          ${P_.items.length>1?`<button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="planRemove" data-i="${i}">Remove</button>`:`<span style="flex:1"></span>`}</div></div>`;
       return;
     }
     if(!st){
