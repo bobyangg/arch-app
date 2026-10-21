@@ -349,11 +349,11 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .xform div{display:flex; justify-content:space-between; gap:12px; padding:10px 0; border-bottom:1px solid var(--quiet); font-size:14px;}
 .xform div:last-child{border-bottom:none;}
 /* Saved plans: the bookmark beside Share, the button by the title, the list. */
-.pbar{display:flex; gap:8px;}
-.pbar .btn{flex:1;}
-.pbar .save{flex:none; width:52px; display:flex; align-items:center; justify-content:center;}
-.pbar .save svg, .psaved svg{width:20px; height:20px;}
-.pbar .save[aria-pressed="true"]{color:var(--lamp);}
+.psave{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 10px;
+  font-size:14px; font-weight:500; color:var(--mortar);}
+.psave svg{width:17px; height:17px;}
+.psave[aria-pressed="true"]{color:var(--lamp);}
+.psaved svg{width:18px; height:18px;}
 .psaved{display:inline-flex; align-items:center; gap:6px; height:36px; padding:0 12px; border-radius:999px;
   background:var(--stone); font-size:13px; color:var(--limestone);}
 .savedcard{padding:16px; border-radius:var(--r-card); background:var(--stone); width:100%; text-align:left;}
@@ -2180,18 +2180,19 @@ function plannerRoot(){
   const frozen=frozenPlan(plan,time,true);
   const key=savedKey(solo?SELF_PLAN:cur.p.id,time,day,frozen.stops);
   const isSaved=(S.saved||[]).some(sp=>sp.key===key);
-  /* The note is about the plan that was saved; change the plan and it goes. */
-  const note=P_.savedNote&&P_.savedNoteKey===key?P_.savedNote:null;
-  const save=`<button class="btn quiet save" data-a="planSave" aria-pressed="${isSaved}"
-    aria-label="${isSaved?"Saved. Tap to remove":"Save this plan for later"}">${BOOKMARK(isSaved)}</button>`;
+  /* **Save, under the main button, quietly.** A square bookmark beside
+     Share made two buttons compete; a line under it says what it does, and
+     once saved, says so -- the bookmark fills and the words change. */
+  const save=`<button class="psave" data-a="planSave" aria-pressed="${isSaved}"
+    aria-label="${isSaved?"Saved. Tap to remove":"Save this plan for later"}">${BOOKMARK(isSaved)}${isSaved?"Saved":"Save for later"}</button>`;
   h+=`<div class="psticky">`;
   if(solo){
-    h+=`<div class="pbar">${save}<button class="btn primary" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button></div>
-      <div class="caption mortar center" style="margin-top:6px" data-k="selfNote">${note?esc(note):"Just for you. Confirm it to add it to your calendar or export it."}</div>`;
+    h+=`<button class="btn primary" data-a="selfConfirm">${P_.selfEditing?"Confirm the changes":"Confirm this plan"}</button>
+      <div class="center" style="margin-top:4px">${save}</div>`;
   } else {
-    h+=`<div class="pbar">${save}<button class="btn primary" data-a="planShare">Share this plan</button></div>`;
-    if(note) h+=`<div class="caption mortar center" style="margin-top:6px">${esc(note)}</div>`;
-    else if(P_.sent) h+=`<div class="caption mortar center" style="margin-top:6px">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
+    h+=`<button class="btn primary" data-a="planShare">Share this plan</button>
+      <div class="center" style="margin-top:4px">${save}</div>`;
+    if(P_.sent) h+=`<div class="caption mortar center">Sent to ${esc(P_.sent)}. It is in your conversation.</div>`;
   }
   return h+`</div></div></div>`;
 }
