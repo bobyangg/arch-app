@@ -1388,19 +1388,20 @@ struct DatePlannerView: View {
                 }
             }
             // Food & drink or Activity, chosen by the planner -- or a place
-            // you name yourself, where "Surprise me" used to be.
-            HStack {
+            // you name yourself, where "Surprise me" used to be. The same two
+            // columns as the buttons above: Custom spot under Food & drink,
+            // Remove under Activity.
+            HStack(spacing: ArchSpacing.xs) {
                 ArchTextButton(title: "Custom spot") {
                     if items.indices.contains(index) { customFor = items[index].id }
                 }
-                .fixedSize()
                 .accessibilityHint("Search for a place and add it to the date")
                 .accessibilityIdentifier("planner.choose.custom")
-                Spacer(minLength: 0)
                 if items.count > 1 {
                     ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
-                        .fixedSize()
                         .accessibilityLabel("Remove this item")
+                } else {
+                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
                 }
             }
         }
