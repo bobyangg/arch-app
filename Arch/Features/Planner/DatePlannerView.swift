@@ -1751,7 +1751,7 @@ struct DatePlannerView: View {
             presenting: repeatShare
         ) { repeated in
             if repeated.settled {
-                Button("OK", role: .cancel) {}
+                Button("Confirm", role: .cancel) {}
             } else {
                 Button("Send it again") { resend(repeated) }
                 Button("Cancel", role: .cancel) {}
