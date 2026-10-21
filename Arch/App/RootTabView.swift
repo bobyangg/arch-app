@@ -118,7 +118,8 @@ struct RootTabView: View {
                         selection = tapped
                     }
                 ),
-                unreadCount: store.unreadCount
+                unreadCount: store.unreadCount,
+                isSubscribed: store.isSubscribed
             )
             .transition(.move(edge: .bottom).combined(with: .opacity))
             }
