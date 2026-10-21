@@ -154,3 +154,7 @@ URLComponents
 # Exporting a settled plan: its picture, and the share sheet
 ImageRenderer
 UIActivityViewController
+
+# MapKit for SwiftUI (iOS 17): the map in "Custom spot", with pins on it
+Map
+Annotation

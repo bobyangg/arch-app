@@ -12,6 +12,7 @@
   --night:#F6F1E8; --stone:#FFFDF9; --stoneRaised:#ECE3D4;
   --limestone:#1E2621; --mortar:#6A665E;
   --lamp:#13615E; --ember:#A2622F; --verdigris:#52795F;
+  --mapLand:#EEEBE3; --mapRoad:#FFFFFF; --mapPark:#CFE3C6; --mapWater:#B9D7EA;
   --onLamp:#F4FBF8;
   --hairline:rgba(106,102,94,.12);
   --quiet:rgba(106,102,94,.28);
@@ -50,6 +51,7 @@ html[data-theme="dark"]{
   --night:#141A18; --stone:#1E2624; --stoneRaised:#28322F;
   --limestone:#EEF2EC; --mortar:#98A29A;
   --lamp:#5FAFA6; --ember:#D3904F; --verdigris:#86AD90;
+  --mapLand:#22292B; --mapRoad:#343D40; --mapPark:#26392E; --mapWater:#1B2C3A;
   --onLamp:#10201E;
   --hairline:rgba(152,162,154,.12);
   --quiet:rgba(152,162,154,.28);
@@ -302,6 +304,20 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
   border-radius:999px; background:var(--stone); font-size:13px; line-height:16px; color:var(--limestone);}
 .pchip input{position:absolute; inset:0; opacity:0; pointer-events:none;}
 .pchip .dim{color:var(--mortar);}
+/* "Custom spot": a drawn stand-in for Apple's map. The app shows the real one. */
+.cmap{position:relative; height:360px; border-radius:var(--r-card,20px); overflow:hidden; background:var(--mapLand);
+  background-image:repeating-linear-gradient(0deg,transparent 0 46px,var(--mapRoad) 46px 50px),
+    repeating-linear-gradient(90deg,transparent 0 58px,var(--mapRoad) 58px 62px);}
+.cmap .water{position:absolute; left:-30px; top:-20px; width:70px; height:120%; background:var(--mapWater); transform:rotate(8deg);}
+.cmap .park{position:absolute; border-radius:14px; background:var(--mapPark);}
+.cmap .poi{position:absolute; transform:translate(-50%,-50%); display:flex; align-items:center; gap:4px;
+  font-size:10px; color:var(--mortar); white-space:nowrap; padding:4px;}
+.cmap .poi i{width:9px; height:9px; border-radius:50%; background:var(--ember); box-shadow:0 0 0 2px var(--mapRoad);}
+.cmap .pin{position:absolute; transform:translate(-50%,-100%); width:26px; height:26px; border-radius:50% 50% 50% 0;
+  rotate:-45deg; background:var(--lamp); box-shadow:0 2px 6px rgba(0,0,0,.25);}
+.cmap .pin.on{width:34px; height:34px;}
+.cmap .card{position:absolute; left:8px; right:8px; bottom:8px; padding:14px; border-radius:var(--r-card,20px);
+  background:var(--stone); box-shadow:0 4px 12px rgba(0,0,0,.12);}
 .pseg{display:inline-flex; height:36px; padding:3px; border-radius:999px; background:var(--stone);}
 .pseg button{padding:0 12px; border-radius:999px; font-size:13px; color:var(--mortar);}
 .pseg button[aria-pressed="true"]{background:var(--stoneRaised); color:var(--limestone);}
@@ -3267,15 +3283,41 @@ function tourGo(i){
 }
 
 /* ============================ sheets ============================ */
-function customSpotResults(q){
-  q=q.trim().toLowerCase();
-  if(q.length<2) return `<div class="footnote mortar">A caf&eacute;, a park, a restaurant: whatever you have in mind.</div>`;
-  const found=VENUES.filter(v=>v.name.toLowerCase().includes(q)).slice(0,15);
-  if(!found.length) return `<div class="footnote mortar">Nothing by that name nearby.</div>`;
-  return found.map(v=>`<button class="pcard" style="text-align:left; width:100%" data-a="customPick" data-v="${v.id}">
-      <div class="subhead">${esc(v.name)}</div>
-      <div class="footnote mortar">${esc([KINDS[v.kind][0],v.hood].filter(Boolean).join(" \u00B7 "))}</div></button>`).join("");
+const spotLine=v=>esc([KINDS[v.kind][0],v.hood].filter(Boolean).join(" \u00B7 "));
+/* "Custom spot": a map of places to tap (every place the prototype knows
+   stands in for Apple's), with what you search for pinned -- or the same
+   search as a list. */
+function customSpotBody(){
+  const c=S.custom, q=c.q.trim().toLowerCase();
+  const found=q.length<2?[]:VENUES.filter(v=>v.name.toLowerCase().includes(q)).slice(0,15);
+  let h=`<div class="pseg mt-s" role="group" aria-label="Map or list">${["map","list"].map(m=>
+    `<button data-a="customMode" data-k="${m}" aria-pressed="${c.mode===m}">${m==="map"?"Map":"List"}</button>`).join("")}</div>`;
+  if(c.mode==="list"){
+    h+=`<div class="v mt-m" style="gap:8px">`;
+    if(q.length<2) h+=`<div class="footnote mortar">A caf&eacute;, a park, a restaurant: whatever you have in mind.</div>`;
+    else if(!found.length) h+=`<div class="footnote mortar">Nothing by that name nearby.</div>`;
+    else h+=found.map(v=>`<button class="pcard" style="text-align:left; width:100%" data-a="customPick" data-v="${v.id}">
+      <div class="subhead">${esc(v.name)}</div><div class="footnote mortar">${spotLine(v)}</div></button>`).join("");
+    return h+`</div>`;
+  }
+  const lats=VENUES.map(v=>v.c.lat), lons=VENUES.map(v=>v.c.lon);
+  const [la0,la1,lo0,lo1]=[Math.min(...lats),Math.max(...lats),Math.min(...lons),Math.max(...lons)];
+  const xy=v=>`left:${8+84*(v.c.lon-lo0)/(lo1-lo0||1)}%; top:${6+68*(la1-v.c.lat)/(la1-la0||1)}%`;
+  const pinned=new Set(found.map(v=>v.id)), chosen=VENUES.find(v=>v.id===c.chosen);
+  h+=`<div class="cmap mt-m" role="group" aria-label="Map"><div class="water"></div>
+    <div class="park" style="left:52%; top:48%; width:70px; height:56px"></div>
+    <div class="park" style="left:30%; top:16%; width:44px; height:36px"></div>
+    ${VENUES.filter(v=>!pinned.has(v.id)).map(v=>`<button class="poi" style="${xy(v)}" data-a="customChoose" data-v="${v.id}"
+      aria-label="${esc(v.name)}"><i></i>${v.id===c.chosen?esc(v.name):""}</button>`).join("")}
+    ${found.map(v=>`<button class="pin${v.id===c.chosen?" on":""}" style="${xy(v)}" data-a="customChoose" data-v="${v.id}"
+      aria-label="${esc(v.name)}"></button>`).join("")}
+    <div class="card">${chosen
+      ?`<div class="subhead">${esc(chosen.name)}</div><div class="footnote mortar">${spotLine(chosen)}</div>
+        <button class="btn primary mt-s" data-a="customPick" data-v="${chosen.id}">Add to the date</button>`
+      :`<div class="footnote mortar">Tap a place on the map, or search for one.</div>`}</div></div>`;
+  return h;
 }
+const redrawCustom=()=>{const b=document.getElementById("customSpotBody"); if(b) b.innerHTML=customSpotBody();};
 function openSheet(html){
   const s=document.getElementById("sheet"), sc=document.getElementById("scrim");
   s.innerHTML=`<div class="grabber"></div>`+html;
@@ -3578,14 +3620,16 @@ document.addEventListener("click",e=>{
     planChoose:()=>{const P_=S.planner, i=+el.dataset.i, c=el.dataset.k;
       const items=P_.items.slice(); items[i]={...items[i],cat:c,hours:CAT_HOURS[c],skips:0};
       S.planner={...P_,items,sent:null,replanned:null}; render();},
-    /* "Custom spot": a place you name. The app searches Apple Maps near you;
-       the prototype searches its own places by name. */
-    customSpot:()=>{S.customFor=S.planner.items[+el.dataset.i].id;
+    /* "Custom spot": a place you name. It opens on a map -- Apple's, in the
+       app -- where any place can be tapped; the list is the same search as
+       rows. The app searches Apple Maps near you; the prototype, its places. */
+    customSpot:()=>{S.customFor=S.planner.items[+el.dataset.i].id; S.custom={mode:"map",q:"",chosen:null};
       openSheet(`<div class="spread" style="align-items:center"><div class="titleM">Add your own spot</div>
           <button class="btntext" style="width:auto; padding:0 4px" data-a="closeSheet">Cancel</button></div>
         <div class="field onNight mt-m"><input id="customSpotQ" placeholder="Search for a place" autocomplete="off"></div>
-        <div id="customSpotResults" class="v mt-m" style="gap:8px">${customSpotResults("")}</div>`);
-      setTimeout(()=>{const q=document.getElementById("customSpotQ"); if(q) q.focus();},250);},
+        <div id="customSpotBody">${customSpotBody()}</div>`);},
+    customMode:()=>{S.custom.mode=el.dataset.k; redrawCustom();},
+    customChoose:()=>{S.custom.chosen=el.dataset.v; redrawCustom();},
     /* Picked: kept as it is in that item, as food or an activity by what it
        is, for the time that usually takes. */
     customPick:()=>{const P_=S.planner, v=VENUES.find(x=>x.id===el.dataset.v);
@@ -4147,7 +4191,7 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
-  if(t.id==="customSpotQ"){ const r=document.getElementById("customSpotResults"); if(r) r.innerHTML=customSpotResults(t.value); return; }
+  if(t.id==="customSpotQ"){ S.custom.q=t.value; S.custom.chosen=null; redrawCustom(); return; }
   if(t.id==="planDateInput"){ if(t.value){ S.planner={...S.planner,day:plannerDay(t.value),items:restartSwaps(),sent:null}; render(); } return; }
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;
     const h=document.querySelector(".titleL"); if(h) h.textContent=distanceText(); return; }
