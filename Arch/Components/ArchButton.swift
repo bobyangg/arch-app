@@ -12,6 +12,8 @@ struct ArchButton: View {
     enum Kind {
         case primary
         case quiet
+        /// Red: deleting your account, and nothing else.
+        case destructive
     }
 
     let title: String
@@ -51,13 +53,19 @@ struct ArchButtonStyle: ButtonStyle {
     // accent. Fading `lamp` out turns it into a muddy brown, which reads as
     // damage rather than as "not yet".
     private var fill: Color {
-        guard kind == .primary else { return ArchColor.quietFill }
-        return isEnabled ? ArchColor.lamp : ArchColor.stoneRaised
+        switch kind {
+        case .primary:     return isEnabled ? ArchColor.lamp : ArchColor.stoneRaised
+        case .destructive: return isEnabled ? ArchColor.danger : ArchColor.stoneRaised
+        case .quiet:       return ArchColor.quietFill
+        }
     }
 
     private var foreground: Color {
-        guard kind == .primary else { return ArchColor.mortar }
-        return isEnabled ? ArchColor.onLamp : ArchColor.mortar
+        switch kind {
+        case .primary:     return isEnabled ? ArchColor.onLamp : ArchColor.mortar
+        case .destructive: return isEnabled ? Color.white : ArchColor.mortar
+        case .quiet:       return ArchColor.mortar
+        }
     }
 }
 

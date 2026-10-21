@@ -32,9 +32,8 @@ struct DistanceSetting: View {
                 .foregroundStyle(ArchColor.mortar)
             }
 
-            SettingNote("Everyone in \(store.rosterName) is inside this. Widening it gives Arch more people to choose from. It does not give you more spots.")
+            SettingNote("Wider gives Arch more people to choose from. Nobody sees how far away you are.")
 
-            SettingNote("Measured from where you live, never shown to anybody. Arch puts no distance on a profile and never sorts people by how near they are.")
         }
     }
 }
@@ -92,7 +91,7 @@ struct SeekingSetting: View {
                 }
             }
 
-            SettingNote("Arch will not put people outside this in your matches, whatever else lines up. It is not shown on your profile, and nobody is told what you picked.")
+            SettingNote("Only these people are matched with you. Not shown on your profile.")
         }
     }
 }
@@ -111,7 +110,7 @@ struct IntentionSetting: View {
                 }
             }
 
-            SettingNote("This is used to choose your matches. It is not shown on your profile, and nobody is told what you picked.")
+            SettingNote("Used to choose your matches. Not shown on your profile.")
         }
     }
 }
@@ -156,7 +155,7 @@ struct LocationSetting: View {
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
 
-            SettingNote("This location is shown under your name. With your distance preference it sets boundaries on who you are able to match with. Arch keeps it to about a kilometre and never shows anybody how far away you are.")
+            SettingNote("Shown under your name. Nobody sees how far away you are.")
 
             ArchButton(title: "Change", action: { isPicking = true })
 
@@ -165,8 +164,8 @@ struct LocationSetting: View {
                 // are two different situations and one line covering both would be
                 // wrong in whichever one the reader is in.
                 SettingNote(store.canChangePlace
-                    ? "You can change your town by name once. After that it is part of Arch Premium. Putting you where your phone says you are stays free either way."
-                    : "You have already changed your town once. Changing it again is part of Arch Premium. Putting you where your phone says you are stays free.")
+                    ? "You can change your town once for free. Using your phone\u{2019}s location is always free."
+                    : "Changing your town again is part of Premium. Using your phone\u{2019}s location is always free.")
             }
         }
         .sheet(isPresented: $isPicking) {

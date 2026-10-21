@@ -56,14 +56,14 @@ struct AnswersSetting: View {
                     .archText(.body)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
-                SettingNote("Arch waits a month between one set of answers and the next, so that the people it chooses for you were chosen against something that held. Arch Premium lets you answer whenever you like.")
+                SettingNote("Once a month, or any time with Premium.")
                 ArchTextButton(title: "See Arch Premium", action: onOpenPremium)
             }
         } else {
             ArchButton(title: "Answer again") { start() }
         }
 
-        SettingNote("The questions you answer help Arch understand what you are looking for and who you might connect with. They are not on your profile, nobody else sees them, and they do not add up to a score. Answering again replaces what you said, and your matches from tomorrow are chosen against the new answers.")
+        SettingNote("Private: not on your profile, and not a score. New answers shape tomorrow\u{2019}s matches.")
     }
 
     /// A store with nothing in it but the questions, started on the first one

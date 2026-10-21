@@ -119,7 +119,7 @@ struct RemovedAccountView: View {
                 Text("A person read your appeal")
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.limestone)
-                Text("The decision stands, and there is no second appeal. If something has changed since, help@arch.app still reaches a person.")
+                Text("The decision stands, and there is no second appeal. If something has changed since, support@archdating.com still reaches a person.")
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .fixedSize(horizontal: false, vertical: true)

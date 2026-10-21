@@ -20,6 +20,7 @@ struct SettingsView: View {
     var onSignOut: () -> Void = {}
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @State private var isSigningOut = false
 
     var body: some View {
@@ -129,6 +130,14 @@ struct SettingsView: View {
             }
             .buttonStyle(PressScaleStyle(scale: 1))
             .accessibilityIdentifier("settings.tour")
+        } else if row.id == "h-safety", let url = ArchConfig.safetyURL {
+            // Safety is a page on the website, not a screen in the app.
+            Button { openURL(url) } label: {
+                SettingsRowView(row: row)
+            }
+            .buttonStyle(PressScaleStyle(scale: 1))
+            .accessibilityHint("Opens archdating.com")
+            .accessibilityIdentifier("settings.safety")
         } else {
             switch row.control {
             case .push:
