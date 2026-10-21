@@ -338,6 +338,9 @@ button{font:inherit; color:inherit; background:none; border:0; cursor:pointer; t
 .agreed{padding:16px; border-radius:var(--r-card); background:var(--stone);}
 .agreed .astop{display:flex; gap:12px; align-items:flex-start;}
 .agreed .astop .at{width:64px; flex:none; font-size:15px; line-height:20px; font-weight:600;}
+/* Maps, Not for us, Remove: edge to edge under the place, the gaps even. */
+.pacts{display:flex; justify-content:space-between; gap:12px; margin-top:4px}
+.pacts .btntext{width:auto; flex:none; padding:0}
 .agreed .astop .btntext{width:auto; flex:none; padding:0 0 0 8px; min-height:32px; margin-top:-6px; text-decoration:none;}
 /* Export: the plan as a picture, then the apps it can go to. */
 .xcard{padding:20px; border-radius:var(--r-card); background:var(--night); border:1px solid var(--quiet);}
@@ -2148,13 +2151,13 @@ function plannerRoot(){
         ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}
         <div class="phours" role="group" aria-label="Duration"><span class="plabel" aria-hidden="true">Duration</span>${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
           aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}</div>
-        <div style="display:flex; margin-top:4px">
-          <a class="btntext" style="flex:1; text-decoration:none" target="_blank" rel="noopener"
+        <div class="pacts">
+          <a class="btntext" style="text-decoration:none" target="_blank" rel="noopener"
             href="https://maps.apple.com/?q=${encodeURIComponent(st.v.name)}&sll=${st.v.c.lat},${st.v.c.lon}&z=17"
             aria-label="Open ${esc(st.v.name)} in Apple Maps">Maps</a>
-          <button class="btntext" style="flex:1" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
+          <button class="btntext" data-a="planHide" data-i="${i}" data-k="${esc(st.v.id)}" data-n="${esc(st.v.name)}"
             aria-label="Never suggest ${esc(st.v.name)}">Not for us</button>
-          <button class="btntext" style="flex:1" data-a="planRemove" data-i="${i}"
+          <button class="btntext" data-a="planRemove" data-i="${i}"
             aria-label="Remove ${esc(st.v.name)}">Remove</button></div></div>`;
     }
     h+=`</div>`;
