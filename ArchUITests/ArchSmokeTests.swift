@@ -432,8 +432,8 @@ final class ArchSmokeTests: XCTestCase {
         element.tap()
     }
 
-    /// "Custom spot" adds a place you name: searched for, tapped, and on the
-    /// plan as your pick.
+    /// "Custom spot" opens on a map of places to tap, and adds a place you
+    /// name: searched for in the list, tapped, and on the plan as your pick.
     func testACustomSpotGoesOnThePlan() {
         let app = launch()
         app.buttons["tab.planner"].tap()
@@ -442,6 +442,8 @@ final class ArchSmokeTests: XCTestCase {
         let custom = app.buttons["planner.choose.custom"]
         XCTAssertTrue(custom.waitForExistence(timeout: 5), "A blank item has no Custom spot.")
         custom.tap()
+        XCTAssertTrue(app.maps.firstMatch.waitForExistence(timeout: 5), "Custom spot did not open on a map.")
+        app.buttons["planner.custom.mode.list"].tap()
         let search = app.textFields.firstMatch
         XCTAssertTrue(search.waitForExistence(timeout: 5), "Custom spot opened no search.")
         search.tap()

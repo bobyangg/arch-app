@@ -622,7 +622,7 @@ enum VenueSearch {
     }
 
     /// What kind of place Apple says it is, in the planner's own kinds.
-    private static func kind(of category: MKPointOfInterestCategory?) -> Venue.Kind {
+    static func kind(of category: MKPointOfInterestCategory?) -> Venue.Kind {
         switch category {
         case .cafe?, .bakery?:                        return .coffee
         case .restaurant?, .foodMarket?:              return .food
@@ -731,7 +731,7 @@ enum VenueSearch {
     }
 
     /// What to call the halfway point: its neighbourhood, or its town.
-    private static func neighbourhood(at point: Coordinate) async -> String? {
+    static func neighbourhood(at point: Coordinate) async -> String? {
         let geocoder = CLGeocoder()
         defer { withExtendedLifetime(geocoder) {} }
         let location = CLLocation(latitude: point.latitude, longitude: point.longitude)
