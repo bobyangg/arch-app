@@ -329,7 +329,7 @@ final class ArchSmokeTests: XCTestCase {
     // MARK: The Date planner
 
     /// The planner opens on one blank item, and a date is built from there:
-    /// an activity, something to eat, and a surprise -- three, and no more.
+    /// an activity, something to eat, and another activity -- three, and no more.
     ///
     /// No stop on screen means the engine found nowhere to go, or the tab drew
     /// nothing -- either way the tab bar would still look fine in a screenshot.
@@ -363,8 +363,8 @@ final class ArchSmokeTests: XCTestCase {
         tapClearOfTheBar(app.buttons["planner.choose.food"], in: app)
         XCTAssertEqual(stops.count, 2, "Adding food did not add a stop.")
         tapClearOfTheBar(app.buttons["planner.addItem"], in: app)
-        tapClearOfTheBar(app.buttons["planner.choose.surprise"], in: app)
-        XCTAssertEqual(stops.count, 3, "Surprise me did not add a stop.")
+        tapClearOfTheBar(app.buttons["planner.choose.activity"], in: app)
+        XCTAssertEqual(stops.count, 3, "A second activity did not add a stop.")
         XCTAssertFalse(app.buttons["planner.addItem"].exists, "A plan holds three items at most.")
 
         // The date opens a calendar, and closing it still leaves the whole
