@@ -1484,6 +1484,7 @@ const reachHint=mi=>mi<=1?"Walking distance. Every stop stays on foot."
   :mi<=5?"A short ride. Stops can be a few minutes apart.":"Across town is fine.";
 function reachControl(id,mi){
   return `<div class="titleM" id="${id}Text">${reachText(mi)}</div>
+    <div id="${id}Map" aria-hidden="true" style="border-radius:var(--r-card); overflow:hidden; line-height:0">${reachMap(mi,id)}</div>
     <input class="slider" id="${id}" type="range" min="${REACH.min}" max="${REACH.max}" step="1" value="${mi}"
       aria-label="How far you would travel for a date, in miles">
     <div style="display:flex; justify-content:space-between" class="footnote mortar"><span>1 mile</span><span>${REACH.max} miles</span></div>
@@ -1494,6 +1495,39 @@ const STYLE_KINDS={talk:["coffee","walk","food"],doing:["studio","museum","shop"
 const prefsFrom=draft=>draft.length===PREF_QS.length&&draft.every(x=>x!=null)
   ?Object.fromEntries(PREF_QS.map(([k,,o],i)=>[k,o?o[draft[i]][0]:draft[i]])):null;
 const prefsDraft=p=>PREF_QS.map(([k,,o])=>p?(o?o.findIndex(x=>x[0]===p[k]):reachOf(p)):null);
+/* **Your distance, drawn.** A circle of that many miles round where you are,
+   on a map that zooms out as it grows -- so the circle gets bigger as the
+   number does, and the neighbourhoods, placed where they really are, say how
+   far that is. Only ever yours: the other person's distance is never drawn.
+   The app uses Apple's map and its MapCircle; this one is drawn. */
+function reachMap(mi,id){
+  const at=matchPoint(S.you); if(!at) return "";
+  const W=320, H=180, cx=W/2, cy=H/2;
+  const rPx=34+50*Math.sqrt((mi-REACH.min)/(REACH.max-REACH.min));
+  const kmPx=mi*KM_PER_MILE/rPx, kx=111.32*Math.cos(at.lat*Math.PI/180), ky=110.57;
+  const grid=Math.max(22,Math.min(56,1.2/kmPx));
+  /* Nearest first; a name that would cover another, or the edge, or you, is left off. */
+  const taken=[[cx-8,cy-8,cx+8,cy+8],[cx-13,cy-21,cx+13,cy-8]], labels=[];
+  PLACES.map(p=>({p,d:kmBetween(at,p.centre)})).sort((a,b)=>a.d-b.d).forEach(({p,d})=>{
+    if(d<0.6) return;
+    const x=cx+(p.centre.lon-at.lon)*kx/kmPx, y=cy-(p.centre.lat-at.lat)*ky/kmPx, w=p.name.length*5.6+6;
+    const box=[x-w/2,y-10,x+w/2,y+3];
+    if(box[0]<4||box[2]>W-4||box[1]<3||box[3]>H-3) return;
+    if(taken.some(t=>!(box[2]<t[0]||box[0]>t[2]||box[3]<t[1]||box[1]>t[3]))) return;
+    taken.push(box); labels.push([x,y,p.name,d<=mi*KM_PER_MILE]);
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    <defs><pattern id="${id}Grid" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
+      <path d="M ${grid} 0 L 0 0 0 ${grid}" fill="none" style="stroke:var(--mapRoad)" stroke-width="1.2"/></pattern></defs>
+    <rect width="${W}" height="${H}" style="fill:var(--mapLand)"/>
+    <rect width="${W}" height="${H}" fill="url(#${id}Grid)"/>
+    <circle cx="${cx}" cy="${cy}" r="${rPx.toFixed(1)}" style="fill:var(--lamp); fill-opacity:.13; stroke:var(--lamp)" stroke-width="1.5"/>
+    ${labels.map(([x,y,n,inside])=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="10"
+      style="fill:var(${inside?"--limestone":"--mortar"})" ${inside?"":`opacity=".7"`}>${esc(n)}</text>`).join("")}
+    <circle cx="${cx}" cy="${cy}" r="5" style="fill:var(--lamp); stroke:var(--mapRoad)" stroke-width="2"/>
+    <text x="${cx}" y="${cy-10}" text-anchor="middle" font-size="10" font-weight="600" style="fill:var(--limestone)">You</text>
+  </svg>`;
+}
 /* Your answers in a line; without the distance where the slider sits beside it. */
 const prefsSummary=(p,noReach)=>PREF_QS.filter(([k])=>!(noReach&&k==="reach"))
   .map(([k,,o])=>o?o.find(x=>x[0]===p[k])[1]:reachText(reachOf(p))).join(" \u00B7 ");
@@ -4315,6 +4349,7 @@ document.addEventListener("input",e=>{
   if(t.id==="reachAsk"||t.id==="reachPref"){ const mi=+t.value;
     const words=document.getElementById(t.id+"Text"), hint=document.getElementById(t.id+"Hint");
     if(words) words.textContent=reachText(mi); if(hint) hint.textContent=reachHint(mi);
+    const drawn=document.getElementById(t.id+"Map"); if(drawn) drawn.innerHTML=reachMap(mi,t.id);
     if(t.id==="reachAsk") S.planner.draft[S.planner.q]=mi;
     else { S.you.prefs={...S.you.prefs,reach:mi}; S.planner={...S.planner,items:restartSwaps(),sent:null}; render(); }
     return; }
