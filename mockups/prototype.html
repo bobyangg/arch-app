@@ -1528,6 +1528,18 @@ function reachMap(mi,id){
     <text x="${cx}" y="${cy-10}" text-anchor="middle" font-size="10" font-weight="600" style="fill:var(--limestone)">You</text>
   </svg>`;
 }
+/* **The questions keep your answers.** Each is kept as you give it; back out
+   part-way and they open again where you left off, the rest still chosen, and
+   the intro says Continue. A full set you back out of is saved, as finishing
+   would. The app keeps them on the phone (DatePlannerView.keptDraft). */
+const keptAnswers=()=>S.prefsDraft&&S.prefsDraft.some(x=>x!=null)?S.prefsDraft:null;
+function startQuestions(){const kept=keptAnswers();
+  S.planner={...S.planner,q:kept?Math.max(0,kept.findIndex(x=>x==null)):0,draft:kept?kept.slice():prefsDraft(S.you.prefs)};}
+function leaveQuestions(){const p=prefsFrom(S.planner.draft||[]);
+  if(!S.prefsDraft||!p) return;
+  S.prefsDraft=null;
+  if(JSON.stringify(p)!==JSON.stringify(S.you.prefs)){
+    S.you.prefs=p; S.planner={...S.planner,time:null,items:restartSwaps(),sent:null}; }}
 /* Your answers in a line; without the distance where the slider sits beside it. */
 const prefsSummary=(p,noReach)=>PREF_QS.filter(([k])=>!(noReach&&k==="reach"))
   .map(([k,,o])=>o?o.find(x=>x[0]===p[k])[1]:reachText(reachOf(p))).join(" \u00B7 ");
@@ -2052,7 +2064,9 @@ function plannerGetStarted(action){
       ${pt("5","Five quick questions about your ideal date. Under a minute.")}
       ${pt("2","Plans fit you both. If either of you does not drink, or wants to keep it walkable, so does every plan.")}
       ${pt("0","Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")}</div>
-    <button class="btn primary mt-l" data-a="${action}">Get started</button>`;
+    ${(()=>{const kept=keptAnswers(), n=kept?kept.filter(x=>x!=null).length:0;
+      return `<button class="btn primary mt-l" data-a="${action}">${n?"Continue":"Get started"}</button>
+        ${n?`<div class="footnote mortar center mt-s">${n} of ${PREF_QS.length} answered. Your answers are kept.</div>`:""}`;})()}`;
 }
 
 /* The five questions, one to a screen, built like onboarding's: the same
@@ -2065,8 +2079,8 @@ function plannerQuestion(){
     <div class="titleM mt-l">${esc(q)}</div>`;
   /* The distance: a slider, so it needs a button to go on. */
   if(!opts){
-    if(P_.draft[i]==null) P_.draft[i]=REACH.start;
-    return head+`<div class="v gap-s mt-xl">${reachControl("reachAsk",P_.draft[i])}</div>
+    /* Shown at three miles until you move it; only moving it, or Done, answers it. */
+    return head+`<div class="v gap-s mt-xl">${reachControl("reachAsk",P_.draft[i]!=null?P_.draft[i]:REACH.start)}</div>
       <button class="btn primary mt-l" data-a="planReachNext">${i+1<PREF_QS.length?"Next":"Done"}</button>
       <button class="btntext mt-s" data-a="planBack">${i===0?"Back":"Back a question"}</button>`;
   }
@@ -3791,25 +3805,26 @@ document.addEventListener("click",e=>{
     planHours:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice();
       items[i]={...items[i],hours:+el.dataset.k}; S.planner={...P_,items,sent:null}; render();},
     /* Into the questions, from what you said last time if you said anything. */
-    planStart:()=>{S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
-    planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; render();
+    planStart:()=>{startQuestions(); render();},
+    planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; S.prefsDraft=P_.draft.slice(); render();
       setTimeout(()=>{
         if(S.planner.q!==at) return;
         if(at+1<PREF_QS.length) S.planner.q=at+1;
-        else { S.you.prefs=prefsFrom(S.planner.draft);
+        else { S.you.prefs=prefsFrom(S.planner.draft); S.prefsDraft=null;
           S.planner={...S.planner,q:null,time:null,items:restartSwaps(),sent:null}; }
         render();
       },260);},
-    planBack:()=>{const P_=S.planner; P_.q=P_.q>0?P_.q-1:null; render();},
+    planBack:()=>{const P_=S.planner; if(P_.q>0) P_.q=P_.q-1; else { P_.q=null; leaveQuestions(); } render();},
     planReachNext:()=>{const P_=S.planner, at=P_.q;
+      if(P_.draft[at]==null){ const sl=document.getElementById("reachAsk");
+        P_.draft[at]=sl?+sl.value:REACH.start; S.prefsDraft=P_.draft.slice(); }
       if(at+1<PREF_QS.length) S.planner.q=at+1;
-      else { S.you.prefs=prefsFrom(P_.draft);
+      else { S.you.prefs=prefsFrom(P_.draft); S.prefsDraft=null;
         S.planner={...P_,q:null,time:null,items:restartSwaps(),sent:null}; }
       render();},
     /* The popup after onboarding: "Get started" goes straight to question one
        in the planner tab; "Not now" leaves the questions waiting there. */
-    introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
-      S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
+    introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[]; startQuestions(); render();},
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,items:restartSwaps(),sent:null}; render();},
     /* A stop opens to its details, and closes again. */
     planOpen:()=>{const k=el.dataset.k, o={...(S.planner.open||{})}; o[k]=!o[k];
@@ -3825,7 +3840,7 @@ document.addEventListener("click",e=>{
         <div class="footnote mortar mt-m">They shape every plan. Nobody else sees them.</div>
         <button class="btn quiet mt-m" data-a="planPrefsEdit">Change your answers</button>
         <button class="btntext mt-s" data-a="closeSheet">Done</button>`);},
-    planPrefsEdit:()=>{closeSheet(); S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
+    planPrefsEdit:()=>{closeSheet(); startQuestions(); render();},
     planDateOpen:()=>{const i=document.getElementById("planDateInput"); if(!i) return;
       try{ i.showPicker(); }catch(e){ i.style.pointerEvents="auto"; i.focus(); i.click(); }},
     /* Swap: the next place along. A kept place is let go, and the planner
@@ -4350,7 +4365,7 @@ document.addEventListener("input",e=>{
     const words=document.getElementById(t.id+"Text"), hint=document.getElementById(t.id+"Hint");
     if(words) words.textContent=reachText(mi); if(hint) hint.textContent=reachHint(mi);
     const drawn=document.getElementById(t.id+"Map"); if(drawn) drawn.innerHTML=reachMap(mi,t.id);
-    if(t.id==="reachAsk") S.planner.draft[S.planner.q]=mi;
+    if(t.id==="reachAsk"){ S.planner.draft[S.planner.q]=mi; S.prefsDraft=S.planner.draft.slice(); }
     else { S.you.prefs={...S.you.prefs,reach:mi}; S.planner={...S.planner,items:restartSwaps(),sent:null}; render(); }
     return; }
   if(t.id==="customSpotQ"){ S.custom.q=t.value; S.custom.chosen=null; redrawCustom(); return; }

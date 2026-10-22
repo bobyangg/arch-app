@@ -439,6 +439,39 @@ final class ArchSmokeTests: XCTestCase {
         element.tap()
     }
 
+    /// Backing out of the date questions keeps what you answered: two answers,
+    /// Back to the start and out, and the planner offers to continue -- on the
+    /// third question. Finished at the end, so nothing is left kept.
+    func testTheDateQuestionsKeepYourAnswers() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        let start = app.buttons["planner.getStarted"]
+        XCTAssertTrue(start.waitForExistence(timeout: 5), "The Date planner did not open on its Get started screen.")
+        start.tap()
+        for question in 1...2 {
+            XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5),
+                          "Question \(question) never appeared.")
+            app.buttons["planner.option.0"].tap()
+        }
+        for from in [3, 2, 1] {
+            XCTAssertTrue(app.staticTexts["\(from) of 5"].waitForExistence(timeout: 5),
+                          "Backing out never reached question \(from).")
+            app.buttons["planner.questionBack"].tap()
+        }
+        XCTAssertTrue(start.waitForExistence(timeout: 5), "Back from the first question did not leave the questions.")
+        XCTAssertEqual(start.label, "Continue", "The planner does not offer to continue the questions.")
+        start.tap()
+        XCTAssertTrue(app.staticTexts["3 of 5"].waitForExistence(timeout: 5),
+                      "The questions did not pick up where they were left.")
+        for question in 3...5 {
+            XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5),
+                          "Question \(question) never appeared.")
+            app.buttons["planner.option.0"].tap()
+        }
+        XCTAssertTrue(app.buttons["planner.editPreferences"].waitForExistence(timeout: 5),
+                      "Finishing the kept questions did not reach a plan.")
+    }
+
     /// "Custom spot" opens on a map of places to tap, and adds a place you
     /// name: searched for in the list, tapped, and on the plan as your pick.
     func testACustomSpotGoesOnThePlan() {

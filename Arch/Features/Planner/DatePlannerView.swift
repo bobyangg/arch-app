@@ -98,6 +98,11 @@ struct DatePlannerView: View {
     /// The question showing, while the questions are; nil otherwise.
     @State private var questionIndex: Int?
     @State private var draft: [Int?] = Array(repeating: nil, count: DatePreferences.questions.count)
+    /// The questions as far as you got, kept on the phone as you answer --
+    /// option indices, "-" for one not answered yet; empty when nothing is
+    /// waiting -- so backing out part-way loses nothing (`startAsking`).
+    @AppStorage(DatePlannerView.draftKey) private var keptDraft = ""
+    static let draftKey = "arch.datePreferenceDraft"
     /// What you have added to the date, in order. It opens with one blank
     /// item, and holds at most `PlanItem.maximum`.
     @State private var items: [PlanItem] = [PlanItem()]
@@ -275,10 +280,7 @@ struct DatePlannerView: View {
 
                 if questionIndex != nil {
                     DatePreferenceQuestions(index: $questionIndex, draft: $draft) { answers in
-                        onSavePreferences(answers)
-                        restartSwaps()
-                        // Changing an agreed plan keeps its time of day.
-                        if changingAgreed == nil { pickedTime = nil }
+                        saveAnswers(answers)
                     }
                 } else if let chosen, let agreed = chosen.conversation.agreedPlan,
                           changingAgreed != agreed.messageID {
@@ -302,7 +304,7 @@ struct DatePlannerView: View {
                     if let chosen, let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
                     }
-                    PlannerGetStarted { startAsking() }
+                    PlannerGetStarted(answered: keptAnswers?.compactMap { $0 }.count ?? 0) { startAsking() }
                 } else if let person = planningWith {
                     picker
                     cancelledLine
@@ -447,6 +449,13 @@ struct DatePlannerView: View {
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+        // Each answer is kept as it is given; leaving part-way keeps the rest.
+        .onChange(of: draft) { _, answers in
+            if questionIndex != nil { keep(answers) }
+        }
+        .onChange(of: questionIndex) { old, new in
+            if old != nil, new == nil { leftQuestions() }
+        }
     }
 
     /// The plan for the person on screen -- or you, on a self plan -- from
@@ -958,12 +967,56 @@ struct DatePlannerView: View {
         sentTo = nil
     }
 
-    /// Into the questions, starting from what you said last time if you have
-    /// said anything.
+    /// Into the questions: where you left them if you backed out part-way,
+    /// with every answer you had given; otherwise from what you said last
+    /// time, if you have said anything.
     private func startAsking() {
-        draft = you.datePreferences?.answers
-            ?? Array(repeating: nil, count: DatePreferences.questions.count)
-        withAnimation(ArchMotion.standard) { questionIndex = 0 }
+        if let kept = keptAnswers {
+            draft = kept
+            withAnimation(ArchMotion.standard) { questionIndex = kept.firstIndex { $0 == nil } ?? 0 }
+        } else {
+            draft = you.datePreferences?.answers
+                ?? Array(repeating: nil, count: DatePreferences.questions.count)
+            withAnimation(ArchMotion.standard) { questionIndex = 0 }
+        }
+    }
+
+    /// The answers kept from a run you backed out of: one per question, nil
+    /// for any not answered. Nil when nothing is kept, or what is kept no
+    /// longer fits the questions.
+    private var keptAnswers: [Int?]? {
+        let parts = keptDraft.split(separator: ",", omittingEmptySubsequences: false)
+        guard parts.count == DatePreferences.questions.count else { return nil }
+        let answers: [Int?] = zip(parts, DatePreferences.questions).map { part, question in
+            Int(part).flatMap { question.options.indices.contains($0) ? $0 : nil }
+        }
+        return answers.contains { $0 != nil } ? answers : nil
+    }
+
+    private func keep(_ answers: [Int?]) {
+        keptDraft = answers.map { answer in answer.map { String($0) } ?? "-" }.joined(separator: ",")
+    }
+
+    /// Your answers, as yours: whether the questions were finished or left
+    /// with every one answered.
+    private func saveAnswers(_ preferences: DatePreferences) {
+        keptDraft = ""
+        onSavePreferences(preferences)
+        restartSwaps()
+        // Changing an agreed plan keeps its time of day.
+        if changingAgreed == nil { pickedTime = nil }
+    }
+
+    /// Out of the questions without finishing them: Back from the first, or
+    /// "Change it" from a thread. A full set is saved as your answers, as
+    /// finishing would have done; part of one waits for next time.
+    private func leftQuestions() {
+        guard !keptDraft.isEmpty, let preferences = DatePreferences(answers: draft) else { return }
+        if preferences == you.datePreferences {
+            keptDraft = ""
+        } else {
+            saveAnswers(preferences)
+        }
     }
 
     /// Asks Apple Maps about the person on screen, once.
