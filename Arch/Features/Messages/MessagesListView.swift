@@ -85,7 +85,9 @@ struct MessagesListView: View {
                     conversation: conversation,
                     isInRoster: holdsSlot(conversation.person),
                     actions: actions,
-                    onAccept: { path = NavigationPath(); onAccept($0) },
+                    // Already on screen, so it changes in place rather than
+                    // sliding away and back.
+                    onAccept: { answer($0, animated: false) },
                     onDecline: { path = NavigationPath(); onDecline($0) },
                     onOpenProfile: { path.append(conversation.person) },
                     onSend: { onSend(conversation, $0) },
@@ -102,7 +104,7 @@ struct MessagesListView: View {
                 MessageRequestsView(
                     requests: requests,
                     onOpen: { path.append($0) },
-                    onAccept: onAccept,
+                    onAccept: { answer($0, animated: true) },
                     onDecline: onDecline
                 )
             }
@@ -119,6 +121,22 @@ struct MessagesListView: View {
             fresh.append(conversation)
             path = fresh
         }
+    }
+
+    /// **Answering lands you in the conversation.** It used to empty the stack
+    /// from inside a request, and from the requests folder it left you looking
+    /// at the folder -- so the one thing you had just said you wanted to do,
+    /// write back, was somewhere you had to go and find. Now the thread is the
+    /// only thing on the stack: open, with its composer, and its back button
+    /// goes to your messages, where it now lives, rather than to a folder it
+    /// has left.
+    private func answer(_ conversation: Conversation, animated: Bool) {
+        onAccept(conversation)
+        var fresh = NavigationPath()
+        fresh.append(live(conversation.id) ?? conversation)
+        var transaction = Transaction()
+        transaction.disablesAnimations = !animated
+        withTransaction(transaction) { path = fresh }
     }
 
     private var list: some View {
