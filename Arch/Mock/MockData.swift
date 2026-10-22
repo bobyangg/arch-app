@@ -1360,6 +1360,11 @@ enum MockData {
             id: "b5",
             title: "Answer questions anytime",
             detail: "Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."
+        ),
+        PremiumBenefit(
+            id: "b6",
+            title: "Save up to fifteen date plans",
+            detail: "Everyone can keep ten plans for later in the Date planner. Premium keeps fifteen."
         )
     ]
     // Profile feedback is listed only while it works -- see

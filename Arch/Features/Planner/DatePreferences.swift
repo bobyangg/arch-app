@@ -63,6 +63,29 @@ struct DatePreferences: Codable, Hashable {
     var drinks: Drinks
     var budget: Budget
     var distance: Distance
+    /// How far you would travel for a date, in miles, from the slider. Nil for
+    /// an answer from before the slider, which `distance` stands in for: a
+    /// walk is a mile, a ride six. `distance` is still written beside it, for
+    /// builds from before the slider (`backend/040`).
+    var reachMiles: Int?
+
+    /// Your distance in miles, however you answered.
+    var miles: Int { reachMiles ?? (distance == .walkable ? 1 : 6) }
+
+    static let milesRange = 1...15
+    /// Where the slider sits before it is moved.
+    static let startingMiles = 3
+
+    static func milesText(_ miles: Int) -> String {
+        "Up to \(miles) mile\(miles == 1 ? "" : "s") away"
+    }
+
+    /// What that distance means for the plan.
+    static func milesHint(_ miles: Int) -> String {
+        miles <= 1 ? "Walking distance. Every stop stays on foot."
+            : miles <= 5 ? "A short ride. Stops can be a few minutes apart."
+            : "Across town is fine."
+    }
 
     // MARK: The questions
 
@@ -72,6 +95,8 @@ struct DatePreferences: Codable, Hashable {
         let id: Int
         let text: String
         let options: [String]
+        /// Answered with a number of miles on a slider, not an option.
+        var isMiles = false
     }
 
     static let questions: [Question] = [
@@ -86,12 +111,14 @@ struct DatePreferences: Codable, Hashable {
                  options: ["Happy to have one", "Fine, but not the point", "I don\u{2019}t drink"]),
         Question(id: 3, text: "What would you like to spend?",
                  options: ["As little as possible", "A coffee and a meal", "Whatever makes it good"]),
-        Question(id: 4, text: "How far would you go in one date?",
-                 options: ["Keep it walkable", "A short ride is fine"]),
+        // A distance, not a choice. It used to be "Keep it walkable" or "A
+        // short ride is fine".
+        Question(id: 4, text: "How far would you travel for a date?", options: [], isMiles: true),
     ]
 
-    /// From five option indices, one per question. Nil unless all five are
-    /// answered with an option that exists.
+    /// From five answers, one per question: an option index each, and for the
+    /// last a number of miles. Nil unless all five are answered with something
+    /// that exists.
     init?(answers: [Int?]) {
         guard answers.count == Self.questions.count else { return nil }
         func pick<T: CaseIterable>(_ index: Int?, _: T.Type) -> T? {
@@ -102,34 +129,46 @@ struct DatePreferences: Codable, Hashable {
               let time = pick(answers[1], Time.self),
               let drinks = pick(answers[2], Drinks.self),
               let budget = pick(answers[3], Budget.self),
-              let distance = pick(answers[4], Distance.self)
+              let miles = answers[4], Self.milesRange.contains(miles)
         else { return nil }
-        self.init(style: style, timeOfDay: time, drinks: drinks, budget: budget, distance: distance)
+        self.init(style: style, timeOfDay: time, drinks: drinks, budget: budget,
+                  distance: miles <= 1 ? .walkable : .ride, reachMiles: miles)
     }
 
-    init(style: Style, timeOfDay: Time, drinks: Drinks, budget: Budget, distance: Distance) {
+    init(style: Style, timeOfDay: Time, drinks: Drinks, budget: Budget, distance: Distance,
+         reachMiles: Int? = nil) {
         self.style = style
         self.timeOfDay = timeOfDay
         self.drinks = drinks
         self.budget = budget
         self.distance = distance
+        self.reachMiles = reachMiles
     }
 
-    /// The five option indices, to start the questions again from what you said.
+    /// The five answers, to start the questions again from what you said.
     var answers: [Int?] {
         [Style.allCases.firstIndex(of: style),
          Time.allCases.firstIndex(of: timeOfDay),
          Drinks.allCases.firstIndex(of: drinks),
          Budget.allCases.firstIndex(of: budget),
-         Distance.allCases.firstIndex(of: distance)]
+         miles]
     }
 
     /// Your own answers in a line, for the planner's "Your preferences" row.
     /// Only ever built from your own: another person's are never put into words.
-    var summary: String {
-        Self.questions.enumerated()
-            .compactMap { index, question in answers[index].map { question.options[$0] } }
-            .joined(separator: " \u{00B7} ")
+    var summary: String { summary(includingDistance: true) }
+
+    /// The same, without the distance where its slider sits beside the line.
+    func summary(includingDistance: Bool) -> String {
+        var parts: [String] = []
+        for (index, question) in Self.questions.enumerated() {
+            if question.isMiles {
+                if includingDistance { parts.append(Self.milesText(miles)) }
+            } else if let answer = answers[index] {
+                parts.append(question.options[answer])
+            }
+        }
+        return parts.joined(separator: " \u{00B7} ")
     }
 }
 
@@ -152,8 +191,9 @@ struct DateFit {
     /// Nothing drink-led on the plan at all.
     var noDrinks: Bool { both.contains { $0.drinks == .no } }
 
-    /// The stops either side of the main thing stay on foot from it.
-    var walkable: Bool { both.contains { $0.distance == .walkable } }
+    /// The stops either side of the main thing stay on foot from it: either
+    /// of you would go a mile or less.
+    var walkable: Bool { both.contains { $0.miles <= 1 } }
 
     /// The lower of the two budgets.
     var budget: DatePreferences.Budget { both.map(\.budget).min() ?? .any }

@@ -163,3 +163,6 @@ Marker
 
 # SwiftUI: answering a request swaps the thread in place, without animating
 Transaction
+# Your distance as a circle on the map, and a web page over the app
+MapCircle
+SFSafariViewController

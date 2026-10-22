@@ -81,6 +81,8 @@ struct DatePreferencesRow: Codable, Hashable {
     var drinks: String
     var budget: String
     var distance: String
+    /// Miles, from the slider (`backend/040`). Nil on a row from before it.
+    var reachMiles: Int?
 
     /// Nil for a value this build does not know -- a choice added later is a
     /// row an older build plans around as if it were unanswered, rather than
@@ -93,7 +95,8 @@ struct DatePreferencesRow: Codable, Hashable {
               let distance = DatePreferences.Distance(rawValue: distance)
         else { return nil }
         return DatePreferences(style: style, timeOfDay: time, drinks: drinks,
-                               budget: budget, distance: distance)
+                               budget: budget, distance: distance,
+                               reachMiles: reachMiles.flatMap { DatePreferences.milesRange.contains($0) ? $0 : nil })
     }
 }
 

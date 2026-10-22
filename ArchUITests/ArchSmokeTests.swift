@@ -466,10 +466,64 @@ final class ArchSmokeTests: XCTestCase {
         for question in 3...5 {
             XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5),
                           "Question \(question) never appeared.")
-            app.buttons["planner.option.0"].tap()
+            app.buttons[question == 5 ? "planner.milesDone" : "planner.option.0"].tap()
         }
         XCTAssertTrue(app.buttons["planner.editPreferences"].waitForExistence(timeout: 5),
                       "Finishing the kept questions did not reach a plan.")
+    }
+
+    /// The distance question is a slider: at its starting three miles the plan
+    /// says so, and an opened stop links to its photos and reviews. Set to a
+    /// mile, Hana's plan -- she keeps it walkable, and lives in Greenpoint --
+    /// says your distances do not overlap, and is still made.
+    func testTheDistanceShapesThePlan() {
+        let app = launch()
+        app.buttons["tab.planner"].tap()
+        answerDatePreferences(app)
+
+        app.buttons["planner.choose.activity"].tap()
+        let stops = app.descendants(matching: .any).matching(identifier: "planner.stop")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
+        let distance = app.buttons["planner.distance"]
+        XCTAssertTrue(distance.waitForExistence(timeout: 5), "The plan does not say your distance.")
+        XCTAssertEqual(distance.label, "Up to 3 miles from you", "The distance is not the slider's three miles.")
+
+        tapClearOfTheBar(app.buttons["planner.open.0"], in: app)
+        XCTAssertTrue(app.buttons["planner.google.0"].waitForExistence(timeout: 5),
+                      "An opened stop has no photos and reviews.")
+
+        // A mile: back into the questions, the slider to its left end. The
+        // opened stop scrolled the controls off the top; back up to them.
+        let preferences = app.buttons["planner.editPreferences"]
+        var upward = 0
+        while upward < 4, !preferences.isHittable || preferences.frame.minY < 120 {
+            app.swipeDown()
+            upward += 1
+        }
+        preferences.tap()
+        let change = app.buttons["planner.changeAnswers"]
+        XCTAssertTrue(change.waitForExistence(timeout: 5), "Your preferences have no way to change them.")
+        change.tap()
+        for question in 1...4 {
+            XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5))
+            app.buttons["planner.option.0"].tap()
+        }
+        XCTAssertTrue(app.staticTexts["5 of 5"].waitForExistence(timeout: 5))
+        let handle = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'How far you would travel'")).firstMatch
+        XCTAssertTrue(handle.waitForExistence(timeout: 5), "The distance has no slider.")
+        let from = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: -600, dy: 0)))
+        XCTAssertEqual(app.staticTexts["planner.milesText"].label, "Up to 1 mile away",
+                       "The slider did not go down to a mile.")
+        app.buttons["planner.milesDone"].tap()
+
+        app.buttons["planner.with.hana"].tap()
+        let blank = app.buttons["planner.choose.activity"]
+        if blank.waitForExistence(timeout: 3) { blank.tap() }
+        XCTAssertTrue(app.descendants(matching: .any)["planner.apart"].waitForExistence(timeout: 5),
+                      "Two distances that do not overlap are not said.")
+        XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "With distances apart, nothing was planned.")
+        XCTAssertTrue(app.buttons["Share this plan"].exists, "A plan past both distances cannot be shared.")
     }
 
     /// "Custom spot" opens on a map of places to tap, and adds a place you
@@ -591,6 +645,9 @@ final class ArchSmokeTests: XCTestCase {
         app.buttons["planner.saved"].tap()
         let open = app.buttons["planner.savedOpen"].firstMatch
         XCTAssertTrue(open.waitForExistence(timeout: 5), "The saved plan is not in Saved.")
+        let count = app.staticTexts["planner.savedCount"]
+        XCTAssertTrue(count.exists && count.label.contains("of 10 saved"),
+                      "Saved does not say how many of ten are kept.")
         open.tap()
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Opening a saved plan planned nothing.")
         let kept = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'From your saved plan'"))
@@ -617,7 +674,8 @@ final class ArchSmokeTests: XCTestCase {
             XCTAssertTrue(app.staticTexts["\(question) of 5"].waitForExistence(timeout: 5),
                           "Question \(question) of the date preferences never appeared.",
                           file: file, line: line)
-            app.buttons["planner.option.0"].tap()
+            // The fifth is a distance on a slider, left where it starts.
+            app.buttons[question == 5 ? "planner.milesDone" : "planner.option.0"].tap()
         }
         XCTAssertTrue(app.buttons["planner.editPreferences"].waitForExistence(timeout: 5),
                       "Answering all five did not take the planner to a plan.",
