@@ -4082,7 +4082,7 @@ document.addEventListener("click",e=>{
       <div class="body mortar mt-s">Your profile goes now, and your conversations stop. This can&rsquo;t be undone.</div>
       <button class="btn danger mt-xxl" data-a="deleteDo">Delete my account</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    deleteDo:()=>{ closeSheet(); S.prefsDraft=null; startOnboarding(); },
     dataBuild:()=>{S.set.dataMade=true; render();},
     dataShare:()=>{const blob=new Blob([JSON.stringify({profile:{name:S.you.name},note:"Prototype stand-in for the export"},null,2)],{type:"application/json"});
       const f=new File([blob],"Arch data.json",{type:"application/json"});
@@ -4096,7 +4096,9 @@ document.addEventListener("click",e=>{
       <div class="body mortar mt-s">Nothing is deleted. Sign back in any time to pick up where you left off.</div>
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    signOutDo:()=>{ closeSheet(); startOnboarding(); },
+    /* Half-answered date questions are this phone's, for whoever is signed in:
+       they go, so the next person never sees them. Finished answers come back. */
+    signOutDo:()=>{ closeSheet(); S.prefsDraft=null; startOnboarding(); },
     setHeight:()=>{
       const v=el.dataset.o;
       if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
