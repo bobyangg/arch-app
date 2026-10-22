@@ -2210,12 +2210,15 @@ function plannerRoot(){
     if(st&&st.leg) h+=`<div class="pwalk"><i></i><div class="footnote mortar">${travelLabel(st.leg)}</div></div>`;
     else if(i>0) h+=`<div style="height:12px"></div>`;
     if(!it.cat){
-      h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
+      /* Remove is the icon Saved plans deletes with, on the card where Swap
+         sits on a filled one; Custom spot is centred under the two choices. */
+      h+=`<div class="pblank"><div class="spread" style="align-items:center">
+          <div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
+          ${P_.items.length>1?`<button class="btntext" style="width:auto; height:32px; margin:-6px -4px -6px 8px; padding:0 4px; color:var(--mortar)"
+            data-a="planRemove" data-i="${i}" aria-label="Remove this item">\u2715</button>`:""}</div>
         <div class="pchoose mt-s">${["food","activity"].map(c=>
           `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
-        <div class="pchoose" style="margin-top:4px">
-          <button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button>
-          ${P_.items.length>1?`<button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="planRemove" data-i="${i}">Remove</button>`:`<span style="flex:1"></span>`}</div></div>`;
+        <button class="btntext" style="margin-top:4px; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button></div>`;
       return;
     }
     if(!st){
