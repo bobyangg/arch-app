@@ -417,6 +417,12 @@ struct DatePlan: Hashable {
     /// distance: Arch does not tell you how far away somebody lives.
     let fairness: String?
     let stops: [Stop]
+    /// Both of you said how far you would travel, and you live further apart
+    /// than the two add up to: the plan is about halfway, past both.
+    var apart = false
+    /// Something on the plan is further than one of you said, because nothing
+    /// that close fitted. Either way the plan is made, and can be sent.
+    var stretched = false
 
     var endsAt: Int { stops.last?.end ?? time.start }
 }
@@ -509,6 +515,7 @@ enum DatePlanner {
     /// ride is fine" used to reach exactly as far as walking did. Ten
     /// kilometres is about 25 to 35 minutes by transit across a city.
     static let rideKm = 10.0
+    static let kmPerMile = 1.609344
     private static let ridePastHalfwayKm = 3.0
     /// How much distance costs when a ride is fine, against walking: half, so
     /// a place across town that suits you both can win over the nearest one.
@@ -652,6 +659,32 @@ enum DatePlanner {
                 .allSatisfy { km($0, venue.coordinate) <= reachLimit }
         }
 
+        /// **Each of you, no further than you said.** Your distance from you,
+        /// theirs from them, in miles from the fifth question; somebody who has
+        /// not answered keeps the reach above. It narrows that reach, never
+        /// widens it. Where nothing an item needs is that close -- the two
+        /// circles do not meet, or meet over too little -- the item reaches as
+        /// far as the rule above, and the plan says so (`stretched`, `apart`).
+        let radii: [(point: Coordinate, km: Double)] = {
+            var radii: [(point: Coordinate, km: Double)] = []
+            if let point = yourPoint, let miles = fit.yours?.miles {
+                radii.append((point: point, km: Double(miles) * Self.kmPerMile))
+            }
+            if let point = theirPoint, let miles = fit.theirs?.miles {
+                radii.append((point: point, km: Double(miles) * Self.kmPerMile))
+            }
+            return radii
+        }()
+        func withinRadius(_ venue: Venue) -> Bool {
+            radii.allSatisfy { km($0.point, venue.coordinate) <= $0.km }
+        }
+        let apart: Bool = {
+            guard let a = yourPoint, let b = theirPoint,
+                  let mine = fit.yours?.miles, let theirs = fit.theirs?.miles else { return false }
+            return km(a, b) > Double(mine + theirs) * Self.kmPerMile
+        }()
+        var stretched = false
+
         // The items that have been told what they are, in your order.
         let filled = items.filter { $0.category != nil }
 
@@ -675,12 +708,17 @@ enum DatePlanner {
             // date does: the third thing on a long afternoon is an evening
             // thing, and a bar should be able to be it.
             let part: DatePlan.TimeOfDay = window.start >= Self.eveningFrom ? .evening : .afternoon
-            return venues.filter {
+            let fitting = venues.filter {
                 $0.kind.category == category && $0.times.contains(part) && $0.isOpen(on: day)
                     && withinReach($0)
                     && $0.openingHours.covers(from: window.start, to: window.end)
                     && !used.contains($0.id) && !excluded.contains($0.id) && fit.allows($0)
             }
+            // Within your distances first; further only when nothing there fits.
+            let close = apart ? [] : fitting.filter(withinRadius)
+            if !close.isEmpty { return close }
+            if !fitting.isEmpty { stretched = true }
+            return fitting
         }
 
         func pick(_ pool: [Venue], skips: Int, passing passed: Set<String> = [],
@@ -703,7 +741,7 @@ enum DatePlanner {
                             shared: DateTheme.allCases.filter { solo ? yours[$0] != nil : shared.contains($0) },
                             sameWords: sameWordsShown,
                             halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
-                            fromYou: nil, fairness: nil, stops: [])
+                            fromYou: nil, fairness: nil, stops: [], apart: apart)
         }
 
         /// "Keep it walkable" starts with the anchor: it has to be somewhere
@@ -884,7 +922,9 @@ enum DatePlanner {
             halfway: halfwayName ?? middle.flatMap(nearestNeighbourhood),
             fromYou: fromYou,
             fairness: fairness,
-            stops: stops
+            stops: stops,
+            apart: apart,
+            stretched: stretched
         )
     }
 

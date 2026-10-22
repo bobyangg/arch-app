@@ -14,10 +14,7 @@ struct OnboardingIdentity: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
-            StepHeading(
-                title: "Your name",
-                detail: "This is what people see. Apple gave us the one on your account — change it if it is not what you go by."
-            )
+            StepHeading(title: "Your Name")
 
             VStack(spacing: ArchSpacing.xs) {
                 ArchField(
@@ -27,10 +24,6 @@ struct OnboardingIdentity: View {
                     surface: ArchColor.stone
                 )
             }
-
-            Text("Your Apple email is never shown to anyone, and Arch only uses it for account notices.")
-                .archText(.footnote)
-                .foregroundStyle(ArchColor.mortar)
         }
     }
 }
@@ -60,10 +53,7 @@ struct OnboardingAbout: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
-            StepHeading(
-                title: "About you",
-                detail: "The facts that sit under your name. Nothing else is asked."
-            )
+            StepHeading(title: "About You")
 
             VStack(spacing: ArchSpacing.xs) {
                 // **No age field.** It is worked out from the birthday collected
@@ -81,7 +71,7 @@ struct OnboardingAbout: View {
                 ArchField(
                     text: Binding(get: { store.work }, set: { store.work = $0 }),
                     label: "Work",
-                    placeholder: "Sound engineer",
+                    placeholder: "Unemployed",
                     surface: ArchColor.stone
                 )
             }

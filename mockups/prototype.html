@@ -680,6 +680,9 @@ const quotedOf=c=>(isRequest(c)?S.you:c.person).prompts[c.open[1]];
 const CAP=()=>S.set.sub?7:5;
 const LIMIT=()=>S.set.sub?15:10;
 const WARN=()=>LIMIT()-2;
+/* Saved date plans: ten, or fifteen with Premium. */
+const SAVE_FREE=10, SAVE_PREMIUM=15;
+const SAVE_LIMIT=()=>S.set.sub?SAVE_PREMIUM:SAVE_FREE;
 /* Nine in the morning, New York time, for everybody at once — the same instant
    DailyFiveStore.nextRefill computes. The abbreviation comes from the zone for
    today rather than being written down, so it says EDT for the seven months a
@@ -695,6 +698,15 @@ const rosterTitle=()=>"Your "+rosterWord();
 /* The top of the range stops being a number: somebody in a small town needs no
    ceiling at all, and they are the people a radius starves first. */
 const distanceText=()=>S.set.distance>=100?"Anywhere":"Within "+S.set.distance+" miles";
+/* **Photos and reviews, on Google.** A Google Maps link -- free, no key, the
+   documented way to send somebody to a place: its name and neighbourhood find
+   the place's own page, with its photos and reviews. Showing them in Arch's
+   own screens would mean Google's Places API: paid past a small monthly
+   allowance, and its terms do not allow it beside a non-Google map, which ours
+   are. The app opens the link in a browser sheet over the planner; the
+   prototype, in a new tab. */
+const googlePlace=(name,hood)=>"https://www.google.com/maps/search/?api=1&query="
+  +encodeURIComponent([name,hood].filter(Boolean).join(", "));
 
 /* Subscribing adds slots; cancelling takes them away. Empty slots go first, so
    cancelling never drops somebody who is still in your roster. */
@@ -714,14 +726,17 @@ const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2]
   [["A thing I have changed my mind about","Lawns. I spent a degree learning to hate them and now I just think about who has to mow it."]],
   ["Street trees","Drainage","Chairs outdoors"],"woman","she/her");
 
-/* Three benefits, and all three exist. The earlier list sold a sixth slot, a
-   same-day refill, six prompts and finer preferences, none of which the app did
-   anything about. A paywall is the easiest place to ship a lie. */
-const BENEFITS=[["Seven people instead of five","Two more slots. The same care choosing them \u2014 a longer queue is not the point."],
- ["Fifteen conversations instead of ten","More room before Arch holds your matches and asks you to answer someone."],
- ["A review of your profile","Which of your photos and answers people write about, and specific notes on what to change."],
- ["Be somewhere you are not yet","Choose any town for where you are \u2014 the city you are moving to, or the one you keep visiting \u2014 instead of where your phone says."],
- ["Answer the questions whenever you like","Everyone can answer again once a month. Premium drops the wait."]];
+/* What Premium gives, in the app's words (MockData.premiumBenefits), and all
+   of it exists. An earlier list sold a sixth slot, a same-day refill, six
+   prompts and finer preferences, none of which the app did anything about. A
+   paywall is the easiest place to ship a lie. Saved date plans are the newest,
+   at the far right. */
+const BENEFITS=[["Seven matches every morning","Get two extra people to discover each day. Arch still takes the same care finding them."],
+ ["Up to fifteen conversations","Keep more conversations going before Arch asks you to choose who you want to focus on."],
+ ["Get feedback on your profile","See which photos and answers stand out, plus specific suggestions to help improve your profile."],
+ ["Choose your location","Set your location anywhere you want, whether you are there now, relocating soon, or just visit often."],
+ ["Answer questions anytime","Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."],
+ ["Save up to fifteen date plans","Everyone can keep ten plans for later in the Date planner. Premium keeps fifteen."]];
 
 /* Pronouns as chips, and one string underneath. More than one is allowed and is
    written by subject ("she/they"); what the chips do not cover is typed and
@@ -1353,8 +1368,8 @@ function thread(id){
 
 /* Nobody scrolls to be sold to. The benefits used to run at full length down
    the page, which put the plans and the only button about a screen and a half
-   down. They are a rail of bubbles now -- every one of the five still here and
-   still in full, because a carousel that drops two of them would be the paywall
+   down. They are a rail of bubbles now -- every one still here and still in
+   full, because a carousel that drops two of them would be the paywall
    lying by layout -- and the room that frees puts the price, the button and its
    footnote on the first screen. */
 function premiumRoot(){
@@ -1457,20 +1472,84 @@ const PREF_QS=[
   ["time","When are you at your best?",[["afternoon","In the afternoon"],["evening","In the evening"],["either","Either is fine"]]],
   ["drinks","How do you feel about drinks?",[["yes","Happy to have one"],["sometimes","Fine, but not the point"],["no","I don\u2019t drink"]]],
   ["budget","What would you like to spend?",[["low","As little as possible"],["middle","A coffee and a meal"],["any","Whatever makes it good"]]],
-  ["distance","How far would you go in one date?",[["walkable","Keep it walkable"],["ride","A short ride is fine"]]]];
+  /* A distance, not a choice: how far you would travel, in miles, on a
+     slider. It used to be "Keep it walkable" or "A short ride is fine". */
+  ["reach","How far would you travel for a date?",null]];
+/* The fifth answer. A mile or less keeps every stop on foot, as "keep it
+   walkable" did; an answer from before the slider reads as a mile or six. */
+const REACH={min:1,max:15,start:3}, KM_PER_MILE=1.609;
+const reachOf=p=>p.reach!=null?p.reach:(p.distance==="walkable"?1:6);
+const reachText=mi=>`Up to ${mi} mile${mi===1?"":"s"} away`;
+const reachHint=mi=>mi<=1?"Walking distance. Every stop stays on foot."
+  :mi<=5?"A short ride. Stops can be a few minutes apart.":"Across town is fine.";
+function reachControl(id,mi){
+  return `<div class="titleM" id="${id}Text">${reachText(mi)}</div>
+    <div id="${id}Map" aria-hidden="true" style="border-radius:var(--r-card); overflow:hidden; line-height:0">${reachMap(mi,id)}</div>
+    <input class="slider" id="${id}" type="range" min="${REACH.min}" max="${REACH.max}" step="1" value="${mi}"
+      aria-label="How far you would travel for a date, in miles">
+    <div style="display:flex; justify-content:space-between" class="footnote mortar"><span>1 mile</span><span>${REACH.max} miles</span></div>
+    <div class="footnote mortar" id="${id}Hint">${reachHint(mi)}</div>`;
+}
 const STYLE_KINDS={talk:["coffee","walk","food"],doing:["studio","museum","shop","show","play","attraction"],
   outside:["walk","park"],night_out:["bar","listening","show","food","cinema","play"]};
 const prefsFrom=draft=>draft.length===PREF_QS.length&&draft.every(x=>x!=null)
-  ?Object.fromEntries(PREF_QS.map(([k,,o],i)=>[k,o[draft[i]][0]])):null;
-const prefsDraft=p=>PREF_QS.map(([k,,o])=>p?o.findIndex(x=>x[0]===p[k]):null);
-const prefsSummary=p=>PREF_QS.map(([k,,o])=>o.find(x=>x[0]===p[k])[1]).join(" \u00B7 ");
+  ?Object.fromEntries(PREF_QS.map(([k,,o],i)=>[k,o?o[draft[i]][0]:draft[i]])):null;
+const prefsDraft=p=>PREF_QS.map(([k,,o])=>p?(o?o.findIndex(x=>x[0]===p[k]):reachOf(p)):null);
+/* **Your distance, drawn.** A circle of that many miles round where you are,
+   on a map that zooms out as it grows -- so the circle gets bigger as the
+   number does, and the neighbourhoods, placed where they really are, say how
+   far that is. Only ever yours: the other person's distance is never drawn.
+   The app uses Apple's map and its MapCircle; this one is drawn. */
+function reachMap(mi,id){
+  const at=matchPoint(S.you); if(!at) return "";
+  const W=320, H=180, cx=W/2, cy=H/2;
+  const rPx=34+50*Math.sqrt((mi-REACH.min)/(REACH.max-REACH.min));
+  const kmPx=mi*KM_PER_MILE/rPx, kx=111.32*Math.cos(at.lat*Math.PI/180), ky=110.57;
+  const grid=Math.max(22,Math.min(56,1.2/kmPx));
+  /* Nearest first; a name that would cover another, or the edge, or you, is left off. */
+  const taken=[[cx-8,cy-8,cx+8,cy+8],[cx-13,cy-21,cx+13,cy-8]], labels=[];
+  PLACES.map(p=>({p,d:kmBetween(at,p.centre)})).sort((a,b)=>a.d-b.d).forEach(({p,d})=>{
+    if(d<0.6) return;
+    const x=cx+(p.centre.lon-at.lon)*kx/kmPx, y=cy-(p.centre.lat-at.lat)*ky/kmPx, w=p.name.length*5.6+6;
+    const box=[x-w/2,y-10,x+w/2,y+3];
+    if(box[0]<4||box[2]>W-4||box[1]<3||box[3]>H-3) return;
+    if(taken.some(t=>!(box[2]<t[0]||box[0]>t[2]||box[3]<t[1]||box[1]>t[3]))) return;
+    taken.push(box); labels.push([x,y,p.name,d<=mi*KM_PER_MILE]);
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
+    <defs><pattern id="${id}Grid" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
+      <path d="M ${grid} 0 L 0 0 0 ${grid}" fill="none" style="stroke:var(--mapRoad)" stroke-width="1.2"/></pattern></defs>
+    <rect width="${W}" height="${H}" style="fill:var(--mapLand)"/>
+    <rect width="${W}" height="${H}" fill="url(#${id}Grid)"/>
+    <circle cx="${cx}" cy="${cy}" r="${rPx.toFixed(1)}" style="fill:var(--lamp); fill-opacity:.13; stroke:var(--lamp)" stroke-width="1.5"/>
+    ${labels.map(([x,y,n,inside])=>`<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" text-anchor="middle" font-size="10"
+      style="fill:var(${inside?"--limestone":"--mortar"})" ${inside?"":`opacity=".7"`}>${esc(n)}</text>`).join("")}
+    <circle cx="${cx}" cy="${cy}" r="5" style="fill:var(--lamp); stroke:var(--mapRoad)" stroke-width="2"/>
+    <text x="${cx}" y="${cy-10}" text-anchor="middle" font-size="10" font-weight="600" style="fill:var(--limestone)">You</text>
+  </svg>`;
+}
+/* **The questions keep your answers.** Each is kept as you give it; back out
+   part-way and they open again where you left off, the rest still chosen, and
+   the intro says Continue. A full set you back out of is saved, as finishing
+   would. The app keeps them on the phone (DatePlannerView.keptDraft). */
+const keptAnswers=()=>S.prefsDraft&&S.prefsDraft.some(x=>x!=null)?S.prefsDraft:null;
+function startQuestions(){const kept=keptAnswers();
+  S.planner={...S.planner,q:kept?Math.max(0,kept.findIndex(x=>x==null)):0,draft:kept?kept.slice():prefsDraft(S.you.prefs)};}
+function leaveQuestions(){const p=prefsFrom(S.planner.draft||[]);
+  if(!S.prefsDraft||!p) return;
+  S.prefsDraft=null;
+  if(JSON.stringify(p)!==JSON.stringify(S.you.prefs)){
+    S.you.prefs=p; S.planner={...S.planner,time:null,items:restartSwaps(),sent:null}; }}
+/* Your answers in a line; without the distance where the slider sits beside it. */
+const prefsSummary=(p,noReach)=>PREF_QS.filter(([k])=>!(noReach&&k==="reach"))
+  .map(([k,,o])=>o?o.find(x=>x[0]===p[k])[1]:reachText(reachOf(p))).join(" \u00B7 ");
 
 /* Two people's answers, as the planner uses them. Rules take the stricter
    answer -- if either of you does not drink, nothing is a bar; if either wants
    it walkable, it stays on foot; the lower budget wins. Tastes are blended. */
 function dateFit(a,b){
   const both=[a,b].filter(Boolean);
-  const noDrinks=both.some(p=>p.drinks==="no"), walkable=both.some(p=>p.distance==="walkable");
+  const noDrinks=both.some(p=>p.drinks==="no"), walkable=both.some(p=>reachOf(p)<=1);
   const budget=["low","middle","any"].find(x=>both.some(p=>p.budget===x))||"any";
   const time=(a&&a.time!=="either"&&a.time)||(b&&b.time!=="either"&&b.time)||"afternoon";
   const allows=v=>!(noDrinks&&DRINK_LED(v.kind));
@@ -1479,7 +1558,8 @@ function dateFit(a,b){
     if(DRINK_LED(v.kind)) both.forEach(p=>{n+=p.drinks==="yes"?0.5:p.drinks==="sometimes"?-0.5:0;});
     n-=(budget==="low"?1.5:budget==="middle"?0.5:0)*PRICE[v.kind];
     return n;};
-  return {noDrinks,walkable,budget,time,allows,score};
+  /* Each person's own distance, in miles, for the planner to hold them to. */
+  return {noDrinks,walkable,budget,time,allows,score,youMiles:a?reachOf(a):null,themMiles:b?reachOf(b):null};
 }
 
 /* Parks, museums and libraries are real places; every café, bar, studio and
@@ -1632,22 +1712,40 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
     +fit.score(v)+nudge(v)-(shared0.has(v.name)?2:0);
   /* Weighed so distance can win: a shared interest used to be worth 4 km. */
   const between=v=>(mid?2.0*kmBetween(mid,v.c):0)+(yp&&tp?1.0*Math.abs(kmBetween(yp,v.c)-kmBetween(tp,v.c)):0);
-  /* Never far from either of you: no further than halfway plus 2 km from the
-     one it is further from, or 6 km for two people who live close. */
-  const reach=yp&&tp?Math.max(6,kmBetween(yp,tp)/2+2):(yp||tp?6:null);
-  const withinReach=v=>reach==null||[yp,tp].filter(Boolean).every(pt=>kmBetween(pt,v.c)<=reach);
+  /* **Each of you, no further than you said.** Your distance from you, theirs
+     from them. Somebody who has not answered keeps the old reach: halfway plus
+     2 km from the one it is further from, or 6 km for two people who live
+     close. When nothing an item needs is that close -- the circles do not
+     meet, or meet over too little -- that item reaches as far as the old rule
+     did, and the plan says so. */
+  const oldReach=yp&&tp?Math.max(6,kmBetween(yp,tp)/2+2):(yp||tp?6:null);
+  const radii=[[yp,fit.youMiles],[tp,fit.themMiles]].filter(([pt])=>pt)
+    .map(([pt,mi])=>[pt,mi!=null?mi*KM_PER_MILE:oldReach]);
+  const inRadius=v=>radii.every(([pt,km])=>km==null||kmBetween(pt,v.c)<=km);
+  const inOldReach=v=>oldReach==null||[yp,tp].filter(Boolean).every(pt=>kmBetween(pt,v.c)<=oldReach);
+  let stretched=false;
+  /* **Your distances do not overlap**: you live further apart than you would
+     each travel, so nowhere is within both. Said plainly on the plan -- and the
+     plan is made anyway, about halfway between you as before the slider, and
+     can be sent like any other. */
+  const apart=!!(yp&&tp&&fit.youMiles!=null&&fit.themMiles!=null
+    &&kmBetween(yp,tp)>(fit.youMiles+fit.themMiles)*KM_PER_MILE);
   /* When each item will happen, before any place is chosen: the earliest it
      can start, and the latest it can end once getting between stops is
      allowed for. A place has to be open across all of it -- "afternoon"
      alone let a café that shuts at six land at seven. */
   const filledAll=(items||[]).filter(it=>it.cat);
   const windows=[]; {let t=PLAN_START[time]; filledAll.forEach((it,i)=>{windows.push([t,t+i*LEG_ALLOWANCE+it.hours*60]); t+=it.hours*60;});}
-  const cands=(cat,i,used)=>VENUES.filter(v=>{const h=hoursOf(v), w=windows[i];
+  const fits=(cat,i,used)=>v=>{const h=hoursOf(v), w=windows[i];
     /* Afternoon or evening by when this item starts, not when the date does:
        the third thing on a long afternoon is an evening thing. */
     const part=w[0]>=EVENING_FROM?"evening":"afternoon";
-    return CAT(v.kind)===cat&&v.times.includes(part)&&!used.has(v.id)&&fit.allows(v)&&withinReach(v)
-      &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow))&&w[0]>=h.o&&w[1]<=h.c&&!hidden.has(v.id);});
+    return CAT(v.kind)===cat&&v.times.includes(part)&&!used.has(v.id)&&fit.allows(v)
+      &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow))&&w[0]>=h.o&&w[1]<=h.c&&!hidden.has(v.id);};
+  /* Within your distances first; further only when nothing there fits. */
+  const cands=(cat,i,used)=>{const all=VENUES.filter(fits(cat,i,used)), close=apart?[]:all.filter(inRadius);
+    if(close.length) return close;
+    const further=all.filter(inOldReach); if(further.length) stretched=true; return further;};
   const pick=(pool0,skips,score,passed)=>{const fresh=pool0.filter(v=>!(passed||[]).includes(v.id)), pool=fresh.length?fresh:pool0;
     const r=pool.map(v=>[v,score(v)]).sort((a,b)=>b[1]-a[1]||(stableHash(a[0].id)-stableHash(b[0].id))).map(x=>x[0]);
     return r.length?r[(skips||0)%r.length]:null;};
@@ -1670,7 +1768,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
 
   const filled=(items||[]).filter(it=>it.cat);
   let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
-  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
@@ -1744,7 +1842,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
-  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,fairness,stops,
+  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
@@ -1870,11 +1968,34 @@ function itemsFromStops(stops,from){
   return (stops||[]).filter(x=>x.category).map(x=>newItem(x.category,
     Math.min(3,Math.max(1,Math.round((x.minutes||60)/60))),placeOf(x),from));
 }
+/* **Saved plans have a ceiling**: ten, or fifteen with Premium. At it, saving
+   asks you to make room rather than quietly dropping the oldest -- a plan you
+   kept stays until you delete it, even after Premium ends and you are over. */
+function savedFull(){
+  const n=(S.saved||[]).length, lim=SAVE_LIMIT(), over=n-lim+1;
+  const body=n>lim
+    ?`You have ${n} saved plans and can keep ${lim}. Delete ${over} to save this one.`
+    :`You can keep ${lim} saved plans${S.set.sub?"":`, or ${SAVE_PREMIUM} with Arch Premium`}. Delete one to save this.`;
+  openSheet(`<div class="titleM">Your saved plans are full</div>
+    <div class="body mortar mt-s">${body}</div>
+    <button class="btn primary mt-m" data-a="savedFromSheet">See saved plans</button>
+    ${S.set.sub?"":`<button class="btntext mt-s" data-a="premiumFromSheet">See Arch Premium</button>`}
+    <button class="btntext" data-a="closeSheet">Cancel</button>`);
+}
 function savedRoot(){
-  const list=S.saved||[];
+  const list=S.saved||[], lim=SAVE_LIMIT();
   let h=navbar("Saved plans")+`<div class="screen"><div class="pad pb-xxxl mt-m">`;
   if(!list.length) return h+`<div class="v gap-s mt-xl"><div class="titleM">Nothing saved yet</div>
-    <div class="body mortar">Tap the bookmark beside Share to keep a plan for later.</div></div></div></div>`;
+    <div class="body mortar">Tap Save for later under Share to keep a plan.</div>
+    <div class="footnote mortar">You can keep ${lim}${S.set.sub?"":`, or ${SAVE_PREMIUM} with Arch Premium`}.</div></div></div></div>`;
+  /* How many, against how many you can keep. Over it (Premium ended) says
+     how many to delete; nothing is ever deleted for you. */
+  const n=list.length, prem=S.set.sub;
+  const more=words=>`<button class="footnote" style="color:var(--lamp); padding:0" data-a="goPremium">${words}</button>`;
+  const line=n>lim?`${n} saved, and you can keep ${lim}. Delete ${n-lim+1} to save another${prem?".":`, or ${more(`keep ${SAVE_PREMIUM} with Premium`)}.`}`
+    :n===lim?`${n} of ${lim} saved. Delete one to save another${prem?".":`, or ${more(`keep ${SAVE_PREMIUM} with Premium`)}.`}`
+    :`${n} of ${lim} saved${prem?"":` \u00B7 ${more(`${SAVE_PREMIUM} with Premium`)}`}`;
+  h+=`<div class="footnote mortar" data-k="savedCount" style="margin-bottom:12px">${line}</div>`;
   h+=`<div class="v gap-s">`;
   list.slice().sort((a,b)=>b.savedAt-a.savedAt).forEach(sp=>{
     const person=sp.with===SELF_PLAN?S.you:(S.convos.find(c=>c.person.id===sp.with)||{}).person;
@@ -1897,8 +2018,8 @@ function savedRoot(){
    by somebody else's answers: Hana does not drink and keeps it walkable; Nadia
    likes a proper night out. Nobody's answers are ever shown to anybody else. */
 function seedPrefs(){
-  HANA.prefs={style:"outside",time:"evening",drinks:"no",budget:"middle",distance:"walkable"};
-  const n=byId("nadia"); if(n) n.prefs={style:"night_out",time:"evening",drinks:"yes",budget:"any",distance:"ride"};
+  HANA.prefs={style:"outside",time:"evening",drinks:"no",budget:"middle",reach:1};
+  const n=byId("nadia"); if(n) n.prefs={style:"night_out",time:"evening",drinks:"yes",budget:"any",reach:8};
 }
 
 function seedHanaPlan(){
@@ -1940,10 +2061,12 @@ function plannerGetStarted(action){
   return `<div class="v gap-s"><div class="titleM">Plan dates you would both enjoy</div>
       <div class="body mortar">Pick somebody you are talking to, and the planner lays out an afternoon or an evening: three stops, chosen from what you both like, about halfway between you.</div></div>
     <div class="v gap-m mt-l">
-      ${pt("5","Five quick questions about your ideal date. Multiple choice, under a minute.")}
+      ${pt("5","Five quick questions about your ideal date. Under a minute.")}
       ${pt("2","Plans fit you both. If either of you does not drink, or wants to keep it walkable, so does every plan.")}
       ${pt("0","Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")}</div>
-    <button class="btn primary mt-l" data-a="${action}">Get started</button>`;
+    ${(()=>{const kept=keptAnswers(), n=kept?kept.filter(x=>x!=null).length:0;
+      return `<button class="btn primary mt-l" data-a="${action}">${n?"Continue":"Get started"}</button>
+        ${n?`<div class="footnote mortar center mt-s">${n} of ${PREF_QS.length} answered. Your answers are kept.</div>`:""}`;})()}`;
 }
 
 /* The five questions, one to a screen, built like onboarding's: the same
@@ -1951,9 +2074,17 @@ function plannerGetStarted(action){
 function plannerQuestion(){
   const P_=S.planner, i=P_.q, [,q,opts]=PREF_QS[i];
   let segs=""; for(let k=0;k<PREF_QS.length;k++) segs+=`<div class="seg ${k<=i?"on":""}"></div>`;
-  return `<div class="rule mt-l">${segs}</div>
+  const head=`<div class="rule mt-l">${segs}</div>
     <div class="caption mortar mt-s">${i+1} of ${PREF_QS.length}</div>
-    <div class="titleM mt-l">${esc(q)}</div>
+    <div class="titleM mt-l">${esc(q)}</div>`;
+  /* The distance: a slider, so it needs a button to go on. */
+  if(!opts){
+    /* Shown at three miles until you move it; only moving it, or Done, answers it. */
+    return head+`<div class="v gap-s mt-xl">${reachControl("reachAsk",P_.draft[i]!=null?P_.draft[i]:REACH.start)}</div>
+      <button class="btn primary mt-l" data-a="planReachNext">${i+1<PREF_QS.length?"Next":"Done"}</button>
+      <button class="btntext mt-s" data-a="planBack">${i===0?"Back":"Back a question"}</button>`;
+  }
+  return head+`
     <div class="v gap-xs mt-xl">${opts.map(([,label],k)=>
       `<button data-a="planAns" data-k="${k}" style="display:block;width:100%">
         <div class="opt ${P_.draft[i]===k?"sel":""}">${esc(label)}</div></button>`).join("")}</div>
@@ -2113,6 +2244,15 @@ function plannerRoot(){
   if(plan.sameWords.length) bits0.push(`you both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}`);
   if(plan.halfway) bits0.push(`${solo?"around":"near"} ${esc(plan.halfway)}`);
   h+=`<div class="footnote mortar mt-s" data-k="planBasis">${bits0.join(" \u00B7 ")}</div>`;
+  /* Your distance, never theirs: the plan simply stays inside both. It opens
+     your preferences, where its slider is. */
+  if(plan.reachMiles!=null) h+=`<button class="footnote" style="color:var(--lamp); padding:0; margin-top:2px" data-a="planPrefs"
+    aria-label="Up to ${plan.reachMiles} miles from you. Change it">Up to ${plan.reachMiles} mi from you</button>`;
+  /* Two cases, said differently: the circles do not meet at all, or they do
+     but nothing fits where they overlap. Neither stops the plan or Share. */
+  if(plan.apart) h+=`<div class="footnote mt-s" data-k="planApart" style="padding:10px 12px; border-radius:var(--r-control); background:var(--stone)">
+      Your distances do not overlap, so this plan is about halfway between you. You can still send it.</div>`;
+  else if(plan.stretched) h+=`<div class="footnote mortar mt-s" data-k="planStretched">Nothing fits that close, so this plan goes a little further.</div>`;
 
   if(P_.hidden) h+=`<div class="spread mt-m" style="align-items:baseline"><div class="footnote mortar">${esc(P_.hidden.name)} will not be suggested again.</div>
     <button class="btntext" style="width:auto; padding:0 4px" data-a="planUnhide">Undo</button></div>`;
@@ -2129,12 +2269,15 @@ function plannerRoot(){
     if(st&&st.leg) h+=`<div class="pwalk"><i></i><div class="footnote mortar">${travelLabel(st.leg)}</div></div>`;
     else if(i>0) h+=`<div style="height:12px"></div>`;
     if(!it.cat){
-      h+=`<div class="pblank"><div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
+      /* Remove is the icon Saved plans deletes with, on the card where Swap
+         sits on a filled one; Custom spot is centred under the two choices. */
+      h+=`<div class="pblank"><div class="spread" style="align-items:center">
+          <div class="subhead">${i===0?"What should the date start with?":"What next?"}</div>
+          ${P_.items.length>1?`<button class="btntext" style="width:auto; height:32px; margin:-6px -4px -6px 8px; padding:0 4px; color:var(--mortar)"
+            data-a="planRemove" data-i="${i}" aria-label="Remove this item">\u2715</button>`:""}</div>
         <div class="pchoose mt-s">${["food","activity"].map(c=>
           `<button data-a="planChoose" data-i="${i}" data-k="${c}">${CAT_TITLE[c]}</button>`).join("")}</div>
-        <div class="pchoose" style="margin-top:4px">
-          <button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button>
-          ${P_.items.length>1?`<button class="btntext" style="flex:1; background:none; color:var(--mortar)" data-a="planRemove" data-i="${i}">Remove</button>`:`<span style="flex:1"></span>`}</div></div>`;
+        <button class="btntext" style="margin-top:4px; color:var(--mortar)" data-a="customSpot" data-i="${i}">Custom spot</button></div>`;
       return;
     }
     if(!st){
@@ -2164,6 +2307,8 @@ function plannerRoot(){
       h+=`<div class="pmore">
         ${kept?"":`<div class="footnote">${esc(st.reason)}</div>`}
         ${st.openThroughout?`<div class="caption mortar" style="margin-top:4px">${hrs.typical?"Usually open":"Open"} ${clockAt(hrs.o)} \u2013 ${clockAt(hrs.c)}</div>`:""}
+        <a class="caption" style="display:inline-block; margin-top:4px; color:var(--lamp); text-decoration:none" target="_blank" rel="noopener"
+          href="${googlePlace(st.v.name,st.v.hood)}" aria-label="Photos and reviews of ${esc(st.v.name)} on Google">Photos and reviews on Google \u2197</a>
         ${st.canSwap?"":`<div class="caption mortar" style="margin-top:2px">${esc(only)}</div>`}
         <div class="phours" role="group" aria-label="Duration"><span class="plabel" aria-hidden="true">Duration</span>${[1,2,3].map(n=>`<button data-a="planHours" data-i="${i}" data-k="${n}"
           aria-pressed="${it.hours===n}" aria-label="${n===1?"One hour":n+" hours"}">${n} hr</button>`).join("")}</div>
@@ -3641,7 +3786,9 @@ document.addEventListener("click",e=>{
           <span class="pin on" style="left:50%; top:50%"></span>
           <div class="poi" style="left:50%; top:62%; font-size:12px; color:var(--limestone)">${esc(d.n)}</div></div>
         <a class="btn quiet mt-m" style="text-decoration:none" target="_blank" rel="noopener"
-          href="https://maps.apple.com/?q=${encodeURIComponent(d.n)}&sll=${d.lat},${d.lon}&z=17">Open in Apple Maps</a>`);},
+          href="https://maps.apple.com/?q=${encodeURIComponent(d.n)}&sll=${d.lat},${d.lon}&z=17">Open in Apple Maps</a>
+        <a class="btntext mt-s" style="text-decoration:none" target="_blank" rel="noopener"
+          href="${googlePlace(d.n,d.h)}">Photos and reviews on Google</a>`);},
     customChoose:()=>{S.custom.chosen=el.dataset.v; redrawCustom();},
     /* Picked: kept as it is in that item, as food or an activity by what it
        is, for the time that usually takes. */
@@ -3659,20 +3806,26 @@ document.addEventListener("click",e=>{
     planHours:()=>{const P_=S.planner, i=+el.dataset.i, items=P_.items.slice();
       items[i]={...items[i],hours:+el.dataset.k}; S.planner={...P_,items,sent:null}; render();},
     /* Into the questions, from what you said last time if you said anything. */
-    planStart:()=>{S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
-    planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; render();
+    planStart:()=>{startQuestions(); render();},
+    planAns:()=>{const P_=S.planner, at=P_.q; P_.draft[at]=+el.dataset.k; S.prefsDraft=P_.draft.slice(); render();
       setTimeout(()=>{
         if(S.planner.q!==at) return;
         if(at+1<PREF_QS.length) S.planner.q=at+1;
-        else { S.you.prefs=prefsFrom(S.planner.draft);
+        else { S.you.prefs=prefsFrom(S.planner.draft); S.prefsDraft=null;
           S.planner={...S.planner,q:null,time:null,items:restartSwaps(),sent:null}; }
         render();
       },260);},
-    planBack:()=>{const P_=S.planner; P_.q=P_.q>0?P_.q-1:null; render();},
+    planBack:()=>{const P_=S.planner; if(P_.q>0) P_.q=P_.q-1; else { P_.q=null; leaveQuestions(); } render();},
+    planReachNext:()=>{const P_=S.planner, at=P_.q;
+      if(P_.draft[at]==null){ const sl=document.getElementById("reachAsk");
+        P_.draft[at]=sl?+sl.value:REACH.start; S.prefsDraft=P_.draft.slice(); }
+      if(at+1<PREF_QS.length) S.planner.q=at+1;
+      else { S.you.prefs=prefsFrom(P_.draft); S.prefsDraft=null;
+        S.planner={...P_,q:null,time:null,items:restartSwaps(),sent:null}; }
+      render();},
     /* The popup after onboarding: "Get started" goes straight to question one
        in the planner tab; "Not now" leaves the questions waiting there. */
-    introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[];
-      S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
+    introStart:()=>{closeSheet(); S.tab="planner"; S.stacks.planner=[]; startQuestions(); render();},
     planTime:()=>{S.planner={...S.planner,time:el.dataset.k,items:restartSwaps(),sent:null}; render();},
     /* A stop opens to its details, and closes again. */
     planOpen:()=>{const k=el.dataset.k, o={...(S.planner.open||{})}; o[k]=!o[k];
@@ -3682,11 +3835,13 @@ document.addEventListener("click",e=>{
        the way back into the questions. Only ever yours. */
     planPrefs:()=>{if(!S.you.prefs) return;
       openSheet(`<div class="titleM">Your date preferences</div>
-        <div class="body mortar mt-s">${esc(prefsSummary(S.you.prefs))}</div>
-        <div class="footnote mortar mt-s">They shape every plan. Nobody else sees them.</div>
+        <div class="body mortar mt-s">${esc(prefsSummary(S.you.prefs,true))}</div>
+        <div class="subhead mt-l">How far you would travel</div>
+        <div class="v gap-s mt-s">${reachControl("reachPref",reachOf(S.you.prefs))}</div>
+        <div class="footnote mortar mt-m">They shape every plan. Nobody else sees them.</div>
         <button class="btn quiet mt-m" data-a="planPrefsEdit">Change your answers</button>
         <button class="btntext mt-s" data-a="closeSheet">Done</button>`);},
-    planPrefsEdit:()=>{closeSheet(); S.planner={...S.planner,q:0,draft:prefsDraft(S.you.prefs)}; render();},
+    planPrefsEdit:()=>{closeSheet(); startQuestions(); render();},
     planDateOpen:()=>{const i=document.getElementById("planDateInput"); if(!i) return;
       try{ i.showPicker(); }catch(e){ i.style.pointerEvents="auto"; i.focus(); i.click(); }},
     /* Swap: the next place along. A kept place is let go, and the planner
@@ -3708,12 +3863,15 @@ document.addEventListener("click",e=>{
       if(S.saved.some(sp=>sp.key===key)){
         S.saved=S.saved.filter(sp=>sp.key!==key);
         S.planner={...P_,savedNote:"Removed from Saved.",savedNoteKey:key};
+      } else if(S.saved.length>=SAVE_LIMIT()){
+        savedFull(); return;
       } else {
         S.saved=S.saved.concat([{id:"sv"+Date.now(),key,with:withId,name:cur.p.name,plan:frozen,savedAt:Date.now()}]);
         S.planner={...P_,savedNote:"Saved. Find it under Saved, by the title.",savedNoteKey:key};
       }
       render();},
     savedList:()=>{S.planner={...S.planner,savedNote:null}; push({name:"saved"});},
+    savedFromSheet:()=>{closeSheet(); acts.savedList();},
     /* Back into the planner, on that person, with the places kept. */
     savedOpen:()=>{const sp=(S.saved||[]).find(x=>x.id===id); if(!sp) return;
       const items=itemsFromStops(sp.plan.stops,"From your saved plan.");
@@ -3925,7 +4083,7 @@ document.addEventListener("click",e=>{
       <div class="body mortar mt-s">Your profile goes now, and your conversations stop. This can&rsquo;t be undone.</div>
       <button class="btn danger mt-xxl" data-a="deleteDo">Delete my account</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    deleteDo:()=>{ closeSheet(); startOnboarding(); },
+    deleteDo:()=>{ closeSheet(); S.prefsDraft=null; startOnboarding(); },
     dataBuild:()=>{S.set.dataMade=true; render();},
     dataShare:()=>{const blob=new Blob([JSON.stringify({profile:{name:S.you.name},note:"Prototype stand-in for the export"},null,2)],{type:"application/json"});
       const f=new File([blob],"Arch data.json",{type:"application/json"});
@@ -3939,7 +4097,9 @@ document.addEventListener("click",e=>{
       <div class="body mortar mt-s">Nothing is deleted. Sign back in any time to pick up where you left off.</div>
       <button class="btn quiet mt-xxl" data-a="signOutDo">Sign out</button>
       <button class="btntext" data-a="closeSheet">Cancel</button>`),
-    signOutDo:()=>{ closeSheet(); startOnboarding(); },
+    /* Half-answered date questions are this phone's, for whoever is signed in:
+       they go, so the next person never sees them. Finished answers come back. */
+    signOutDo:()=>{ closeSheet(); S.prefsDraft=null; startOnboarding(); },
     setHeight:()=>{
       const v=el.dataset.o;
       if(el.dataset.t==="ob") S.onboarding.height=v; else S.you.h=v;
@@ -4204,6 +4364,13 @@ document.addEventListener("click",e=>{
 /* live input */
 document.addEventListener("input",e=>{
   const t=e.target, o=S.onboarding;
+  if(t.id==="reachAsk"||t.id==="reachPref"){ const mi=+t.value;
+    const words=document.getElementById(t.id+"Text"), hint=document.getElementById(t.id+"Hint");
+    if(words) words.textContent=reachText(mi); if(hint) hint.textContent=reachHint(mi);
+    const drawn=document.getElementById(t.id+"Map"); if(drawn) drawn.innerHTML=reachMap(mi,t.id);
+    if(t.id==="reachAsk"){ S.planner.draft[S.planner.q]=mi; S.prefsDraft=S.planner.draft.slice(); }
+    else { S.you.prefs={...S.you.prefs,reach:mi}; S.planner={...S.planner,items:restartSwaps(),sent:null}; render(); }
+    return; }
   if(t.id==="customSpotQ"){ S.custom.q=t.value; S.custom.chosen=null; redrawCustom(); return; }
   if(t.id==="planDateInput"){ if(t.value){ S.planner={...S.planner,day:plannerDay(t.value),items:restartSwaps(),sent:null}; render(); } return; }
   if(t.dataset.s==="distance"){ S.set.distance=+t.value;

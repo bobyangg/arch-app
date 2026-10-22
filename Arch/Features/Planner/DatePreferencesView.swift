@@ -13,6 +13,9 @@ import SwiftUI
 /// both people said; so this says they are not on your profile and are never
 /// shown, not that nobody could ever read them. See `backend/029`.
 struct PlannerGetStarted: View {
+    /// Questions answered on a run you backed out of, and kept: the button
+    /// says Continue, and how far you got.
+    var answered: Int = 0
     let onStart: () -> Void
 
     var body: some View {
@@ -22,38 +25,34 @@ struct PlannerGetStarted: View {
                     .archText(.titleM)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Pick somebody you are talking to, and the planner lays out an afternoon or an evening: three stops, chosen from what you both like, about halfway between you.")
-                    .archText(.body)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                point("5", "Five quick questions about your ideal date. Multiple choice, under a minute.")
-                point("2", "Plans fit you both. If either of you does not drink, or wants to keep it walkable, so does every plan.")
-                point("0", "Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")
+                point("Five quick questions about your ideal date. Under a minute.")
+                point("Arch plans dates based on both your preferences.")
+                point("Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")
             }
 
-            ArchButton(title: "Get started", action: onStart)
-                .accessibilityIdentifier("planner.getStarted")
+            VStack(spacing: ArchSpacing.xs) {
+                ArchButton(title: answered > 0 ? "Continue" : "Get started", action: onStart)
+                    .accessibilityIdentifier("planner.getStarted")
+                if answered > 0 {
+                    Text("\(answered) of \(DatePreferences.questions.count) answered. Your answers are kept.")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+            }
         }
     }
 
-    /// A numeral and a sentence. The numerals are the screen's whole argument
-    /// -- five questions, two of you, nothing shown -- set where the eye starts.
-    private func point(_ figure: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
-            Text(figure)
-                .archText(.titleM)
-                .foregroundStyle(ArchColor.lamp)
-                .frame(width: 28, alignment: .leading)
-                .accessibilityHidden(true)
-            Text(text)
-                .archText(.body)
-                .foregroundStyle(ArchColor.limestone)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+    /// One sentence. The numerals that used to sit beside these were cut to
+    /// keep the screen short.
+    private func point(_ text: String) -> some View {
+        Text(text)
+            .archText(.body)
+            .foregroundStyle(ArchColor.limestone)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -65,8 +64,10 @@ struct PlannerGetStarted: View {
 struct DatePreferenceQuestions: View {
     /// Which question is showing. Set to nil to leave.
     @Binding var index: Int?
-    /// One answer per question, as an option index.
+    /// One answer per question: an option index, or for the distance, miles.
     @Binding var draft: [Int?]
+    /// Where you are, for the distance's map. Nil draws no map.
+    var centre: Coordinate? = nil
     let onFinish: (DatePreferences) -> Void
 
     var body: some View {
@@ -85,41 +86,101 @@ struct DatePreferenceQuestions: View {
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
 
-                VStack(spacing: ArchSpacing.xs) {
-                    ForEach(Array(question.options.enumerated()), id: \.offset) { option, text in
-                        OptionRow(text: text, isSelected: draft[index] == option) {
-                            choose(option, at: index)
+                if question.isMiles {
+                    milesAnswer(at: index)
+                } else {
+                    VStack(spacing: ArchSpacing.xs) {
+                        ForEach(Array(question.options.enumerated()), id: \.offset) { option, text in
+                            OptionRow(text: text, isSelected: draft[index] == option) {
+                                choose(option, at: index)
+                            }
+                            .accessibilityIdentifier("planner.option.\(option)")
                         }
-                        .accessibilityIdentifier("planner.option.\(option)")
                     }
                 }
 
                 ArchTextButton(title: index == 0 ? "Back" : "Back a question") {
                     withAnimation(ArchMotion.standard) { self.index = index == 0 ? nil : index - 1 }
                 }
+                .accessibilityIdentifier("planner.questionBack")
             }
         }
     }
 
-    /// Marks the choice, then moves on after a beat -- or, on the last
-    /// question, finishes. Only if this is still the question that was tapped,
-    /// so two quick taps cannot skip one.
+    /// **The distance: a slider, with your circle on a map.** Shown at three
+    /// miles until it is moved; only moving it, or Next, answers it -- looking
+    /// at it does not.
+    private func milesAnswer(at index: Int) -> some View {
+        let miles = draft[index] ?? DatePreferences.startingMiles
+        return VStack(alignment: .leading, spacing: ArchSpacing.l) {
+            DistanceChooser(miles: Binding(get: { miles }, set: { draft[index] = $0 }), centre: centre)
+            ArchButton(title: index + 1 < DatePreferences.questions.count ? "Next" : "Done") {
+                if draft[index] == nil { draft[index] = miles }
+                advance(from: index)
+            }
+            .accessibilityIdentifier("planner.milesDone")
+        }
+    }
+
+    /// Marks the choice, then moves on after a beat.
     private func choose(_ option: Int, at tapped: Int) {
         draft[tapped] = option
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(260))
-            guard index == tapped else { return }
-            withAnimation(ArchMotion.standard) {
-                if tapped + 1 < DatePreferences.questions.count {
-                    index = tapped + 1
-                } else if let preferences = DatePreferences(answers: draft) {
-                    onFinish(preferences)
-                    index = nil
-                } else {
-                    // One was skipped with Back and never answered: go to it.
-                    index = draft.firstIndex { $0 == nil }
-                }
+            advance(from: tapped)
+        }
+    }
+
+    /// On to the next question -- or, after the last, finished. Only if this
+    /// is still the question that was answered, so two quick taps cannot skip
+    /// one.
+    private func advance(from answered: Int) {
+        guard index == answered else { return }
+        withAnimation(ArchMotion.standard) {
+            if answered + 1 < DatePreferences.questions.count {
+                index = answered + 1
+            } else if let preferences = DatePreferences(answers: draft) {
+                onFinish(preferences)
+                index = nil
+            } else {
+                // One was skipped with Back and never answered: go to it.
+                index = draft.firstIndex { $0 == nil }
             }
+        }
+    }
+}
+
+/// How far you would travel for a date: the miles in words, your circle on a
+/// map, the slider, and what that distance means for a plan. In the questions
+/// and in "Your date preferences", so the two can never differ.
+struct DistanceChooser: View {
+    @Binding var miles: Int
+    var centre: Coordinate? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+            Text(DatePreferences.milesText(miles))
+                .archText(.titleM)
+                .foregroundStyle(ArchColor.limestone)
+                .contentTransition(.numericText())
+                .animation(ArchMotion.quick, value: miles)
+                .accessibilityIdentifier("planner.milesText")
+            if let centre {
+                ReachMap(centre: centre, miles: miles)
+            }
+            ValueSlider(value: $miles, bounds: DatePreferences.milesRange,
+                        label: "How far you would travel, in miles")
+            HStack {
+                Text("\(DatePreferences.milesRange.lowerBound) mile")
+                Spacer()
+                Text("\(DatePreferences.milesRange.upperBound) miles")
+            }
+            .archText(.footnote)
+            .foregroundStyle(ArchColor.mortar)
+            Text(DatePreferences.milesHint(miles))
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

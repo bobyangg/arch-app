@@ -12,58 +12,31 @@ import SwiftUI
 /// the weakest version of that there is. Continue does nothing until the box is
 /// ticked, and ticking it is recorded on the server with the version.
 ///
-/// The six lines are the short version, and they say so. They are the parts of
-/// the terms somebody is likeliest to run into; the full text is one tap away,
-/// in English and in French, and it is what counts.
+/// **Short on purpose.** A heading, the two documents and the box, centred.
+/// There used to be a description and a six-line summary of the terms above
+/// them; both were cut to shorten what onboarding asks people to read. The
+/// French terms are still on the website, and linked from the English page.
 struct OnboardingTerms: View {
     let store: OnboardingStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.xl) {
-            StepHeading(
-                title: "The terms",
-                detail: "What you agree to by joining Arch. This is the short version; the full terms are what count."
-            )
-
-            VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                line("You are 18 or over, and this account is yours alone.")
-                line("Your profile is honest, and your first photo is you.")
-                line("No harassment, no scams, and no unwanted sexual content.")
-                line("Arch does not run background checks. Meet somewhere public, and never send money.")
-                line("Premium renews until you cancel it in your Apple ID settings.")
-                line("You can delete your account at any time, in Settings.")
-            }
-            .padding(ArchSpacing.m)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous)
-                    .fill(ArchColor.stone)
-            )
+        VStack(alignment: .center, spacing: ArchSpacing.xl) {
+            StepHeading(title: "The terms", centered: true)
 
             links
 
             agreement
         }
-    }
-
-    private func line(_ text: String) -> some View {
-        Text(text)
-            .archText(.body)
-            .foregroundStyle(ArchColor.limestone)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity)
     }
 
     /// Opened in Safari rather than drawn here: the pages are long, they are
     /// the same pages everybody else reads, and a copy in the app would be a
     /// second version to keep in step with the first.
     private var links: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+        VStack(alignment: .center, spacing: ArchSpacing.s) {
             if let terms = ArchConfig.termsURL {
                 Link("Read the Terms and Conditions", destination: terms)
-            }
-            if let french = ArchConfig.termsFrenchURL {
-                Link("Lire les conditions en français", destination: french)
             }
             if let privacy = ArchConfig.privacyURL {
                 Link("Read the Privacy Policy", destination: privacy)
@@ -87,10 +60,9 @@ struct OnboardingTerms: View {
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
                     .multilineTextAlignment(.leading)
-                Spacer(minLength: 0)
             }
             .padding(ArchSpacing.m)
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .center)
             .background(
                 RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
                     .fill(store.acceptedTerms ? ArchColor.stoneRaised : ArchColor.stone)

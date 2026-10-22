@@ -360,7 +360,7 @@ struct Person: Identifiable, Hashable {
     }
 
     /// Every height the picker offers, so nobody types "tall".
-    static let heights: [String] = (54...80).map { inches in
+    static let heights: [String] = (54...84).map { inches in
         let feet = inches / 12, rest = inches % 12
         return rest == 0 ? "\(feet) ft" : "\(feet) ft \(rest)"
     }
@@ -1360,6 +1360,11 @@ enum MockData {
             id: "b5",
             title: "Answer questions anytime",
             detail: "Everyone can change their questionnaire answers once a month. Premium lets you answer them whenever you want."
+        ),
+        PremiumBenefit(
+            id: "b6",
+            title: "Save up to fifteen date plans",
+            detail: "Everyone can keep ten plans for later in the Date planner. Premium keeps fifteen."
         )
     ]
     // Profile feedback is listed only while it works -- see
@@ -1465,5 +1470,5 @@ enum MockData {
     }
 
     static let onboardingHeadline = "Five people a day"
-    static let onboardingBody = "Five people. Every morning. No endless swiping. Arch finds the people you might actually want to meet."
+    static let onboardingBody = "Five people a day, so no endless swiping. Arch finds the people you might actually want to meet."
 }

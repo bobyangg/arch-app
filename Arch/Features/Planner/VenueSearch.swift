@@ -573,6 +573,23 @@ enum VenueSearch {
         )
     }
 
+    // MARK: Photos and reviews
+
+    /// **The place on Google Maps** -- its photos and reviews -- by name and
+    /// neighbourhood. A plain link: free, and no key (Google's "Maps URLs").
+    /// Showing them in Arch's own screens would mean Google's Places API, paid
+    /// past a small monthly allowance, and its terms do not allow it beside a
+    /// non-Google map, which ours are.
+    static func googleURL(for venue: Venue) -> URL? {
+        var parts = URLComponents(string: "https://www.google.com/maps/search/")
+        parts?.queryItems = [
+            URLQueryItem(name: "api", value: "1"),
+            URLQueryItem(name: "query", value: [venue.name, venue.neighbourhood]
+                .filter { !$0.isEmpty }.joined(separator: ", ")),
+        ]
+        return parts?.url
+    }
+
     // MARK: Your own spot
 
     /// **A place you name**, for "Custom spot": Apple Maps' places matching

@@ -355,7 +355,9 @@ struct RootTabView: View {
                     },
                     onOpenDaily: { selection = .daily },
                     startQuestions: plannerStarts,
-                    onSavePreferences: { profile.setDatePreferences($0) }
+                    onSavePreferences: { profile.setDatePreferences($0) },
+                    isPremium: settings.isSubscribed,
+                    onOpenPremium: { selection = .premium }
                 )
             }
             tab(.you) {
