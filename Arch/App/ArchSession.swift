@@ -80,7 +80,7 @@ final class ArchSession {
             // Its answers are mock data that start empty every launch, so date
             // questions kept from an earlier launch -- or an earlier UI test --
             // would be half of somebody else's set.
-            UserDefaults.standard.removeObject(forKey: DatePlannerView.draftKey)
+            forgetKeptAnswers()
             return
         }
 
@@ -101,6 +101,7 @@ final class ArchSession {
                 // A missing *session* throws `notSignedIn` and is caught below
                 // without destroying anything.
                 await ArchBackend.signOut()
+                forgetKeptAnswers()
                 state = .signedOut
                 return
             }
@@ -233,10 +234,20 @@ final class ArchSession {
     /// they are, and signing back in with Apple lands straight back on them.
     func signOut() async {
         await ArchBackend.signOut()
+        forgetKeptAnswers()
         profile = ProfileStore()
         daily = DailyFiveStore()
         settings = SettingsStore()
         state = .signedOut
+    }
+
+    /// What this phone keeps for whoever is signed in, and must not hand to
+    /// the next person: date questions answered part-way (`DatePlannerView`).
+    /// Finished answers are on the server and come back with the account; a
+    /// half-finished set does not. Not on a session that merely lapsed (the
+    /// `notSignedIn` catch in `refresh`), which keeps everything on purpose.
+    private func forgetKeptAnswers() {
+        UserDefaults.standard.removeObject(forKey: DatePlannerView.draftKey)
     }
 
     /// Immediate and permanent, as the screen says. Lands where a new account does.
