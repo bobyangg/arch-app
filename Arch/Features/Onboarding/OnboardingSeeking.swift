@@ -19,8 +19,7 @@ struct OnboardingSeeking: View {
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
-                title: "Who you want to meet",
-                detail: "Pick as many as apply. Arch will not put anyone outside this in your five."
+                title: "Who you want to meet"
             )
 
             VStack(spacing: ArchSpacing.xs) {
@@ -34,7 +33,7 @@ struct OnboardingSeeking: View {
                 }
             }
 
-            Text("This is not shown on your profile, and nobody is told what you picked. You can change it in Settings.")
+            Text("This is not shown on your profile. You can change it in Settings later.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

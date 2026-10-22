@@ -21,7 +21,7 @@ struct OnboardingBirthday: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "When were you born?",
-                detail: "Your age is worked out from this and shown on your profile. The date itself is never shown to anyone."
+                detail: "Your birthday is never shown to anyone."
             )
 
             // **One control, not three sheets.** All three parts on screen at

@@ -321,9 +321,12 @@ struct OnboardingFlowView: View {
 struct StepHeading: View {
     let title: String
     var detail: String?
+    /// Centred rather than leading. Only the terms step, which is short enough
+    /// to sit in the middle of the screen as one block.
+    var centered = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ArchSpacing.s) {
+        VStack(alignment: centered ? .center : .leading, spacing: ArchSpacing.s) {
             Text(title)
                 .archText(.titleL)
                 .foregroundStyle(ArchColor.limestone)
@@ -335,7 +338,8 @@ struct StepHeading: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .multilineTextAlignment(centered ? .center : .leading)
+        .frame(maxWidth: .infinity, alignment: centered ? .center : .leading)
     }
 }
 
