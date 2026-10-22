@@ -1678,6 +1678,12 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
   const inRadius=v=>radii.every(([pt,km])=>km==null||kmBetween(pt,v.c)<=km);
   const inOldReach=v=>oldReach==null||[yp,tp].filter(Boolean).every(pt=>kmBetween(pt,v.c)<=oldReach);
   let stretched=false;
+  /* **Your distances do not overlap**: you live further apart than you would
+     each travel, so nowhere is within both. Said plainly on the plan -- and the
+     plan is made anyway, about halfway between you as before the slider, and
+     can be sent like any other. */
+  const apart=!!(yp&&tp&&fit.youMiles!=null&&fit.themMiles!=null
+    &&kmBetween(yp,tp)>(fit.youMiles+fit.themMiles)*KM_PER_MILE);
   /* When each item will happen, before any place is chosen: the earliest it
      can start, and the latest it can end once getting between stops is
      allowed for. A place has to be open across all of it -- "afternoon"
@@ -1691,7 +1697,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
     return CAT(v.kind)===cat&&v.times.includes(part)&&!used.has(v.id)&&fit.allows(v)
       &&!(dow!=null&&(CLOSED[v.id]||[]).includes(dow))&&w[0]>=h.o&&w[1]<=h.c&&!hidden.has(v.id);};
   /* Within your distances first; further only when nothing there fits. */
-  const cands=(cat,i,used)=>{const all=VENUES.filter(fits(cat,i,used)), close=all.filter(inRadius);
+  const cands=(cat,i,used)=>{const all=VENUES.filter(fits(cat,i,used)), close=apart?[]:all.filter(inRadius);
     if(close.length) return close;
     const further=all.filter(inOldReach); if(further.length) stretched=true; return further;};
   const pick=(pool0,skips,score,passed)=>{const fresh=pool0.filter(v=>!(passed||[]).includes(v.id)), pool=fresh.length?fresh:pool0;
@@ -1716,7 +1722,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
 
   const filled=(items||[]).filter(it=>it.cat);
   let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
-  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,reachMiles:fit.youMiles,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
@@ -1790,7 +1796,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
-  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,reachMiles:fit.youMiles,fairness,stops,
+  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
@@ -2193,7 +2199,11 @@ function plannerRoot(){
   if(plan.reachMiles!=null) bits0.push(`<button class="footnote" style="color:var(--lamp); padding:0" data-a="planPrefs"
     aria-label="Up to ${plan.reachMiles} miles from you. Change it">up to ${plan.reachMiles} mi from you</button>`);
   h+=`<div class="footnote mortar mt-s" data-k="planBasis">${bits0.join(" \u00B7 ")}</div>`;
-  if(plan.stretched) h+=`<div class="footnote mortar mt-s" data-k="planStretched">Nothing fits that close, so this plan goes a little further.</div>`;
+  /* Two cases, said differently: the circles do not meet at all, or they do
+     but nothing fits where they overlap. Neither stops the plan or Share. */
+  if(plan.apart) h+=`<div class="footnote mt-s" data-k="planApart" style="padding:10px 12px; border-radius:var(--r-control); background:var(--stone)">
+      Your distances do not overlap, so this plan is about halfway between you. You can still send it.</div>`;
+  else if(plan.stretched) h+=`<div class="footnote mortar mt-s" data-k="planStretched">Nothing fits that close, so this plan goes a little further.</div>`;
 
   if(P_.hidden) h+=`<div class="spread mt-m" style="align-items:baseline"><div class="footnote mortar">${esc(P_.hidden.name)} will not be suggested again.</div>
     <button class="btntext" style="width:auto; padding:0 4px" data-a="planUnhide">Undo</button></div>`;
