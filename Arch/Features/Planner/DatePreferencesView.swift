@@ -22,16 +22,12 @@ struct PlannerGetStarted: View {
                     .archText(.titleM)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
-                Text("Pick somebody you are talking to, and the planner lays out an afternoon or an evening: three stops, chosen from what you both like, about halfway between you.")
-                    .archText(.body)
-                    .foregroundStyle(ArchColor.mortar)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
-                point("5", "Five quick questions about your ideal date. Multiple choice, under a minute.")
-                point("2", "Plans fit you both. If either of you does not drink, or wants to keep it walkable, so does every plan.")
-                point("0", "Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")
+                point("Five quick questions about your ideal date. Multiple choice, under a minute.")
+                point("Arch plans dates based on both your preferences.")
+                point("Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")
             }
 
             ArchButton(title: "Get started", action: onStart)
@@ -39,21 +35,14 @@ struct PlannerGetStarted: View {
         }
     }
 
-    /// A numeral and a sentence. The numerals are the screen's whole argument
-    /// -- five questions, two of you, nothing shown -- set where the eye starts.
-    private func point(_ figure: String, _ text: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: ArchSpacing.s) {
-            Text(figure)
-                .archText(.titleM)
-                .foregroundStyle(ArchColor.lamp)
-                .frame(width: 28, alignment: .leading)
-                .accessibilityHidden(true)
-            Text(text)
-                .archText(.body)
-                .foregroundStyle(ArchColor.limestone)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
+    /// One sentence. The numerals that used to sit beside these were cut to
+    /// keep the screen short.
+    private func point(_ text: String) -> some View {
+        Text(text)
+            .archText(.body)
+            .foregroundStyle(ArchColor.limestone)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

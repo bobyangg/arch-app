@@ -35,10 +35,9 @@ struct OnboardingQuestionnaire: View {
             VStack(alignment: .leading, spacing: ArchSpacing.m) {
                 point("Your answers are not on your profile.")
                 point("Nobody else sees them.")
-                point("They do not add up to a score, and Arch will never show you a percentage.")
             }
 
-            Text("\(Questionnaire.count) questions, about two minutes. There is no wrong answer to any of them, and you can change what you said later in Settings.")
+            Text("\(Questionnaire.count) questions taking about two minutes. There are no wrong answers and you can change them in Settings later.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
