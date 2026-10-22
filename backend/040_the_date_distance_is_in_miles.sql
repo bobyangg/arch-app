@@ -26,11 +26,14 @@
 -- that comes with the build that uses it.
 --
 -- Applied in the SQL Editor on 2026-10-22, ahead of any build that writes it.
+-- Safe to run again: a second run finds everything already there and changes
+-- nothing (the first version of this file stopped with "column reach_miles
+-- already exists").
 
 begin;
 
 alter table date_preferences
-    add column reach_miles smallint check (reach_miles between 1 and 15);
+    add column if not exists reach_miles smallint check (reach_miles between 1 and 15);
 
 comment on column date_preferences.reach_miles is
     'How far they would travel for a date, in miles. Null: read distance instead (walkable = 1, ride = 6).';
@@ -48,7 +51,7 @@ begin
 end;
 $$;
 
-create trigger date_preferences_keep_in_step
+create or replace trigger date_preferences_keep_in_step
     before update on date_preferences
     for each row execute function private.date_preferences_keep_in_step();
 
