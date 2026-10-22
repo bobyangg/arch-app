@@ -2243,10 +2243,11 @@ function plannerRoot(){
   const bits0=[basis];
   if(plan.sameWords.length) bits0.push(`you both wrote ${plan.sameWords.map(w=>`\u201C${esc(w)}\u201D`).join(" and ")}`);
   if(plan.halfway) bits0.push(`${solo?"around":"near"} ${esc(plan.halfway)}`);
-  /* Your distance, never theirs: the plan simply stays inside both. */
-  if(plan.reachMiles!=null) bits0.push(`<button class="footnote" style="color:var(--lamp); padding:0" data-a="planPrefs"
-    aria-label="Up to ${plan.reachMiles} miles from you. Change it">up to ${plan.reachMiles} mi from you</button>`);
   h+=`<div class="footnote mortar mt-s" data-k="planBasis">${bits0.join(" \u00B7 ")}</div>`;
+  /* Your distance, never theirs: the plan simply stays inside both. It opens
+     your preferences, where its slider is. */
+  if(plan.reachMiles!=null) h+=`<button class="footnote" style="color:var(--lamp); padding:0; margin-top:2px" data-a="planPrefs"
+    aria-label="Up to ${plan.reachMiles} miles from you. Change it">Up to ${plan.reachMiles} mi from you</button>`;
   /* Two cases, said differently: the circles do not meet at all, or they do
      but nothing fits where they overlap. Neither stops the plan or Share. */
   if(plan.apart) h+=`<div class="footnote mt-s" data-k="planApart" style="padding:10px 12px; border-radius:var(--r-control); background:var(--stone)">
