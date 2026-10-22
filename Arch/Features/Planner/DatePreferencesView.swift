@@ -13,6 +13,9 @@ import SwiftUI
 /// both people said; so this says they are not on your profile and are never
 /// shown, not that nobody could ever read them. See `backend/029`.
 struct PlannerGetStarted: View {
+    /// Questions answered on a run you backed out of, and kept: the button
+    /// says Continue, and how far you got.
+    var answered: Int = 0
     let onStart: () -> Void
 
     var body: some View {
@@ -30,8 +33,15 @@ struct PlannerGetStarted: View {
                 point("Your answers are not on your profile, and Arch never shows them to anybody. You can change them from the planner.")
             }
 
-            ArchButton(title: "Get started", action: onStart)
-                .accessibilityIdentifier("planner.getStarted")
+            VStack(spacing: ArchSpacing.xs) {
+                ArchButton(title: answered > 0 ? "Continue" : "Get started", action: onStart)
+                    .accessibilityIdentifier("planner.getStarted")
+                if answered > 0 {
+                    Text("\(answered) of \(DatePreferences.questions.count) answered. Your answers are kept.")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.mortar)
+                }
+            }
         }
     }
 
@@ -86,6 +96,7 @@ struct DatePreferenceQuestions: View {
                 ArchTextButton(title: index == 0 ? "Back" : "Back a question") {
                     withAnimation(ArchMotion.standard) { self.index = index == 0 ? nil : index - 1 }
                 }
+                .accessibilityIdentifier("planner.questionBack")
             }
         }
     }

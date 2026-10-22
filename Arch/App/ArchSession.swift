@@ -77,6 +77,10 @@ final class ArchSession {
             // default to. Nothing below this line would have anywhere to go.
             state = .designBuild
             introducePlanner = ProcessInfo.processInfo.arguments.contains("-introducePlanner")
+            // Its answers are mock data that start empty every launch, so date
+            // questions kept from an earlier launch -- or an earlier UI test --
+            // would be half of somebody else's set.
+            UserDefaults.standard.removeObject(forKey: DatePlannerView.draftKey)
             return
         }
 
