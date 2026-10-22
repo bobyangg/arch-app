@@ -160,3 +160,6 @@ Map
 Annotation
 # A stop's place on a map, in the app ("Maps" on a stop)
 Marker
+
+# SwiftUI: answering a request swaps the thread in place, without animating
+Transaction
