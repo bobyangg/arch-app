@@ -1367,9 +1367,30 @@ struct DatePlannerView: View {
     /// An item added and not yet told what it is.
     private func blankCard(index: Int) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(index == 0 ? "What should the date start with?" : "What next?")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
+            HStack(alignment: .center, spacing: ArchSpacing.s) {
+                Text(index == 0 ? "What should the date start with?" : "What next?")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                Spacer(minLength: 0)
+                // Remove, as the icon Saved plans deletes with: on the item,
+                // where Swap sits on a filled one, rather than a word under the
+                // choices. Not on the only item. The negative padding keeps the
+                // row the height of its words, so the card is the same height
+                // with the icon as without.
+                if items.count > 1 {
+                    Button { withAnimation(ArchMotion.standard) { remove(index) } } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.9))
+                    .padding(.vertical, -6)
+                    .accessibilityLabel("Remove this item")
+                    .accessibilityIdentifier("planner.blankRemove.\(index)")
+                }
+            }
             HStack(spacing: ArchSpacing.xs) {
                 ForEach(DatePlan.Category.allCases) { category in
                     Button { withAnimation(ArchMotion.standard) { fill(index, with: category) } } label: {
@@ -1388,22 +1409,13 @@ struct DatePlannerView: View {
                 }
             }
             // Food & drink or Activity, chosen by the planner -- or a place
-            // you name yourself, where "Surprise me" used to be. The same two
-            // columns as the buttons above: Custom spot under Food & drink,
-            // Remove under Activity.
-            HStack(spacing: ArchSpacing.xs) {
-                ArchTextButton(title: "Custom spot") {
-                    if items.indices.contains(index) { customFor = items[index].id }
-                }
-                .accessibilityHint("Search for a place and add it to the date")
-                .accessibilityIdentifier("planner.choose.custom")
-                if items.count > 1 {
-                    ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
-                        .accessibilityLabel("Remove this item")
-                } else {
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                }
+            // you name yourself, where "Surprise me" used to be, centred under
+            // the two.
+            ArchTextButton(title: "Custom spot") {
+                if items.indices.contains(index) { customFor = items[index].id }
             }
+            .accessibilityHint("Search for a place and add it to the date")
+            .accessibilityIdentifier("planner.choose.custom")
         }
         .padding(ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)

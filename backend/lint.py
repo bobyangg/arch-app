@@ -31,7 +31,8 @@ FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql",
          "029_date_preferences.sql", "032_hidden_places.sql",
          "017_a_dismissal_ends_the_pairing.sql",
          "037_a_newcomer_is_matched_on_arrival.sql",
-         "038_a_day_that_is_not_full_takes_newcomers.sql"]
+         "038_a_day_that_is_not_full_takes_newcomers.sql",
+         "040_the_date_distance_is_in_miles.sql"]
 
 problems = []
 notes = []
