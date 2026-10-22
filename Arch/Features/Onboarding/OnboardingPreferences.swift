@@ -24,7 +24,7 @@ struct OnboardingPreferences: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Who you are looking for",
-                detail: "Both of these are filters, not preferences — nobody outside them goes in your five, and you do not go in theirs."
+                detail: "Both of these are filters, not preferences."
             )
 
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -75,7 +75,7 @@ struct OnboardingPreferences: View {
                      high: "Anywhere")
             }
 
-            Text("Widening either one does not get you more people at once. It gives Arch more to choose your five from. You can change both in Settings whenever you like.")
+            Text("You can change both in Settings whenever you like.")
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

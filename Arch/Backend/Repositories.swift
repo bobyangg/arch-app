@@ -899,6 +899,7 @@ enum ArchBackend {
             let drinks: String
             let budget: String
             let distance: String
+            let reachMiles: Int
             let answeredAt: Date
         }
         try await SupabaseClient.shared.upsert("date_preferences", [Write(
@@ -908,6 +909,7 @@ enum ArchBackend {
             drinks: preferences.drinks.rawValue,
             budget: preferences.budget.rawValue,
             distance: preferences.distance.rawValue,
+            reachMiles: preferences.miles,
             answeredAt: time
         )])
     }

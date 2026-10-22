@@ -15,7 +15,7 @@ struct OnboardingPhotos: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Photos",
-                detail: "At least \(Person.requiredPhotos), up to \(Person.photoLimit). The first one is what people see in their five, so make it a clear photograph of you on your own. The rest are yours."
+                detail: "Choose \(Person.requiredPhotos)-\(Person.photoLimit) photos, in order of what you want to show on your profile."
             )
 
             VStack(alignment: .leading, spacing: ArchSpacing.s) {
@@ -74,7 +74,7 @@ struct OnboardingAnswers: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Three answers",
-                detail: "Pick three from the list and answer them. This is the part people actually read, and the specific version always beats the general one."
+                detail: "Pick three prompts and write your answers. This helps people learn more about you."
             )
 
             VStack(spacing: ArchSpacing.m) {
@@ -182,7 +182,7 @@ struct OnboardingInterests: View {
         VStack(alignment: .leading, spacing: ArchSpacing.xl) {
             StepHeading(
                 title: "Three interests",
-                detail: "Short and specific. \"Bridge inspections\" tells someone more than \"travel\" ever will."
+                detail: "Write three interests that you enjoy."
             )
 
             VStack(spacing: ArchSpacing.xs) {

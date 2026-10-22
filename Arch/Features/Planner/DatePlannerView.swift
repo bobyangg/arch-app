@@ -86,6 +86,10 @@ struct DatePlannerView: View {
     /// opens straight onto the first question. A count, because it is an event.
     var startQuestions: Int = 0
     var onSavePreferences: (DatePreferences) -> Void = { _ in }
+    /// Arch Premium: fifteen saved plans instead of ten.
+    var isPremium: Bool = false
+    /// "See Arch Premium", from a full list of saved plans.
+    var onOpenPremium: () -> Void = {}
 
     @Environment(\.openURL) private var openURL
 
@@ -98,6 +102,11 @@ struct DatePlannerView: View {
     /// The question showing, while the questions are; nil otherwise.
     @State private var questionIndex: Int?
     @State private var draft: [Int?] = Array(repeating: nil, count: DatePreferences.questions.count)
+    /// The questions as far as you got, kept on the phone as you answer --
+    /// option indices, "-" for one not answered yet; empty when nothing is
+    /// waiting -- so backing out part-way loses nothing (`startAsking`).
+    @AppStorage(DatePlannerView.draftKey) private var keptDraft = ""
+    static let draftKey = "arch.datePreferenceDraft"
     /// What you have added to the date, in order. It opens with one blank
     /// item, and holds at most `PlanItem.maximum`.
     @State private var items: [PlanItem] = [PlanItem()]
@@ -195,6 +204,13 @@ struct DatePlannerView: View {
     @State private var customFor: UUID?
     /// The place "Maps" is showing on a map, while its sheet is open.
     @State private var mapping: Venue?
+    /// "Photos and reviews on Google", while its page is open.
+    @State private var browsing: BrowserPage?
+    /// Saving with the list of saved plans already full.
+    @State private var savedFull = false
+    /// The distance in the preferences sheet while it moves; saved a moment
+    /// after it stops.
+    @State private var sheetMiles: Int?
     /// **One plan in progress per person.** What you built with somebody --
     /// the items, their hours and swaps, the time of day and the day -- is
     /// kept when you switch to somebody else, and is there when you come back.
@@ -274,11 +290,8 @@ struct DatePlannerView: View {
                 masthead
 
                 if questionIndex != nil {
-                    DatePreferenceQuestions(index: $questionIndex, draft: $draft) { answers in
-                        onSavePreferences(answers)
-                        restartSwaps()
-                        // Changing an agreed plan keeps its time of day.
-                        if changingAgreed == nil { pickedTime = nil }
+                    DatePreferenceQuestions(index: $questionIndex, draft: $draft, centre: you.matchPoint) { answers in
+                        saveAnswers(answers)
                     }
                 } else if let chosen, let agreed = chosen.conversation.agreedPlan,
                           changingAgreed != agreed.messageID {
@@ -302,7 +315,7 @@ struct DatePlannerView: View {
                     if let chosen, let agreed = chosen.conversation.agreedPlan {
                         changingBanner(agreed, with: chosen)
                     }
-                    PlannerGetStarted { startAsking() }
+                    PlannerGetStarted(answered: keptAnswers?.compactMap { $0 }.count ?? 0) { startAsking() }
                 } else if let person = planningWith {
                     picker
                     cancelledLine
@@ -329,6 +342,7 @@ struct DatePlannerView: View {
                             // saying what it is built on; then the stops.
                             settingsRow(time)
                             basisLine(plan)
+                            distanceNote(plan)
                             if let justHidden {
                                 HStack(alignment: .firstTextBaseline) {
                                     Text("\(justHidden.name) will not be suggested again.")
@@ -378,6 +392,10 @@ struct DatePlannerView: View {
         .background(ArchColor.night)
         .sheet(item: $mapping) { venue in
             PlaceMapSheet(venue: venue, onClose: { mapping = nil })
+        }
+        .sheet(item: $browsing) { page in
+            InAppBrowser(url: page.url)
+                .ignoresSafeArea()
         }
         .task(id: "\(planningID)#\(attempt)") { await findPlaces() }
         .task {
@@ -447,6 +465,13 @@ struct DatePlannerView: View {
         }
         // "Get started" in the popup after onboarding.
         .onChange(of: startQuestions) { _, _ in startAsking() }
+        // Each answer is kept as it is given; leaving part-way keeps the rest.
+        .onChange(of: draft) { _, answers in
+            if questionIndex != nil { keep(answers) }
+        }
+        .onChange(of: questionIndex) { old, new in
+            if old != nil, new == nil { leftQuestions() }
+        }
     }
 
     /// The plan for the person on screen -- or you, on a self plan -- from
@@ -958,12 +983,59 @@ struct DatePlannerView: View {
         sentTo = nil
     }
 
-    /// Into the questions, starting from what you said last time if you have
-    /// said anything.
+    /// Into the questions: where you left them if you backed out part-way,
+    /// with every answer you had given; otherwise from what you said last
+    /// time, if you have said anything.
     private func startAsking() {
-        draft = you.datePreferences?.answers
-            ?? Array(repeating: nil, count: DatePreferences.questions.count)
-        withAnimation(ArchMotion.standard) { questionIndex = 0 }
+        if let kept = keptAnswers {
+            draft = kept
+            withAnimation(ArchMotion.standard) { questionIndex = kept.firstIndex { $0 == nil } ?? 0 }
+        } else {
+            draft = you.datePreferences?.answers
+                ?? Array(repeating: nil, count: DatePreferences.questions.count)
+            withAnimation(ArchMotion.standard) { questionIndex = 0 }
+        }
+    }
+
+    /// The answers kept from a run you backed out of: one per question, nil
+    /// for any not answered. Nil when nothing is kept, or what is kept no
+    /// longer fits the questions.
+    private var keptAnswers: [Int?]? {
+        let parts = keptDraft.split(separator: ",", omittingEmptySubsequences: false)
+        guard parts.count == DatePreferences.questions.count else { return nil }
+        let answers: [Int?] = zip(parts, DatePreferences.questions).map { part, question in
+            Int(part).flatMap { value in
+                (question.isMiles ? DatePreferences.milesRange.contains(value)
+                                  : question.options.indices.contains(value)) ? value : nil
+            }
+        }
+        return answers.contains { $0 != nil } ? answers : nil
+    }
+
+    private func keep(_ answers: [Int?]) {
+        keptDraft = answers.map { answer in answer.map { String($0) } ?? "-" }.joined(separator: ",")
+    }
+
+    /// Your answers, as yours: whether the questions were finished or left
+    /// with every one answered.
+    private func saveAnswers(_ preferences: DatePreferences) {
+        keptDraft = ""
+        onSavePreferences(preferences)
+        restartSwaps()
+        // Changing an agreed plan keeps its time of day.
+        if changingAgreed == nil { pickedTime = nil }
+    }
+
+    /// Out of the questions without finishing them: Back from the first, or
+    /// "Change it" from a thread. A full set is saved as your answers, as
+    /// finishing would have done; part of one waits for next time.
+    private func leftQuestions() {
+        guard !keptDraft.isEmpty, let preferences = DatePreferences(answers: draft) else { return }
+        if preferences == you.datePreferences {
+            keptDraft = ""
+        } else {
+            saveAnswers(preferences)
+        }
     }
 
     /// Asks Apple Maps about the person on screen, once.
@@ -1039,7 +1111,14 @@ struct DatePlannerView: View {
                     open(saved)
                 },
                 onDelete: { saved in unsave(saved.key) },
-                onClose: { showingSaved = false }
+                onClose: { showingSaved = false },
+                limit: savedLimit,
+                premiumLimit: Self.savedLimitPremium,
+                isPremium: isPremium,
+                onOpenPremium: {
+                    showingSaved = false
+                    onOpenPremium()
+                }
             )
         }
     }
@@ -1260,7 +1339,10 @@ struct DatePlannerView: View {
                 onDone: { choosingDate = false }
             )
         }
-        .sheet(isPresented: $showingPreferences) { preferencesSheet }
+        .sheet(isPresented: $showingPreferences, onDismiss: {
+            saveSheetMiles()
+            sheetMiles = nil
+        }) { preferencesSheet }
     }
 
     /// Your answers, and the way back into the questions. Only ever yours:
@@ -1272,10 +1354,17 @@ struct DatePlannerView: View {
                 .foregroundStyle(ArchColor.limestone)
                 .padding(.top, ArchSpacing.xl)
             if let preferences = you.datePreferences {
-                Text(preferences.summary)
+                Text(preferences.summary(includingDistance: false))
                     .archText(.body)
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
+                Text("How far you would travel")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                    .padding(.top, ArchSpacing.s)
+                DistanceChooser(miles: Binding(get: { sheetMiles ?? preferences.miles },
+                                               set: { sheetMiles = $0 }),
+                                centre: you.matchPoint)
             }
             Text("They shape every plan. Nobody else sees them.")
                 .archText(.footnote)
@@ -1291,9 +1380,26 @@ struct DatePlannerView: View {
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .presentationDetents([.medium])
+        .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .archSheetBackground()
+        // Saved a moment after the slider stops, not at every mile it passes;
+        // the plan behind the sheet follows.
+        .task(id: sheetMiles) {
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            saveSheetMiles()
+        }
+    }
+
+    /// The distance from the preferences sheet, as your answer -- `distance`
+    /// beside it for builds from before the slider.
+    private func saveSheetMiles() {
+        guard let miles = sheetMiles, var preferences = you.datePreferences,
+              miles != preferences.miles else { return }
+        preferences.reachMiles = miles
+        preferences.distance = miles <= 1 ? .walkable : .ride
+        onSavePreferences(preferences)
     }
 
     /// **What the plan is built on, in one line**: what you share -- or, on a
@@ -1316,12 +1422,55 @@ struct DatePlannerView: View {
         if let halfway = plan.halfway {
             parts.append(isSolo ? "around \(halfway)" : "near \(halfway)")
         }
-        return Text(parts.joined(separator: " \u{00B7} "))
-            .archText(.footnote)
-            .foregroundStyle(ArchColor.mortar)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.bottom, ArchSpacing.l)
-            .accessibilityIdentifier("planner.basis")
+        return VStack(alignment: .leading, spacing: ArchSpacing.xxs) {
+            Text(parts.joined(separator: " \u{00B7} "))
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("planner.basis")
+            // Your distance, never theirs: the plan simply stays inside both.
+            // It opens your preferences, where its slider is.
+            if let miles = you.datePreferences?.miles {
+                Button { showingPreferences = true } label: {
+                    Text("Up to \(miles) mi from you")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.lamp)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(PressScaleStyle(scale: 0.97))
+                .accessibilityLabel("Up to \(miles) miles from you")
+                .accessibilityHint("Change how far you would travel")
+                .accessibilityIdentifier("planner.distance")
+            }
+        }
+        .padding(.bottom, ArchSpacing.l)
+    }
+
+    /// Two cases, said differently: your distances do not overlap at all, or
+    /// they do but nothing fits where they meet. Neither stops the plan, or
+    /// Share.
+    @ViewBuilder private func distanceNote(_ plan: DatePlan) -> some View {
+        if plan.apart {
+            Text("Your distances do not overlap, so this plan is about halfway between you. You can still send it.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.limestone)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(ArchSpacing.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                        .fill(ArchColor.stone)
+                )
+                .padding(.bottom, ArchSpacing.m)
+                .accessibilityIdentifier("planner.apart")
+        } else if plan.stretched {
+            Text("Nothing fits that close, so this plan goes a little further.")
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, ArchSpacing.m)
+                .accessibilityIdentifier("planner.stretched")
+        }
     }
 
     /// What you have added, in order: each item the planner found a place for
@@ -1367,9 +1516,30 @@ struct DatePlannerView: View {
     /// An item added and not yet told what it is.
     private func blankCard(index: Int) -> some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(index == 0 ? "What should the date start with?" : "What next?")
-                .archText(.subhead)
-                .foregroundStyle(ArchColor.limestone)
+            HStack(alignment: .center, spacing: ArchSpacing.s) {
+                Text(index == 0 ? "What should the date start with?" : "What next?")
+                    .archText(.subhead)
+                    .foregroundStyle(ArchColor.limestone)
+                Spacer(minLength: 0)
+                // Remove, as the icon Saved plans deletes with: on the item,
+                // where Swap sits on a filled one, rather than a word under the
+                // choices. Not on the only item. The negative padding keeps the
+                // row the height of its words, so the card is the same height
+                // with the icon as without.
+                if items.count > 1 {
+                    Button { withAnimation(ArchMotion.standard) { remove(index) } } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(ArchColor.mortar)
+                            .frame(width: 32, height: 32)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(PressScaleStyle(scale: 0.9))
+                    .padding(.vertical, -6)
+                    .accessibilityLabel("Remove this item")
+                    .accessibilityIdentifier("planner.blankRemove.\(index)")
+                }
+            }
             HStack(spacing: ArchSpacing.xs) {
                 ForEach(DatePlan.Category.allCases) { category in
                     Button { withAnimation(ArchMotion.standard) { fill(index, with: category) } } label: {
@@ -1388,22 +1558,13 @@ struct DatePlannerView: View {
                 }
             }
             // Food & drink or Activity, chosen by the planner -- or a place
-            // you name yourself, where "Surprise me" used to be. The same two
-            // columns as the buttons above: Custom spot under Food & drink,
-            // Remove under Activity.
-            HStack(spacing: ArchSpacing.xs) {
-                ArchTextButton(title: "Custom spot") {
-                    if items.indices.contains(index) { customFor = items[index].id }
-                }
-                .accessibilityHint("Search for a place and add it to the date")
-                .accessibilityIdentifier("planner.choose.custom")
-                if items.count > 1 {
-                    ArchTextButton(title: "Remove") { withAnimation(ArchMotion.standard) { remove(index) } }
-                        .accessibilityLabel("Remove this item")
-                } else {
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
-                }
+            // you name yourself, where "Surprise me" used to be, centred under
+            // the two.
+            ArchTextButton(title: "Custom spot") {
+                if items.indices.contains(index) { customFor = items[index].id }
             }
+            .accessibilityHint("Search for a place and add it to the date")
+            .accessibilityIdentifier("planner.choose.custom")
         }
         .padding(ArchSpacing.m)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1566,6 +1727,23 @@ struct DatePlannerView: View {
                             .archText(.caption)
                             .foregroundStyle(ArchColor.mortar)
                             .fixedSize(horizontal: false, vertical: true)
+                    }
+                    // Photos and reviews: Google's page for the place, over the
+                    // planner (`VenueSearch.googleURL`).
+                    if let google = VenueSearch.googleURL(for: stop.venue) {
+                        Button { browsing = BrowserPage(url: google) } label: {
+                            HStack(spacing: 4) {
+                                Text("Photos and reviews on Google")
+                                Image(systemName: "arrow.up.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                            }
+                            .archText(.caption)
+                            .foregroundStyle(ArchColor.lamp)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PressScaleStyle(scale: 0.97))
+                        .accessibilityLabel("Photos and reviews of \(stop.venue.name) on Google")
+                        .accessibilityIdentifier("planner.google.\(index)")
                     }
                     if !stop.canSwap {
                         Text(onlyFit(stop, in: plan))
@@ -1810,6 +1988,21 @@ struct DatePlannerView: View {
         let key: String
     }
 
+    /// Saved plans you can keep: ten, or fifteen with Arch Premium.
+    static let savedLimitFree = 10
+    static let savedLimitPremium = 15
+    private var savedLimit: Int { isPremium ? Self.savedLimitPremium : Self.savedLimitFree }
+
+    private var savedFullMessage: String {
+        let count = savedPlans.count
+        if count > savedLimit {
+            return "You have \(count) saved plans and can keep \(savedLimit). Delete \(count - savedLimit + 1) to save this one."
+        }
+        return isPremium
+            ? "You can keep \(savedLimit) saved plans. Delete one to save this."
+            : "You can keep \(savedLimit) saved plans, or \(Self.savedLimitPremium) with Arch Premium. Delete one to save this."
+    }
+
     /// Yours, newest first.
     private var savedPlans: [SavedDatePlan] {
         allSavedPlans.filter { $0.owner == you.id }.sorted { $0.savedAt > $1.savedAt }
@@ -1853,6 +2046,12 @@ struct DatePlannerView: View {
         let key = savedKey(shared)
         if savedPlans.contains(where: { $0.key == key }) {
             unsave(key)
+            return
+        }
+        // Full: ask to make room rather than drop the oldest. A plan you
+        // kept stays until you delete it, even past the limit after Premium.
+        guard savedPlans.count < savedLimit else {
+            savedFull = true
             return
         }
         let saved = SavedDatePlan(id: UUID().uuidString, owner: you.id, withID: planningID,
@@ -1902,6 +2101,15 @@ struct DatePlannerView: View {
         .accessibilityLabel(isSaved ? "Saved. Tap to remove" : "Save this plan for later")
         .accessibilityAddTraits(isSaved ? [.isButton, .isSelected] : .isButton)
         .accessibilityIdentifier("planner.save")
+        .alert("Your saved plans are full", isPresented: $savedFull) {
+            Button("See saved plans") { showingSaved = true }
+            if !isPremium {
+                Button("See Arch Premium") { onOpenPremium() }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(savedFullMessage)
+        }
     }
 
     // MARK: Sending the same plan twice
@@ -1999,6 +2207,11 @@ struct SavedPlansSheet: View {
     let onOpen: (DatePlannerView.SavedDatePlan) -> Void
     let onDelete: (DatePlannerView.SavedDatePlan) -> Void
     let onClose: () -> Void
+    /// How many you can keep, and with Premium.
+    var limit: Int = DatePlannerView.savedLimitFree
+    var premiumLimit: Int = DatePlannerView.savedLimitPremium
+    var isPremium: Bool = false
+    var onOpenPremium: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -2021,8 +2234,14 @@ struct SavedPlansSheet: View {
                     .archText(.footnote)
                     .foregroundStyle(ArchColor.mortar)
                     .padding(.top, ArchSpacing.xxs)
+                Text(isPremium ? "You can keep \(limit)." : "You can keep \(limit), or \(premiumLimit) with Arch Premium.")
+                    .archText(.footnote)
+                    .foregroundStyle(ArchColor.mortar)
+                    .padding(.top, ArchSpacing.xxs)
                 Spacer(minLength: 0)
             } else {
+                countLine
+                    .padding(.bottom, ArchSpacing.s)
                 ScrollView {
                     VStack(spacing: ArchSpacing.s) {
                         ForEach(plans) { saved in card(saved) }
@@ -2037,6 +2256,31 @@ struct SavedPlansSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .archSheetBackground()
+    }
+
+    /// How many, against how many you can keep. Over it -- Premium ended --
+    /// says how many to delete; nothing is ever deleted for you.
+    private var countLine: some View {
+        let count = plans.count
+        let words = count > limit
+            ? "\(count) saved, and you can keep \(limit). Delete \(count - limit + 1) to save another."
+            : count == limit
+                ? "\(count) of \(limit) saved. Delete one to save another."
+                : "\(count) of \(limit) saved."
+        return VStack(alignment: .leading, spacing: 2) {
+            Text(words)
+                .archText(.footnote)
+                .foregroundStyle(ArchColor.mortar)
+                .accessibilityIdentifier("planner.savedCount")
+            if !isPremium {
+                Button(action: onOpenPremium) {
+                    Text("Keep \(premiumLimit) with Arch Premium")
+                        .archText(.footnote)
+                        .foregroundStyle(ArchColor.lamp)
+                }
+                .buttonStyle(PressScaleStyle(scale: 0.97))
+            }
+        }
     }
 
     private func card(_ saved: DatePlannerView.SavedDatePlan) -> some View {

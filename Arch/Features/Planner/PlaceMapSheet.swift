@@ -8,6 +8,7 @@ struct PlaceMapSheet: View {
     let onClose: () -> Void
 
     @Environment(\.openURL) private var openURL
+    @State private var browsing: BrowserPage?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -46,6 +47,13 @@ struct PlaceMapSheet: View {
             .padding(.top, ArchSpacing.m)
             .accessibilityHint("For directions")
             .accessibilityIdentifier("planner.placeMap.open")
+
+            if let google = VenueSearch.googleURL(for: venue) {
+                ArchTextButton(title: "Photos and reviews on Google") {
+                    browsing = BrowserPage(url: google)
+                }
+                .accessibilityIdentifier("planner.placeMap.google")
+            }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.bottom, ArchSpacing.m)
@@ -53,6 +61,10 @@ struct PlaceMapSheet: View {
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(.visible)
         .archSheetBackground()
+        .sheet(item: $browsing) { page in
+            InAppBrowser(url: page.url)
+                .ignoresSafeArea()
+        }
     }
 
     private var point: CLLocationCoordinate2D {
