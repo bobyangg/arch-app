@@ -1,7 +1,7 @@
 import MapKit
 import SwiftUI
 
-/// **Your distance, drawn.** A circle of that many miles round where you are,
+/// **Your distance, drawn.** A circle of that many kilometres round where you are,
 /// on Apple's map, zoomed out to fit it -- so the circle grows as the number
 /// does, and the neighbourhoods on the map say how far that really is.
 ///
@@ -10,7 +10,7 @@ import SwiftUI
 /// about -- the slider under it is the thing to touch.
 struct ReachMap: View {
     let centre: Coordinate
-    let miles: Int
+    let km: Int
 
     @State private var camera: MapCameraPosition = .automatic
 
@@ -30,7 +30,7 @@ struct ReachMap: View {
         .frame(height: 180)
         .clipShape(RoundedRectangle(cornerRadius: ArchRadius.card, style: .continuous))
         .onAppear { camera = fitted }
-        .onChange(of: miles) { _, _ in
+        .onChange(of: km) { _, _ in
             withAnimation(ArchMotion.standard) { camera = fitted }
         }
         .accessibilityHidden(true)
@@ -40,7 +40,7 @@ struct ReachMap: View {
         CLLocationCoordinate2D(latitude: centre.latitude, longitude: centre.longitude)
     }
 
-    private var metres: CLLocationDistance { Double(miles) * 1_609.344 }
+    private var metres: CLLocationDistance { Double(km) * 1_000 }
 
     /// The circle with a little room round it.
     private var fitted: MapCameraPosition {
