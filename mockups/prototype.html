@@ -1477,17 +1477,17 @@ const PREF_QS=[
   ["reach","How far would you travel for a date?",null]];
 /* The fifth answer. A mile or less keeps every stop on foot, as "keep it
    walkable" did; an answer from before the slider reads as a mile or six. */
-const REACH={min:1,max:15,start:3}, KM_PER_MILE=1.609;
-const reachOf=p=>p.reach!=null?p.reach:(p.distance==="walkable"?1:6);
-const reachText=mi=>`Up to ${mi} mile${mi===1?"":"s"} away`;
-const reachHint=mi=>mi<=1?"Walking distance. Every stop stays on foot."
-  :mi<=5?"A short ride. Stops can be a few minutes apart.":"Across town is fine.";
+const REACH={min:1,max:25,start:5,walk:2};
+const reachOf=p=>p.reach!=null?p.reach:(p.distance==="walkable"?2:10);
+const reachText=km=>`Up to ${km} km away`;
+const reachHint=km=>km<=REACH.walk?"Walking distance. Every stop stays on foot."
+  :km<=8?"A short ride. Stops can be a few minutes apart.":"Across town is fine.";
 function reachControl(id,mi){
   return `<div class="titleM" id="${id}Text">${reachText(mi)}</div>
     <div id="${id}Map" aria-hidden="true" style="border-radius:var(--r-card); overflow:hidden; line-height:0">${reachMap(mi,id)}</div>
     <input class="slider" id="${id}" type="range" min="${REACH.min}" max="${REACH.max}" step="1" value="${mi}"
-      aria-label="How far you would travel for a date, in miles">
-    <div style="display:flex; justify-content:space-between" class="footnote mortar"><span>1 mile</span><span>${REACH.max} miles</span></div>
+      aria-label="How far you would travel for a date, in kilometres">
+    <div style="display:flex; justify-content:space-between" class="footnote mortar"><span>1 km</span><span>${REACH.max} km</span></div>
     <div class="footnote mortar" id="${id}Hint">${reachHint(mi)}</div>`;
 }
 const STYLE_KINDS={talk:["coffee","walk","food"],doing:["studio","museum","shop","show","play","attraction"],
@@ -1504,7 +1504,7 @@ function reachMap(mi,id){
   const at=matchPoint(S.you); if(!at) return "";
   const W=320, H=180, cx=W/2, cy=H/2;
   const rPx=34+50*Math.sqrt((mi-REACH.min)/(REACH.max-REACH.min));
-  const kmPx=mi*KM_PER_MILE/rPx, kx=111.32*Math.cos(at.lat*Math.PI/180), ky=110.57;
+  const kmPx=mi/rPx, kx=111.32*Math.cos(at.lat*Math.PI/180), ky=110.57;
   const grid=Math.max(22,Math.min(56,1.2/kmPx));
   /* Nearest first; a name that would cover another, or the edge, or you, is left off. */
   const taken=[[cx-8,cy-8,cx+8,cy+8],[cx-13,cy-21,cx+13,cy-8]], labels=[];
@@ -1514,7 +1514,7 @@ function reachMap(mi,id){
     const box=[x-w/2,y-10,x+w/2,y+3];
     if(box[0]<4||box[2]>W-4||box[1]<3||box[3]>H-3) return;
     if(taken.some(t=>!(box[2]<t[0]||box[0]>t[2]||box[3]<t[1]||box[1]>t[3]))) return;
-    taken.push(box); labels.push([x,y,p.name,d<=mi*KM_PER_MILE]);
+    taken.push(box); labels.push([x,y,p.name,d<=mi]);
   });
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" style="display:block">
     <defs><pattern id="${id}Grid" width="${grid}" height="${grid}" patternUnits="userSpaceOnUse">
@@ -1549,7 +1549,7 @@ const prefsSummary=(p,noReach)=>PREF_QS.filter(([k])=>!(noReach&&k==="reach"))
    it walkable, it stays on foot; the lower budget wins. Tastes are blended. */
 function dateFit(a,b){
   const both=[a,b].filter(Boolean);
-  const noDrinks=both.some(p=>p.drinks==="no"), walkable=both.some(p=>reachOf(p)<=1);
+  const noDrinks=both.some(p=>p.drinks==="no"), walkable=both.some(p=>reachOf(p)<=REACH.walk);
   const budget=["low","middle","any"].find(x=>both.some(p=>p.budget===x))||"any";
   const time=(a&&a.time!=="either"&&a.time)||(b&&b.time!=="either"&&b.time)||"afternoon";
   const allows=v=>!(noDrinks&&DRINK_LED(v.kind));
@@ -1559,7 +1559,7 @@ function dateFit(a,b){
     n-=(budget==="low"?1.5:budget==="middle"?0.5:0)*PRICE[v.kind];
     return n;};
   /* Each person's own distance, in miles, for the planner to hold them to. */
-  return {noDrinks,walkable,budget,time,allows,score,youMiles:a?reachOf(a):null,themMiles:b?reachOf(b):null};
+  return {noDrinks,walkable,budget,time,allows,score,youKm:a?reachOf(a):null,themKm:b?reachOf(b):null};
 }
 
 /* Parks, museums and libraries are real places; every café, bar, studio and
@@ -1719,8 +1719,8 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
      meet, or meet over too little -- that item reaches as far as the old rule
      did, and the plan says so. */
   const oldReach=yp&&tp?Math.max(6,kmBetween(yp,tp)/2+2):(yp||tp?6:null);
-  const radii=[[yp,fit.youMiles],[tp,fit.themMiles]].filter(([pt])=>pt)
-    .map(([pt,mi])=>[pt,mi!=null?mi*KM_PER_MILE:oldReach]);
+  const radii=[[yp,fit.youKm],[tp,fit.themKm]].filter(([pt])=>pt)
+    .map(([pt,mi])=>[pt,mi!=null?mi:oldReach]);
   const inRadius=v=>radii.every(([pt,km])=>km==null||kmBetween(pt,v.c)<=km);
   const inOldReach=v=>oldReach==null||[yp,tp].filter(Boolean).every(pt=>kmBetween(pt,v.c)<=oldReach);
   let stretched=false;
@@ -1728,8 +1728,8 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
      each travel, so nowhere is within both. Said plainly on the plan -- and the
      plan is made anyway, about halfway between you as before the slider, and
      can be sent like any other. */
-  const apart=!!(yp&&tp&&fit.youMiles!=null&&fit.themMiles!=null
-    &&kmBetween(yp,tp)>(fit.youMiles+fit.themMiles)*KM_PER_MILE);
+  const apart=!!(yp&&tp&&fit.youKm!=null&&fit.themKm!=null
+    &&kmBetween(yp,tp)>(fit.youKm+fit.themKm));
   /* When each item will happen, before any place is chosen: the earliest it
      can start, and the latest it can end once getting between stops is
      allowed for. A place has to be open across all of it -- "afternoon"
@@ -1768,7 +1768,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
 
   const filled=(items||[]).filter(it=>it.cat);
   let ai=filled.findIndex(it=>it.cat==="activity"); if(ai<0&&filled.length) ai=0;
-  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
+  if(ai<0) return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachKm:fit.youKm,fairness:null,stops:[],fromYou:null,endsAt:PLAN_START[time]};
 
   /* "Keep it walkable" starts with the anchor: it has to be somewhere with
      enough of every other item you asked for on foot from it. */
@@ -1842,7 +1842,7 @@ function planDate(you,them,time,items,day,alreadyShared,excluded){
   if(first&&yp&&tp){const diff=kmBetween(tp,first.c)-kmBetween(yp,first.c);
     fairness=Math.abs(diff)<1?`About as far for ${them.name} as for you.`
       :diff>0?`A little further for ${them.name} than for you.`:`A little further for you than for ${them.name}.`;}
-  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachMiles:fit.youMiles,fairness,stops,
+  return {day,shared:solo?DATE_THEME_ORDER.filter(k=>k in yours):shared,sameWords,halfway,stretched,apart,reachKm:fit.youKm,fairness,stops,
     fromYou:first&&yp?kmBetween(yp,first.c):null,
     endsAt:stops.length?stops[stops.length-1].start+stops[stops.length-1].minutes:PLAN_START[time]};
 }
@@ -2018,8 +2018,8 @@ function savedRoot(){
    by somebody else's answers: Hana does not drink and keeps it walkable; Nadia
    likes a proper night out. Nobody's answers are ever shown to anybody else. */
 function seedPrefs(){
-  HANA.prefs={style:"outside",time:"evening",drinks:"no",budget:"middle",reach:1};
-  const n=byId("nadia"); if(n) n.prefs={style:"night_out",time:"evening",drinks:"yes",budget:"any",reach:8};
+  HANA.prefs={style:"outside",time:"evening",drinks:"no",budget:"middle",reach:2};
+  const n=byId("nadia"); if(n) n.prefs={style:"night_out",time:"evening",drinks:"yes",budget:"any",reach:13};
 }
 
 function seedHanaPlan(){
@@ -2246,8 +2246,8 @@ function plannerRoot(){
   h+=`<div class="footnote mortar mt-s" data-k="planBasis">${bits0.join(" \u00B7 ")}</div>`;
   /* Your distance, never theirs: the plan simply stays inside both. It opens
      your preferences, where its slider is. */
-  if(plan.reachMiles!=null) h+=`<button class="footnote" style="color:var(--lamp); padding:0; margin-top:2px" data-a="planPrefs"
-    aria-label="Up to ${plan.reachMiles} miles from you. Change it">Up to ${plan.reachMiles} mi from you</button>`;
+  if(plan.reachKm!=null) h+=`<button class="footnote" style="color:var(--lamp); padding:0; margin-top:2px" data-a="planPrefs"
+    aria-label="Up to ${plan.reachKm} kilometres from you. Change it">Up to ${plan.reachKm} km from you</button>`;
   /* Two cases, said differently: the circles do not meet at all, or they do
      but nothing fits where they overlap. Neither stops the plan or Share. */
   if(plan.apart) h+=`<div class="footnote mt-s" data-k="planApart" style="padding:10px 12px; border-radius:var(--r-control); background:var(--stone)">

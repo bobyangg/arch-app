@@ -899,6 +899,7 @@ enum ArchBackend {
             let drinks: String
             let budget: String
             let distance: String
+            let reachKm: Int
             let reachMiles: Int
             let answeredAt: Date
         }
@@ -909,7 +910,8 @@ enum ArchBackend {
             drinks: preferences.drinks.rawValue,
             budget: preferences.budget.rawValue,
             distance: preferences.distance.rawValue,
-            reachMiles: preferences.miles,
+            reachKm: preferences.km,
+            reachMiles: preferences.milesForOlderBuilds,
             answeredAt: time
         )])
     }
