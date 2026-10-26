@@ -36,7 +36,11 @@ struct EditInterestsSheet: View {
 
             Spacer(minLength: 0)
 
-            ArchButton(title: "Save", isEnabled: hasSomething) {
+            if let note = ContentFilter.note(for: drafts, in: .profile) {
+                BlockedWordNote(text: note)
+            }
+            ArchButton(title: "Save",
+                       isEnabled: hasSomething && ContentFilter.allows(drafts, in: .profile)) {
                 onSave(drafts)
             }
             .accessibilityIdentifier("interests.save")
