@@ -229,6 +229,11 @@ final class OnboardingStore {
 
     /// Names the gap rather than leaving a dead button to be guessed at.
     var photoShortfallText: String {
+        if profile.sensitiveRefused > 0 {
+            return profile.sensitiveRefused == 1
+                ? "Your iPhone flagged one photo as sensitive, so it was not added."
+                : "Your iPhone flagged \(ArchCopy.word(profile.sensitiveRefused)) photos as sensitive, so they were not added."
+        }
         if profile.failedUploads > 0 {
             return profile.failedUploads == 1
                 ? "One photo did not upload. Tap it to try again."

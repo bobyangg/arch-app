@@ -23,6 +23,9 @@ struct CachedImage: View {
     let url: URL?
 
     @State private var loaded: UIImage?
+    /// What iOS said about it, once asked. See `SensitivePhotos`.
+    @State private var sensitive: Bool?
+    @State private var shown = false
 
     /// Read straight from the cache while rendering, so a rebuilt cell draws its
     /// photograph on the first frame. Going through `@State` alone would show the
@@ -32,11 +35,30 @@ struct CachedImage: View {
         loaded ?? url.flatMap { ImageStore.shared.image(for: $0) }
     }
 
+    /// Nil while iOS is still being asked. Always false on a phone that has not
+    /// turned Sensitive Content Warning on, which is most of them.
+    private var verdict: Bool? {
+        guard SensitivePhotos.isOn else { return false }
+        return sensitive ?? url.flatMap { ImageStore.shared.verdict(for: $0) }
+    }
+
+    private var isShown: Bool {
+        shown || url.map { ImageStore.shared.isShown($0) } ?? false
+    }
+
     var body: some View {
         Group {
-            if let image {
+            if let image, verdict == false || (verdict == true && isShown) {
                 Image(uiImage: image).resizable().scaledToFill()
+            } else if let image, verdict == true {
+                SensitivePhotoCover(image: image) {
+                    if let url { ImageStore.shared.markShown(url) }
+                    shown = true
+                }
             } else {
+                // Also the state while a photograph is being checked: it is not
+                // drawn until iOS has said, so a sensitive one never shows for a
+                // frame before its cover arrives.
                 // Not a spinner. The tone underneath is already doing the job, and
                 // a spinner on top of it would be the app drawing attention to its
                 // own latency.
@@ -49,18 +71,35 @@ struct CachedImage: View {
     }
 
     private func load() async {
+        // A cell reused for another photograph starts that one unjudged.
+        sensitive = nil
+        shown = false
         guard let url else {
             loaded = nil
             return
         }
         if let cached = ImageStore.shared.image(for: url) {
             loaded = cached
+            await screen(cached, at: url)
             return
         }
         guard let (data, _) = try? await URLSession.shared.data(from: url),
               let decoded = UIImage(data: data) else { return }
         ImageStore.shared.store(decoded, for: url)
         loaded = decoded
+        await screen(decoded, at: url)
+    }
+
+    /// Asks iOS once per photograph, and remembers the answer for the session.
+    private func screen(_ image: UIImage, at url: URL) async {
+        guard SensitivePhotos.isOn else { return }
+        if let known = ImageStore.shared.verdict(for: url) {
+            sensitive = known
+            return
+        }
+        let flagged = await SensitivePhotos.isSensitive(image)
+        ImageStore.shared.storeVerdict(flagged, for: url)
+        sensitive = flagged
     }
 }
 
@@ -92,5 +131,29 @@ final class ImageStore: @unchecked Sendable {
     func store(_ image: UIImage, for url: URL) {
         let bytes = image.cgImage.map { $0.bytesPerRow * $0.height } ?? 0
         cache.setObject(image, forKey: url as NSURL, cost: bytes)
+    }
+
+    // MARK: What iOS said about each photograph (`SensitivePhotos`)
+
+    /// Kept beside the images and for as long, so a rebuilt cell neither asks
+    /// again nor draws the photograph for a frame before covering it.
+    private let verdicts = NSCache<NSURL, NSNumber>()
+    /// Photographs the viewer chose to see after the warning. For the session.
+    private let shown = NSCache<NSURL, NSNumber>()
+
+    func verdict(for url: URL) -> Bool? {
+        verdicts.object(forKey: url as NSURL)?.boolValue
+    }
+
+    func storeVerdict(_ sensitive: Bool, for url: URL) {
+        verdicts.setObject(NSNumber(value: sensitive), forKey: url as NSURL)
+    }
+
+    func isShown(_ url: URL) -> Bool {
+        shown.object(forKey: url as NSURL)?.boolValue ?? false
+    }
+
+    func markShown(_ url: URL) {
+        shown.setObject(NSNumber(value: true), forKey: url as NSURL)
     }
 }
