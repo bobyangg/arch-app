@@ -57,7 +57,11 @@ struct MessageComposerSheet: View {
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ArchButton(title: "Send", isEnabled: !trimmed.isEmpty) {
+            if let note = ContentFilter.note(for: trimmed, in: .message) {
+                BlockedWordNote(text: note)
+            }
+            ArchButton(title: "Send",
+                       isEnabled: !trimmed.isEmpty && ContentFilter.allows(trimmed, in: .message)) {
                 onSend(trimmed)
             }
         }

@@ -163,7 +163,23 @@ final class OnboardingStore {
         if birthDay > limit { self.birthDay = limit }
     }
 
+    /// Why Continue is waiting, when the step holds a word Arch does not allow.
+    ///
+    /// Checked here rather than left to the server, because onboarding saves
+    /// everything at the end with `try?`: a name the server refused would have
+    /// been a profile that silently never existed. See `ContentFilter`.
+    var blockedWordNote: String? {
+        switch step {
+        case .identity:  return ContentFilter.note(for: name, in: .profile)
+        case .about:     return ContentFilter.note(for: [work, pronounsDraft], in: .profile)
+        case .answers:   return ContentFilter.note(for: person.prompts.map(\.answer), in: .profile)
+        case .interests: return ContentFilter.note(for: interestDrafts, in: .profile)
+        default:         return nil
+        }
+    }
+
     var canContinue: Bool {
+        guard blockedWordNote == nil else { return false }
         switch step {
         case .birthday:
             // Being too young stops the button and nothing else. No record is
@@ -213,6 +229,11 @@ final class OnboardingStore {
 
     /// Names the gap rather than leaving a dead button to be guessed at.
     var photoShortfallText: String {
+        if profile.sensitiveRefused > 0 {
+            return profile.sensitiveRefused == 1
+                ? "Your iPhone flagged one photo as sensitive, so it was not added."
+                : "Your iPhone flagged \(ArchCopy.word(profile.sensitiveRefused)) photos as sensitive, so they were not added."
+        }
         if profile.failedUploads > 0 {
             return profile.failedUploads == 1
                 ? "One photo did not upload. Tap it to try again."

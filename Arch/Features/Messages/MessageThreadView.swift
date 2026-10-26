@@ -362,30 +362,42 @@ struct MessageThreadView: View {
         .archBar(.bottom)
     }
 
-    private var composer: some View {
-        HStack(alignment: .bottom, spacing: ArchSpacing.xs) {
-            TextField("Message", text: $draft, axis: .vertical)
-                .archText(.callout)
-                .foregroundStyle(ArchColor.limestone)
-                .lineLimit(1...5)
-                .padding(.horizontal, ArchSpacing.s)
-                .padding(.vertical, ArchSpacing.xs + 2)
-                .background(
-                    RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
-                        .fill(ArchColor.stone)
-                )
+    /// The draft, trimmed, and whether it may be sent. A word Arch does not
+    /// allow holds the button, with a line above the field saying why.
+    private var trimmedDraft: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var canSend: Bool {
+        !trimmedDraft.isEmpty && ContentFilter.allows(trimmedDraft, in: .message)
+    }
 
-            Button { send() } label: {
-                Image(systemName: "arrow.up")
-                    .archText(.subhead)
-                    .foregroundStyle(ArchColor.onLamp)
-                    .frame(width: 36, height: 36)
-                    .background(Circle().fill(ArchColor.lamp))
-                    .opacity(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0.35 : 1)
+    private var composer: some View {
+        VStack(spacing: ArchSpacing.xs) {
+            if let note = ContentFilter.note(for: trimmedDraft, in: .message) {
+                BlockedWordNote(text: note)
             }
-            .buttonStyle(PressScaleStyle())
-            .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("Send")
+            HStack(alignment: .bottom, spacing: ArchSpacing.xs) {
+                TextField("Message", text: $draft, axis: .vertical)
+                    .archText(.callout)
+                    .foregroundStyle(ArchColor.limestone)
+                    .lineLimit(1...5)
+                    .padding(.horizontal, ArchSpacing.s)
+                    .padding(.vertical, ArchSpacing.xs + 2)
+                    .background(
+                        RoundedRectangle(cornerRadius: ArchRadius.control, style: .continuous)
+                            .fill(ArchColor.stone)
+                    )
+
+                Button { send() } label: {
+                    Image(systemName: "arrow.up")
+                        .archText(.subhead)
+                        .foregroundStyle(ArchColor.onLamp)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(ArchColor.lamp))
+                        .opacity(canSend ? 1 : 0.35)
+                }
+                .buttonStyle(PressScaleStyle())
+                .disabled(!canSend)
+                .accessibilityLabel("Send")
+            }
         }
         .padding(.horizontal, ArchSpacing.screenMargin)
         .padding(.vertical, ArchSpacing.xs)
@@ -398,8 +410,8 @@ struct MessageThreadView: View {
     /// soon as it is handed over, so the field emptying and the bubble appearing
     /// are the same frame.
     private func send() {
-        let body = draft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { return }
+        let body = trimmedDraft
+        guard canSend else { return }
         draft = ""
         onSend(body)
     }

@@ -155,25 +155,53 @@ final class ProfileStore {
     /// hostage behind a spinner is how people end up staring at a progress bar
     /// wondering whether the app has frozen, and there is nothing here they need to
     /// wait for — the ordering and the cropping are already done.
+    /// Photographs from the last pick that iOS called sensitive and that were
+    /// therefore not added. Only ever above zero on a phone with Sensitive
+    /// Content Warning turned on (`SensitivePhotos`).
+    private(set) var sensitiveRefused = 0
+
     func addPhotos(_ picked: [PickedPhoto]) {
-        for item in picked.prefix(slotsLeft) {
-            // A real uuid, because the server's column is one and the row is
-            // written before the bytes are. The old "you-p" + six characters was
-            // not a uuid and collided in shape with the seeded mock ids.
-            let id = UUID().uuidString.lowercased()
-            let position = person.photos.count
-            person.photos.append(
-                Photo(id: id,
-                      toneIndex: item.photo.toneIndex,
-                      // Shown from memory until the upload finishes and a signed
-                      // URL exists. Without this the new tile is a flat tone for as
-                      // long as the network takes, which reads as a failure.
-                      url: nil,
-                      state: .pending)
-            )
-            uploads[id] = .uploading
-            upload(id: id, position: position, item: item)
+        sensitiveRefused = 0
+        // **Checked before it joins the grid, on a phone that checks at all.**
+        // A photograph iOS calls sensitive is not added, and because it never
+        // took a position, the ones after it keep a gapless order. Everybody
+        // else -- most people -- gets the tiles straight away, as before.
+        guard SensitivePhotos.isOn else {
+            picked.prefix(slotsLeft).forEach(append)
+            return
         }
+        Task { @MainActor [weak self] in
+            for item in picked {
+                guard let self, self.slotsLeft > 0 else { return }
+                let rendered = await Task.detached(priority: .userInitiated) {
+                    PhotoExport.jpeg(from: item.photo, crop: item.crop)
+                }.value
+                if let rendered, await SensitivePhotos.isSensitive(jpeg: rendered) {
+                    self.sensitiveRefused += 1
+                    continue
+                }
+                self.append(item)
+            }
+        }
+    }
+
+    private func append(_ item: PickedPhoto) {
+        // A real uuid, because the server's column is one and the row is
+        // written before the bytes are. The old "you-p" + six characters was
+        // not a uuid and collided in shape with the seeded mock ids.
+        let id = UUID().uuidString.lowercased()
+        let position = person.photos.count
+        person.photos.append(
+            Photo(id: id,
+                  toneIndex: item.photo.toneIndex,
+                  // Shown from memory until the upload finishes and a signed
+                  // URL exists. Without this the new tile is a flat tone for as
+                  // long as the network takes, which reads as a failure.
+                  url: nil,
+                  state: .pending)
+        )
+        uploads[id] = .uploading
+        upload(id: id, position: position, item: item)
     }
 
     /// Render the crop and send it.

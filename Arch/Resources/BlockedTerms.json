@@ -1,0 +1,24 @@
+{
+  "about": "Words Arch does not allow. 'everywhere' is refused in profiles and in messages; 'profile' only in profiles (name, work, prompt answers, interests). Matched as whole words, in lower case, with look-alike digits and symbols read as letters (0 o, 1 i, 3 e, 4 a, 5 s, 7 t, @ a, $ s, ! i), a letter written more times than here still counting (niiice), and single letters spaced out (f u c k) read as one word. backend/043 loads this same file into private.blocked_terms; change both together. Reclaimed and ambiguous words (queer, dyke, homo, cum, dick) are left out on purpose: blocking them would block people describing themselves, a degree, or their name.",
+  "everywhere": [
+    "nigger", "niggers", "nigga", "niggas", "nigguh", "niggah", "sandnigger", "sandniggers",
+    "coon", "coons", "jigaboo", "jigaboos", "porchmonkey", "porch monkey", "jungle bunny",
+    "pickaninny", "golliwog", "darkie", "darkies", "chink", "chinks", "gook", "gooks",
+    "zipperhead", "zipperheads", "spic", "spics", "spick", "spicks", "wetback", "wetbacks",
+    "beaner", "beaners", "kike", "kikes", "christ killer", "christ killers", "paki", "pakis",
+    "raghead", "ragheads", "towelhead", "towelheads", "squaw", "squaws", "injun", "injuns",
+    "honky", "honkies",
+    "faggot", "faggots", "fag", "fags", "faggy", "tranny", "trannies", "shemale", "shemales",
+    "retard", "retards", "retarded", "spaz", "mongoloid", "mongoloids",
+    "kys", "kill yourself", "go kill yourself"
+  ],
+  "profile": [
+    "fuck", "fucks", "fucked", "fucker", "fuckers", "fucking", "fuckin", "motherfucker", "motherfuckers",
+    "cunt", "cunts", "cock", "cocks", "dickhead", "dickheads", "dick pic", "dick pics", "dickpic", "dickpics",
+    "pussy", "pussies", "tits", "titties", "boobs", "slut", "sluts", "whore", "whores", "bitch", "bitches",
+    "asshole", "assholes", "blowjob", "blowjobs", "handjob", "handjobs", "cumshot", "creampie", "gangbang",
+    "horny", "nudes", "sexting", "porn", "porno", "nsfw", "xxx", "dildo", "dildos",
+    "onlyfans", "only fans", "fansly", "cashapp", "cash app", "venmo me", "sugar daddy", "sugardaddy",
+    "sugar baby", "sugarbaby", "sugar mommy", "escort", "escorts"
+  ]
+}
