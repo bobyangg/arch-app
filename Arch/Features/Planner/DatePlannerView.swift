@@ -210,7 +210,7 @@ struct DatePlannerView: View {
     @State private var savedFull = false
     /// The distance in the preferences sheet while it moves; saved a moment
     /// after it stops.
-    @State private var sheetMiles: Int?
+    @State private var sheetKm: Int?
     /// **One plan in progress per person.** What you built with somebody --
     /// the items, their hours and swaps, the time of day and the day -- is
     /// kept when you switch to somebody else, and is there when you come back.
@@ -1005,7 +1005,7 @@ struct DatePlannerView: View {
         guard parts.count == DatePreferences.questions.count else { return nil }
         let answers: [Int?] = zip(parts, DatePreferences.questions).map { part, question in
             Int(part).flatMap { value in
-                (question.isMiles ? DatePreferences.milesRange.contains(value)
+                (question.isDistance ? DatePreferences.kmRange.contains(value)
                                   : question.options.indices.contains(value)) ? value : nil
             }
         }
@@ -1340,8 +1340,8 @@ struct DatePlannerView: View {
             )
         }
         .sheet(isPresented: $showingPreferences, onDismiss: {
-            saveSheetMiles()
-            sheetMiles = nil
+            saveSheetKm()
+            sheetKm = nil
         }) { preferencesSheet }
     }
 
@@ -1362,8 +1362,8 @@ struct DatePlannerView: View {
                     .archText(.subhead)
                     .foregroundStyle(ArchColor.limestone)
                     .padding(.top, ArchSpacing.s)
-                DistanceChooser(miles: Binding(get: { sheetMiles ?? preferences.miles },
-                                               set: { sheetMiles = $0 }),
+                DistanceChooser(km: Binding(get: { sheetKm ?? preferences.km },
+                                            set: { sheetKm = $0 }),
                                 centre: you.matchPoint)
             }
             Text("They shape every plan. Nobody else sees them.")
@@ -1385,20 +1385,21 @@ struct DatePlannerView: View {
         .archSheetBackground()
         // Saved a moment after the slider stops, not at every mile it passes;
         // the plan behind the sheet follows.
-        .task(id: sheetMiles) {
+        .task(id: sheetKm) {
             try? await Task.sleep(for: .milliseconds(600))
             guard !Task.isCancelled else { return }
-            saveSheetMiles()
+            saveSheetKm()
         }
     }
 
     /// The distance from the preferences sheet, as your answer -- `distance`
     /// beside it for builds from before the slider.
-    private func saveSheetMiles() {
-        guard let miles = sheetMiles, var preferences = you.datePreferences,
-              miles != preferences.miles else { return }
-        preferences.reachMiles = miles
-        preferences.distance = miles <= 1 ? .walkable : .ride
+    private func saveSheetKm() {
+        guard let km = sheetKm, var preferences = you.datePreferences,
+              km != preferences.km else { return }
+        preferences.reachKm = km
+        preferences.reachMiles = nil
+        preferences.distance = km <= DatePreferences.walkingKm ? .walkable : .ride
         onSavePreferences(preferences)
     }
 
@@ -1430,15 +1431,15 @@ struct DatePlannerView: View {
                 .accessibilityIdentifier("planner.basis")
             // Your distance, never theirs: the plan simply stays inside both.
             // It opens your preferences, where its slider is.
-            if let miles = you.datePreferences?.miles {
+            if let km = you.datePreferences?.km {
                 Button { showingPreferences = true } label: {
-                    Text("Up to \(miles) mi from you")
+                    Text("Up to \(km) km from you")
                         .archText(.footnote)
                         .foregroundStyle(ArchColor.lamp)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(PressScaleStyle(scale: 0.97))
-                .accessibilityLabel("Up to \(miles) miles from you")
+                .accessibilityLabel("Up to \(km) kilometres from you")
                 .accessibilityHint("Change how far you would travel")
                 .accessibilityIdentifier("planner.distance")
             }
