@@ -64,7 +64,7 @@ struct PlannerGetStarted: View {
 struct DatePreferenceQuestions: View {
     /// Which question is showing. Set to nil to leave.
     @Binding var index: Int?
-    /// One answer per question: an option index, or for the distance, miles.
+    /// One answer per question: an option index, or for the distance, kilometres.
     @Binding var draft: [Int?]
     /// Where you are, for the distance's map. Nil draws no map.
     var centre: Coordinate? = nil
@@ -86,8 +86,8 @@ struct DatePreferenceQuestions: View {
                     .foregroundStyle(ArchColor.limestone)
                     .fixedSize(horizontal: false, vertical: true)
 
-                if question.isMiles {
-                    milesAnswer(at: index)
+                if question.isDistance {
+                    distanceAnswer(at: index)
                 } else {
                     VStack(spacing: ArchSpacing.xs) {
                         ForEach(Array(question.options.enumerated()), id: \.offset) { option, text in
@@ -107,15 +107,15 @@ struct DatePreferenceQuestions: View {
         }
     }
 
-    /// **The distance: a slider, with your circle on a map.** Shown at three
-    /// miles until it is moved; only moving it, or Next, answers it -- looking
+    /// **The distance: a slider, with your circle on a map.** Shown at five
+    /// kilometres until it is moved; only moving it, or Next, answers it -- looking
     /// at it does not.
-    private func milesAnswer(at index: Int) -> some View {
-        let miles = draft[index] ?? DatePreferences.startingMiles
+    private func distanceAnswer(at index: Int) -> some View {
+        let km = draft[index] ?? DatePreferences.startingKm
         return VStack(alignment: .leading, spacing: ArchSpacing.l) {
-            DistanceChooser(miles: Binding(get: { miles }, set: { draft[index] = $0 }), centre: centre)
+            DistanceChooser(km: Binding(get: { km }, set: { draft[index] = $0 }), centre: centre)
             ArchButton(title: index + 1 < DatePreferences.questions.count ? "Next" : "Done") {
-                if draft[index] == nil { draft[index] = miles }
+                if draft[index] == nil { draft[index] = km }
                 advance(from: index)
             }
             .accessibilityIdentifier("planner.milesDone")
@@ -150,34 +150,34 @@ struct DatePreferenceQuestions: View {
     }
 }
 
-/// How far you would travel for a date: the miles in words, your circle on a
+/// How far you would travel for a date: the kilometres in words, your circle on a
 /// map, the slider, and what that distance means for a plan. In the questions
 /// and in "Your date preferences", so the two can never differ.
 struct DistanceChooser: View {
-    @Binding var miles: Int
+    @Binding var km: Int
     var centre: Coordinate? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: ArchSpacing.s) {
-            Text(DatePreferences.milesText(miles))
+            Text(DatePreferences.kmText(km))
                 .archText(.titleM)
                 .foregroundStyle(ArchColor.limestone)
                 .contentTransition(.numericText())
-                .animation(ArchMotion.quick, value: miles)
+                .animation(ArchMotion.quick, value: km)
                 .accessibilityIdentifier("planner.milesText")
             if let centre {
-                ReachMap(centre: centre, miles: miles)
+                ReachMap(centre: centre, km: km)
             }
-            ValueSlider(value: $miles, bounds: DatePreferences.milesRange,
-                        label: "How far you would travel, in miles")
+            ValueSlider(value: $km, bounds: DatePreferences.kmRange,
+                        label: "How far you would travel, in kilometres")
             HStack {
-                Text("\(DatePreferences.milesRange.lowerBound) mile")
+                Text("\(DatePreferences.kmRange.lowerBound) km")
                 Spacer()
-                Text("\(DatePreferences.milesRange.upperBound) miles")
+                Text("\(DatePreferences.kmRange.upperBound) km")
             }
             .archText(.footnote)
             .foregroundStyle(ArchColor.mortar)
-            Text(DatePreferences.milesHint(miles))
+            Text(DatePreferences.kmHint(km))
                 .archText(.footnote)
                 .foregroundStyle(ArchColor.mortar)
                 .fixedSize(horizontal: false, vertical: true)

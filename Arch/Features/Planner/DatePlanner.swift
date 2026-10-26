@@ -515,7 +515,6 @@ enum DatePlanner {
     /// ride is fine" used to reach exactly as far as walking did. Ten
     /// kilometres is about 25 to 35 minutes by transit across a city.
     static let rideKm = 10.0
-    static let kmPerMile = 1.609344
     private static let ridePastHalfwayKm = 3.0
     /// How much distance costs when a ride is fine, against walking: half, so
     /// a place across town that suits you both can win over the nearest one.
@@ -660,18 +659,18 @@ enum DatePlanner {
         }
 
         /// **Each of you, no further than you said.** Your distance from you,
-        /// theirs from them, in miles from the fifth question; somebody who has
+        /// theirs from them, in kilometres from the fifth question; somebody who has
         /// not answered keeps the reach above. It narrows that reach, never
         /// widens it. Where nothing an item needs is that close -- the two
         /// circles do not meet, or meet over too little -- the item reaches as
         /// far as the rule above, and the plan says so (`stretched`, `apart`).
         let radii: [(point: Coordinate, km: Double)] = {
             var radii: [(point: Coordinate, km: Double)] = []
-            if let point = yourPoint, let miles = fit.yours?.miles {
-                radii.append((point: point, km: Double(miles) * Self.kmPerMile))
+            if let point = yourPoint, let reach = fit.yours?.km {
+                radii.append((point: point, km: Double(reach)))
             }
-            if let point = theirPoint, let miles = fit.theirs?.miles {
-                radii.append((point: point, km: Double(miles) * Self.kmPerMile))
+            if let point = theirPoint, let reach = fit.theirs?.km {
+                radii.append((point: point, km: Double(reach)))
             }
             return radii
         }()
@@ -680,8 +679,8 @@ enum DatePlanner {
         }
         let apart: Bool = {
             guard let a = yourPoint, let b = theirPoint,
-                  let mine = fit.yours?.miles, let theirs = fit.theirs?.miles else { return false }
-            return km(a, b) > Double(mine + theirs) * Self.kmPerMile
+                  let mine = fit.yours?.km, let theirs = fit.theirs?.km else { return false }
+            return km(a, b) > Double(mine + theirs)
         }()
         var stretched = false
 

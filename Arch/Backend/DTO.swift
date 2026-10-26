@@ -81,7 +81,9 @@ struct DatePreferencesRow: Codable, Hashable {
     var drinks: String
     var budget: String
     var distance: String
-    /// Miles, from the slider (`backend/040`). Nil on a row from before it.
+    /// Kilometres, from the slider (`backend/042`). Nil on a row from before it.
+    var reachKm: Int?
+    /// Miles, from the builds that asked in miles (`backend/040`).
     var reachMiles: Int?
 
     /// Nil for a value this build does not know -- a choice added later is a
@@ -96,7 +98,8 @@ struct DatePreferencesRow: Codable, Hashable {
         else { return nil }
         return DatePreferences(style: style, timeOfDay: time, drinks: drinks,
                                budget: budget, distance: distance,
-                               reachMiles: reachMiles.flatMap { DatePreferences.milesRange.contains($0) ? $0 : nil })
+                               reachKm: reachKm.flatMap { DatePreferences.kmRange.contains($0) ? $0 : nil },
+                               reachMiles: reachMiles.flatMap { (1...15).contains($0) ? $0 : nil })
     }
 }
 
