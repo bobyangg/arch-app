@@ -153,7 +153,8 @@ struct ArrangeProfileView: View {
             PhotoGridCaption(count: person.photos.count,
                              failed: store.failedUploads,
                              rejected: store.refusedPhotos,
-                             notFirst: store.mainPhotoProblems)
+                             notFirst: store.mainPhotoProblems,
+                             flagged: store.sensitiveRefused)
                 .padding(.top, ArchSpacing.xxs)
         }
     }
