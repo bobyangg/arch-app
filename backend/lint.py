@@ -32,7 +32,8 @@ FILES = ["001_schema.sql", "002_policies.sql", "003_functions.sql",
          "017_a_dismissal_ends_the_pairing.sql",
          "037_a_newcomer_is_matched_on_arrival.sql",
          "038_a_day_that_is_not_full_takes_newcomers.sql",
-         "040_the_date_distance_is_in_miles.sql"]
+         "040_the_date_distance_is_in_miles.sql",
+         "043_words_arch_does_not_allow.sql"]
 
 problems = []
 notes = []
