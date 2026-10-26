@@ -230,6 +230,9 @@ struct PhotoGridCaption: View {
     /// Photographs that are fine and simply cannot be the first one. Counted apart
     /// from `rejected` because saying these are "not on your profile" is false.
     var notFirst: Int = 0
+    /// Photographs from the last pick that iOS called sensitive, so they were
+    /// not added (`SensitivePhotos`).
+    var flagged: Int = 0
 
     var body: some View {
         Text(text)
@@ -239,6 +242,13 @@ struct PhotoGridCaption: View {
     }
 
     private var text: String {
+        // First, because the photo it is about has already gone from the grid,
+        // and without this line it would look as if the pick had not worked.
+        if flagged > 0 {
+            return flagged == 1
+                ? "Your iPhone flagged one photo as sensitive, so it was not added."
+                : "Your iPhone flagged \(ArchCopy.word(flagged)) photos as sensitive, so they were not added."
+        }
         if failed > 0 {
             return failed == 1
                 ? "One photo did not upload. It is not on your profile until it does."
@@ -306,7 +316,8 @@ private struct PhotoGridPreview: View {
                 onFinishUpload: { store.finishUpload(id: $0) },
                 onRetryUpload: { store.retryUpload(id: $0) }
             )
-            PhotoGridCaption(count: store.person.photos.count, failed: store.failedUploads)
+            PhotoGridCaption(count: store.person.photos.count, failed: store.failedUploads,
+                             flagged: store.sensitiveRefused)
         }
         .onAppear {
             guard !isReady else { return }

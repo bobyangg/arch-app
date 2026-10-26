@@ -192,6 +192,9 @@ struct OnboardingFlowView: View {
         // press and no dead footer sitting under it.
         if store.questionIndex == nil {
             VStack(spacing: ArchSpacing.xs) {
+                if let note = store.blockedWordNote {
+                    BlockedWordNote(text: note)
+                }
                 ArchButton(title: continueTitle, isEnabled: store.canContinue) {
                     switch store.step {
                     case .notifications: finish(allowing: true)

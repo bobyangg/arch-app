@@ -107,6 +107,12 @@ targets:
         com.apple.developer.applesignin:
           - Default
         aps-environment: production
+        # Apple's on-device check for sensitive photos (`SensitivePhotos`). The
+        # App ID has the Sensitive Content Analysis capability, so the profile CI
+        # makes from it carries this; without it iOS reports the analysis as
+        # disabled and the check does nothing.
+        com.apple.developer.sensitivecontentanalysis.client:
+          - analysis
 
     info:
       path: Arch/Info.plist

@@ -39,7 +39,12 @@ struct EditDetailsSheet: View {
     @State private var locationNote: String?
     @Environment(\.dismiss) private var dismiss
 
-    private var isValid: Bool { place != nil }
+    private var isValid: Bool { place != nil && blockedWordNote == nil }
+
+    /// Work and pronouns are the free text here; the name is fixed at signup.
+    private var blockedWordNote: String? {
+        ContentFilter.note(for: [work, pronouns], in: .profile)
+    }
 
     var body: some View {
         ScrollView {
@@ -92,6 +97,10 @@ struct EditDetailsSheet: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 PronounPicker(text: $pronouns)
+
+                if let note = blockedWordNote {
+                    BlockedWordNote(text: note)
+                }
 
                 ArchButton(title: "Save", isEnabled: isValid) {
                     onSave(

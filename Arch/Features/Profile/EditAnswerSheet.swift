@@ -87,7 +87,11 @@ struct EditAnswerSheet: View {
 
             Spacer(minLength: 0)
 
-            ArchButton(title: "Save", isEnabled: !trimmed.isEmpty) {
+            if let note = ContentFilter.note(for: trimmed, in: .profile) {
+                BlockedWordNote(text: note)
+            }
+            ArchButton(title: "Save",
+                       isEnabled: !trimmed.isEmpty && ContentFilter.allows(trimmed, in: .profile)) {
                 onSave(question, trimmed)
             }
             ArchTextButton(title: "Cancel") { dismiss() }

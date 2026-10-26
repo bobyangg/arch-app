@@ -166,3 +166,7 @@ Transaction
 # Your distance as a circle on the map, and a web page over the app
 MapCircle
 SFSafariViewController
+
+# SensitiveContentAnalysis: Apple's on-device check for nudity, for people who turned it on
+SCSensitivityAnalyzer
+NSNumber
