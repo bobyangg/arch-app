@@ -472,9 +472,9 @@ final class ArchSmokeTests: XCTestCase {
                       "Finishing the kept questions did not reach a plan.")
     }
 
-    /// The distance question is a slider: at its starting three miles the plan
+    /// The distance question is a slider: at its starting five kilometres the plan
     /// says so, and an opened stop links to its photos and reviews. Set to a
-    /// mile, Hana's plan -- she keeps it walkable, and lives in Greenpoint --
+    /// kilometre, Hana's plan -- she keeps it walkable, and lives in Greenpoint --
     /// says your distances do not overlap, and is still made.
     func testTheDistanceShapesThePlan() {
         let app = launch()
@@ -486,13 +486,13 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertTrue(stops.firstMatch.waitForExistence(timeout: 5), "Choosing an activity planned nothing.")
         let distance = app.buttons["planner.distance"]
         XCTAssertTrue(distance.waitForExistence(timeout: 5), "The plan does not say your distance.")
-        XCTAssertEqual(distance.label, "Up to 3 miles from you", "The distance is not the slider's three miles.")
+        XCTAssertEqual(distance.label, "Up to 5 kilometres from you", "The distance is not the slider's five kilometres.")
 
         tapClearOfTheBar(app.buttons["planner.open.0"], in: app)
         XCTAssertTrue(app.buttons["planner.google.0"].waitForExistence(timeout: 5),
                       "An opened stop has no photos and reviews.")
 
-        // A mile: back into the questions, the slider to its left end. The
+        // A kilometre: back into the questions, the slider to its left end. The
         // opened stop scrolled the controls off the top; back up to them.
         let preferences = app.buttons["planner.editPreferences"]
         var upward = 0
@@ -513,8 +513,8 @@ final class ArchSmokeTests: XCTestCase {
         XCTAssertTrue(handle.waitForExistence(timeout: 5), "The distance has no slider.")
         let from = handle.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         from.press(forDuration: 0.1, thenDragTo: from.withOffset(CGVector(dx: -600, dy: 0)))
-        XCTAssertEqual(app.staticTexts["planner.milesText"].label, "Up to 1 mile away",
-                       "The slider did not go down to a mile.")
+        XCTAssertEqual(app.staticTexts["planner.milesText"].label, "Up to 1 km away",
+                       "The slider did not go down to a kilometre.")
         app.buttons["planner.milesDone"].tap()
 
         app.buttons["planner.with.hana"].tap()
