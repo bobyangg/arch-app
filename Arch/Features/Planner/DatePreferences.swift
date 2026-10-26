@@ -63,27 +63,46 @@ struct DatePreferences: Codable, Hashable {
     var drinks: Drinks
     var budget: Budget
     var distance: Distance
-    /// How far you would travel for a date, in miles, from the slider. Nil for
-    /// an answer from before the slider, which `distance` stands in for: a
-    /// walk is a mile, a ride six. `distance` is still written beside it, for
-    /// builds from before the slider (`backend/040`).
+    /// How far you would travel for a date, in kilometres, from the slider
+    /// (`backend/042`).
+    var reachKm: Int?
+    /// The same in miles, from the builds that asked in miles (`backend/040`).
+    /// Still written beside `reachKm`, and `distance` beside both, for builds
+    /// that read only those.
     var reachMiles: Int?
 
-    /// Your distance in miles, however you answered.
-    var miles: Int { reachMiles ?? (distance == .walkable ? 1 : 6) }
+    /// Your distance in kilometres, however you answered: the slider's, else
+    /// an answer in miles, else walk-or-ride -- a walk is 2 km, a ride 10.
+    var km: Int {
+        if let reachKm { return reachKm }
+        if let reachMiles { return Self.km(fromMiles: reachMiles) }
+        return distance == .walkable ? Self.walkingKm : 10
+    }
 
-    static let milesRange = 1...15
+    /// For builds that read miles: the nearest whole mile, 1 to 15.
+    var milesForOlderBuilds: Int {
+        min(15, max(1, Int((Double(km) / Self.kmPerMile).rounded())))
+    }
+
+    static func km(fromMiles miles: Int) -> Int {
+        min(kmRange.upperBound, max(kmRange.lowerBound, Int((Double(miles) * kmPerMile).rounded())))
+    }
+
+    static let kmRange = 1...25
     /// Where the slider sits before it is moved.
-    static let startingMiles = 3
+    static let startingKm = 5
+    /// This far or less keeps every stop on foot, as "keep it walkable" did.
+    static let walkingKm = 2
+    static let kmPerMile = 1.609344
 
-    static func milesText(_ miles: Int) -> String {
-        "Up to \(miles) mile\(miles == 1 ? "" : "s") away"
+    static func kmText(_ km: Int) -> String {
+        "Up to \(km) km away"
     }
 
     /// What that distance means for the plan.
-    static func milesHint(_ miles: Int) -> String {
-        miles <= 1 ? "Walking distance. Every stop stays on foot."
-            : miles <= 5 ? "A short ride. Stops can be a few minutes apart."
+    static func kmHint(_ km: Int) -> String {
+        km <= walkingKm ? "Walking distance. Every stop stays on foot."
+            : km <= 8 ? "A short ride. Stops can be a few minutes apart."
             : "Across town is fine."
     }
 
@@ -95,8 +114,8 @@ struct DatePreferences: Codable, Hashable {
         let id: Int
         let text: String
         let options: [String]
-        /// Answered with a number of miles on a slider, not an option.
-        var isMiles = false
+        /// Answered with a number of kilometres on a slider, not an option.
+        var isDistance = false
     }
 
     static let questions: [Question] = [
@@ -113,11 +132,11 @@ struct DatePreferences: Codable, Hashable {
                  options: ["As little as possible", "A coffee and a meal", "Whatever makes it good"]),
         // A distance, not a choice. It used to be "Keep it walkable" or "A
         // short ride is fine".
-        Question(id: 4, text: "How far would you travel for a date?", options: [], isMiles: true),
+        Question(id: 4, text: "How far would you travel for a date?", options: [], isDistance: true),
     ]
 
     /// From five answers, one per question: an option index each, and for the
-    /// last a number of miles. Nil unless all five are answered with something
+    /// last a number of kilometres. Nil unless all five are answered with something
     /// that exists.
     init?(answers: [Int?]) {
         guard answers.count == Self.questions.count else { return nil }
@@ -129,19 +148,20 @@ struct DatePreferences: Codable, Hashable {
               let time = pick(answers[1], Time.self),
               let drinks = pick(answers[2], Drinks.self),
               let budget = pick(answers[3], Budget.self),
-              let miles = answers[4], Self.milesRange.contains(miles)
+              let km = answers[4], Self.kmRange.contains(km)
         else { return nil }
         self.init(style: style, timeOfDay: time, drinks: drinks, budget: budget,
-                  distance: miles <= 1 ? .walkable : .ride, reachMiles: miles)
+                  distance: km <= Self.walkingKm ? .walkable : .ride, reachKm: km)
     }
 
     init(style: Style, timeOfDay: Time, drinks: Drinks, budget: Budget, distance: Distance,
-         reachMiles: Int? = nil) {
+         reachKm: Int? = nil, reachMiles: Int? = nil) {
         self.style = style
         self.timeOfDay = timeOfDay
         self.drinks = drinks
         self.budget = budget
         self.distance = distance
+        self.reachKm = reachKm
         self.reachMiles = reachMiles
     }
 
@@ -151,7 +171,7 @@ struct DatePreferences: Codable, Hashable {
          Time.allCases.firstIndex(of: timeOfDay),
          Drinks.allCases.firstIndex(of: drinks),
          Budget.allCases.firstIndex(of: budget),
-         miles]
+         km]
     }
 
     /// Your own answers in a line, for the planner's "Your preferences" row.
@@ -162,8 +182,8 @@ struct DatePreferences: Codable, Hashable {
     func summary(includingDistance: Bool) -> String {
         var parts: [String] = []
         for (index, question) in Self.questions.enumerated() {
-            if question.isMiles {
-                if includingDistance { parts.append(Self.milesText(miles)) }
+            if question.isDistance {
+                if includingDistance { parts.append(Self.kmText(km)) }
             } else if let answer = answers[index] {
                 parts.append(question.options[answer])
             }
@@ -192,8 +212,8 @@ struct DateFit {
     var noDrinks: Bool { both.contains { $0.drinks == .no } }
 
     /// The stops either side of the main thing stay on foot from it: either
-    /// of you would go a mile or less.
-    var walkable: Bool { both.contains { $0.miles <= 1 } }
+    /// of you would go two kilometres or less.
+    var walkable: Bool { both.contains { $0.km <= DatePreferences.walkingKm } }
 
     /// The lower of the two budgets.
     var budget: DatePreferences.Budget { both.map(\.budget).min() ?? .any }
