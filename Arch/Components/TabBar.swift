@@ -19,10 +19,10 @@ enum ArchTab: Int, CaseIterable, Identifiable, Hashable {
         }
     }
 
-    /// The label under the icon. Premium has seven slots, so its roster is the
-    /// Daily 7, and the tab says so rather than promising five.
+    /// The label under the icon. Premium has eight slots, so its roster is the
+    /// Daily 8, and the tab says so rather than promising five.
     func title(isSubscribed: Bool) -> String {
-        self == .daily && isSubscribed ? "Daily 7" : title
+        self == .daily && isSubscribed ? "Daily 8" : title
     }
 
     /// What a UI test addresses this tab by.

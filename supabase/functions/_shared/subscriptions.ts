@@ -2,7 +2,7 @@
 //
 // The only writer of `subscriptions`. The table has a read policy for its owner
 // and nothing else, so no client can grant itself Premium -- and everything that
-// reads Premium (seven slots in `match_population`, the location allowance, the
+// reads Premium (eight slots in `match_population`, the location allowance, the
 // notes on your profile) reads it from here.
 
 import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";

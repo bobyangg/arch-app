@@ -715,7 +715,7 @@ enum ArchBackend {
 
     // MARK: The roster
 
-    /// Today's five, or seven.
+    /// Today's five, or eight.
     ///
     /// One request, with the profile, photos, prompts and interests embedded —
     /// PostgREST can follow the foreign keys, and a request per slot would be five

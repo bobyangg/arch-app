@@ -290,8 +290,8 @@ final class SettingsStore {
     var premiumText: String { isSubscribed ? "Subscribed" : "Not subscribed" }
     /// What to call the roster in settings copy, which has no roster to read.
     /// The same word `Roster.name` derives from the slots themselves.
-    var rosterName: String { isSubscribed ? "your seven" : "your five" }
-    var rosterTitle: String { isSubscribed ? "Your seven" : "Your five" }
+    var rosterName: String { isSubscribed ? "your eight" : "your five" }
+    var rosterTitle: String { isSubscribed ? "Your eight" : "Your five" }
     var seekingText: String { Gender.sentence(seeking) }
     /// The row says so, so that pausing does not need a second screen to be legible.
     var pausedText: String? { isPaused ? "Paused" : nil }
