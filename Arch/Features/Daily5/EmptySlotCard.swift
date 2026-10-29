@@ -13,7 +13,7 @@ struct EmptySlotCard: View {
     let refillsAt: Date
     /// Whether you opened this slot or they did.
     var opening: SlotOpening = .yours
-    /// "your five", or "your seven" with premium.
+    /// "your five", or "your eight" with premium.
     var rosterName: String = "your five"
 
     var body: some View {

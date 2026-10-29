@@ -42,7 +42,7 @@ struct HelpPage: View {
     @ViewBuilder
     private var how: some View {
         section("Five people at a time",
-                "Seven with Premium. They stay until you dismiss them.")
+                "Eight with Premium. They stay until you dismiss them.")
         section("New matches at \(RefillCopy.batchHour())",
                 "Every morning, for everyone at once.")
         section("No matching step",

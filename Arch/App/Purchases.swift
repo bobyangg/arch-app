@@ -10,7 +10,7 @@ import SwiftUI
 ///
 /// **The server decides, not the phone.** A purchase is sent to the
 /// `subscription` function, which asks Apple directly and records what Apple
-/// says; that record is what the matcher reads for seven slots and what the
+/// says; that record is what the matcher reads for eight slots and what the
 /// location allowance reads. So this class never grants Premium itself. It tells
 /// the server what happened and reports what the server answered.
 ///

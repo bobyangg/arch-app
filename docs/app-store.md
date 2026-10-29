@@ -22,7 +22,7 @@ Apple's.
 > Arch is a dating app built around one idea: fewer people, taken seriously.
 >
 > FIVE PEOPLE, HELD
-> Every morning Arch introduces you to five people (seven with Premium). They stay.
+> Every morning Arch introduces you to five people (eight with Premium). They stay.
 > There is no queue to work through and nothing to clear. If you do nothing, they
 > are still there tomorrow.
 >
@@ -44,7 +44,7 @@ Apple's.
 > your profile and never shown to anyone.
 >
 > ARCH PREMIUM
-> Seven people instead of five, room for more conversations, and your town set
+> Eight people instead of five, room for more conversations, and your town set
 > wherever you like. Premium changes how many people you meet, never who Arch
 > chooses or anything about who has looked at you.
 >

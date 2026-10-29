@@ -58,7 +58,7 @@ enum ArchConfig {
     /// The version on the page at `termsURL`, recorded when somebody accepts.
     /// **Change it with the page**, or acceptances of new terms are filed under
     /// the old ones.
-    static let termsVersion = "1.0"
+    static let termsVersion = "1.1"
 
     /// Whether profile feedback -- "Review your profile", and the Premium benefit
     /// that sells it -- is switched on.
