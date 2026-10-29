@@ -13,7 +13,7 @@ import SwiftUI
 /// Copy is written around the name rather than pronouns. Arch has no business
 /// guessing anyone's.
 struct DismissConfirmSheet: View {
-    /// "your five", or "your seven" with premium.
+    /// "your five", or "your eight" with premium.
     var rosterName: String = "your five"
     let person: Person
     let onConfirm: () -> Void

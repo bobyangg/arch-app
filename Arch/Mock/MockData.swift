@@ -601,7 +601,7 @@ struct Roster: Hashable {
     /// fixed name — it is the feature — but a sentence about *your* slots has to
     /// say how many you actually have.
     var title: String { "Your \(word)" }
-    /// The same word mid-sentence: "takes Priya out of your seven".
+    /// The same word mid-sentence: "takes Priya out of your eight".
     var name: String { "your \(word)" }
 
     private var word: String {
@@ -1179,13 +1179,14 @@ enum MockData {
         slots: (1...5).map { RosterSlot.empty(id: "slot-\($0)", refillsAt: hours(14), opening: .yours) }
     )
 
-    /// A subscriber's roster: seven slots rather than five. The arch draws seven
+    /// A subscriber's roster: eight slots rather than five. The arch draws eight
     /// voussoirs, so the indicator generalises without a second design.
     static let rosterPremium = Roster(slots: [
         .filled(priya), .filled(marcus), .filled(hana),
         .filled(ines), .filled(dev),
         .empty(id: "slot-6", refillsAt: hours(14), opening: .yours),
-        .empty(id: "slot-7", refillsAt: hours(14), opening: .yours)
+        .empty(id: "slot-7", refillsAt: hours(14), opening: .yours),
+        .empty(id: "slot-8", refillsAt: hours(14), opening: .yours)
     ])
 
     /// Three people and two open slots, refilling at different times.
@@ -1338,8 +1339,8 @@ enum MockData {
     static let premiumBenefits: [PremiumBenefit] = [
         PremiumBenefit(
             id: "b1",
-            title: "Seven matches every morning",
-            detail: "Get two extra people to discover each day. Arch still takes the same care finding them."
+            title: "Eight matches every morning",
+            detail: "Get three extra people to discover each day. Arch still takes the same care finding them."
         ),
         PremiumBenefit(
             id: "b2",
