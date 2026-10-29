@@ -119,7 +119,7 @@ final class DailyFiveStore {
     }
 
     static let freeSlots = 5
-    static let premiumSlots = 7
+    static let premiumSlots = 8
     /// Above this, the roster waits. The point is that people answer the
     /// conversations they start rather than collecting more of them.
     static let freeConversations = 10
@@ -129,7 +129,7 @@ final class DailyFiveStore {
     /// slots refill, or anything about who has looked at you.
     ///
     /// Set through `setSubscribed(_:)`, because the roster has to be resized in the
-    /// same breath — a seven-slot subscriber with five slots on screen would be a
+    /// same breath — an eight-slot subscriber with five slots on screen would be a
     /// feature the user paid for and cannot see.
     private(set) var isSubscribed = false
 

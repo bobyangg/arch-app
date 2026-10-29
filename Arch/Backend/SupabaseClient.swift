@@ -490,7 +490,7 @@ actor SupabaseClient {
 
     /// Short-lived URLs for a set of stored objects.
     ///
-    /// Batched, because a roster is up to seven people with six photographs each
+    /// Batched, because a roster is up to eight people with six photographs each
     /// and signing them one at a time would be forty-two round trips on a phone.
     /// `ArchBackend.roster()` went to the same trouble for the same reason.
     ///

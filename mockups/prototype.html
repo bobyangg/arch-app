@@ -677,7 +677,7 @@ const quotedOf=c=>(isRequest(c)?S.you:c.person).prompts[c.open[1]];
 
 /* Premium widens both limits, so "your five" stops being true the moment somebody
    subscribes. Every sentence that names the count reads the word from here. */
-const CAP=()=>S.set.sub?7:5;
+const CAP=()=>S.set.sub?8:5;
 const LIMIT=()=>S.set.sub?15:10;
 const WARN=()=>LIMIT()-2;
 /* Saved date plans: ten, or fifteen with Premium. */
@@ -692,7 +692,7 @@ function refillTime(){
   const zone=(parts.find(x=>x.type==="timeZoneName")||{}).value||"ET";
   return "9am "+zone;
 }
-const rosterWord=()=>({5:"five",6:"six",7:"seven"}[S.slots.length]||"matches");
+const rosterWord=()=>({5:"five",6:"six",7:"seven",8:"eight"}[S.slots.length]||"matches");
 const rosterName=()=>"your "+rosterWord();
 const rosterTitle=()=>"Your "+rosterWord();
 /* The top of the range stops being a number: somebody in a small town needs no
@@ -731,7 +731,7 @@ const HANA=P("hana","Hana",28,"bk-greenpoint","5 ft 6","Landscape architect",[2]
    prompts and finer preferences, none of which the app did anything about. A
    paywall is the easiest place to ship a lie. Saved date plans are the newest,
    at the far right. */
-const BENEFITS=[["Seven matches every morning","Get two extra people to discover each day. Arch still takes the same care finding them."],
+const BENEFITS=[["Eight matches every morning","Get three extra people to discover each day. Arch still takes the same care finding them."],
  ["Up to fifteen conversations","Keep more conversations going before Arch asks you to choose who you want to focus on."],
  ["Get feedback on your profile","See which photos and answers stand out, plus specific suggestions to help improve your profile."],
  ["Choose your location","Set your location anywhere you want, whether you are there now, relocating soon, or just visit often."],
@@ -798,7 +798,7 @@ const LIBRARY=[[3,3/4],[1,1],[5,4/3],[0,3/4],[2,9/16],[4,1],[0,16/9],[3,3/4],[5,
                [2,3/4],[1,4/3],[4,3/4],[0,1],[3,9/16],[2,4/3],[5,3/4],[1,3/4],[4,21/9]];
 /* Arch writes small numbers out. "Add 2 photos" is a receipt; "Add two photos" is
    a sentence. */
-const NUM=["zero","one","two","three","four","five","six","seven"];
+const NUM=["zero","one","two","three","four","five","six","seven","eight"];
 const numWord=n=>NUM[n]||String(n);
 const capWord=n=>{const w=numWord(n); return w[0].toUpperCase()+w.slice(1);};
 
@@ -2937,7 +2937,7 @@ function settingDetail(id){
      +'<div class="btntext">Restore purchases</div>';
   } else if(id==="h-how"){
     /* One line each: the rules fit in a sentence apiece. */
-    b=sect("Five people at a time","Seven with Premium. They stay until you dismiss them.")
+    b=sect("Five people at a time","Eight with Premium. They stay until you dismiss them.")
      +sect("New matches at 9am","Every morning, for everyone at once.")
      +sect("No matching step","Write to anyone in your five. They don&rsquo;t have to like you first.")
      +sect("Dismissing opens a spot","It refills the next morning. Nobody is told who left.")
