@@ -114,32 +114,40 @@ user-generated content, which the questionnaire asks about directly.
 
 ## Review notes
 
-Paste into App Review Information → Notes, and fill in the demo account.
+Paste into App Review Information → Notes. Untick "Sign-in required" — there is
+no demo account to give: v1 signs in with Apple only (the email door is closed in
+`OnboardingWelcome`), and any Apple ID works. Attach a screen recording under
+App Review Information → Attachment, because the reviewer's own account will
+most likely have nobody in it (below).
 
 > Arch is a dating app with a deliberately different mechanic, which may not be
 > obvious in a short review:
 >
 > - There is no swiping and no "like". Each morning (9am New York) Arch builds a
->   roster of five people per user. Pairing is mutual: if A is in B's roster, B
->   is in A's. Writing to someone is the only positive action.
-> - Because rosters are built overnight, a brand-new account has an empty roster
->   until the next morning. The demo account below already has people in it.
->
-> Demo account (sign in with email → enter the address → the code is emailed to
-> an inbox we monitor): [DEMO EMAIL]. [OR: explain how the reviewer gets the code.]
+>   roster of five people per user (eight with Premium). Pairing is mutual: if A
+>   is in B's roster, B is in A's. Writing to someone is the only positive action.
+> - Sign in with Apple using any Apple ID. No demo account is needed.
+> - Arch is available in Canada only, and people are matched by distance. A new
+>   account outside Canada will have an empty roster, which is expected. A
+>   newcomer is matched on arrival only with nearby people who have a free slot
+>   that day; otherwise the roster fills the next morning. The attached recording
+>   shows a full roster, a profile, a conversation, reporting and blocking, and
+>   Premium.
 >
 > Where to find the required features:
-> - Report and block: any profile or conversation → ⋯ menu.
+> - Report and block: any profile or conversation → ⋯ menu. Every report alerts
+>   a moderator by push notification within minutes.
+> - Objectionable content: slurs are refused in profiles and messages, and
+>   sexual or selling terms in profiles. Photos are checked on device with
+>   Apple's Sensitive Content Analysis for people who have Sensitive Content
+>   Warnings turned on.
 > - Delete account: Settings → Delete account (immediate).
 > - Terms and Privacy: under the subscribe button on the Premium tab, and in
 >   Settings.
 > - Premium: the Premium tab. Purchases use the sandbox.
+> - Contact: support@archdating.com.
 >
 > Minimum age is 18, enforced at onboarding from the date of birth.
-
-The demo account needs **email sign-in to work**, which needs a real sending
-service (Supabase's built-in email is rate-limited and not for production). That
-is the domain task, and it is on the critical path for review.
 
 ---
 
@@ -147,12 +155,11 @@ is the domain task, and it is on the critical path for review.
 
 - **Guideline 1.2 (user-generated content)** requires reporting, blocking, a
   published contact, *and a method for filtering objectionable material*. Arch has
-  the first three. **It has no filter:** photographs approve themselves the moment
-  they finish uploading (`approve_on_upload`), and moderation only happens after a
-  report. A dating app is exactly where a reviewer checks this. The cheapest
-  credible fix is on-device nudity detection before upload with Apple's
-  SensitiveContentAnalysis framework (iOS 17+), plus the manual review that
-  already exists.
+  all four: the word filter (`backend/043`, `ContentFilter`) on profiles and
+  messages, and SensitiveContentAnalysis on photos. The photo check only runs for
+  people who turned on Sensitive Content Warnings, so photos from everybody else
+  still approve on upload (`approve_on_upload`) and are moderated after a report.
+  The review notes say exactly that rather than more.
 - **Guideline 4.3 (saturated categories).** Dating is one. The review notes above
   lead with what is different for that reason.
 - **Guideline 5.1.1(ix).** Apps handling sensitive data are expected to come from
