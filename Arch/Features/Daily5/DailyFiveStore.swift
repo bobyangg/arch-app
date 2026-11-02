@@ -542,7 +542,21 @@ final class DailyFiveStore {
         // came back. Dropping it would take somebody's message off the screen
         // between sending it and the reply arriving.
         let known = Set(fresh.map(\.id))
-        conversations = fresh + conversations.filter { !known.contains($0.id) && $0.id.hasPrefix("pending-") }
+        let pending = conversations.filter { !known.contains($0.id) && $0.id.hasPrefix("pending-") }
+
+        // A conversation the server no longer has was ended and then deleted
+        // (`backend/047`). If it is the one on screen it stays, ended, so the
+        // person reading it sees the ended bar rather than falling back to the
+        // copy they opened -- a composer for a thread that is gone. It goes
+        // with the next refresh after they leave it.
+        let vanished = conversations
+            .filter { !known.contains($0.id) && !$0.id.hasPrefix("pending-") && $0.id == openThreadID }
+            .map { conversation -> Conversation in
+                var ended = conversation
+                ended.state = .ended
+                return ended
+            }
+        conversations = fresh + pending + vanished
     }
 
     /// Server truth, plus anything of yours that is not in it yet.

@@ -961,7 +961,16 @@ enum ArchBackend {
         )
         guard !rows.isEmpty else { return [] }
 
-        let others = rows.map { $0.other(than: me) }
+        // Each person once. Two people can have more than one thread -- the one
+        // that ended and the one they started when introduced again
+        // (`backend/028`) -- and `people(ids:)` answers once per id it is given,
+        // so a repeated id came back as a repeated person and the dictionary
+        // below trapped on it. The app closed at launch, every launch, for
+        // anybody in that position.
+        var others: [String] = []
+        for row in rows where !others.contains(row.other(than: me)) {
+            others.append(row.other(than: me))
+        }
         let profiles = try await people(ids: others)
         let byID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
 
