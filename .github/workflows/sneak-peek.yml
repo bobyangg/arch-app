@@ -1,0 +1,129 @@
+# A screen recording of the Daily 5, for sneak peeks.
+#
+# Nobody on this project has a Mac, so the simulator here is the only place Arch
+# can be filmed. `ArchUITests/ArchSneakPeek` walks through the roster at a pace a
+# viewer can follow, the simulator records while it does, and the video is kept
+# as an artifact: open the run on GitHub, scroll to Artifacts, download
+# `sneak-peek`.
+#
+# The design build, so every person on screen is made up (`MockData`), with the
+# pictures in `Arch/Resources/MockPhotos` where there are any.
+#
+# Separate from Build so that every push does not pay for a recording. It runs by
+# itself when the walk-through, the pictures or this file change, and from the
+# Actions tab ("Run workflow") whenever wanted.
+
+name: Sneak peek
+
+on:
+  push:
+    paths:
+      - ArchUITests/ArchSneakPeek.swift
+      - Arch/Resources/MockPhotos/**
+      - Arch/Mock/**
+      - .github/workflows/sneak-peek.yml
+  workflow_dispatch:
+
+concurrency:
+  group: sneak-peek-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  record:
+    name: Record the Daily 5
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+
+      # Same reasoning as Build: the newest Xcode keeps the SDK and the runner's
+      # simulator runtimes in step.
+      - name: Use the newest Xcode on the image
+        run: |
+          newest=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
+          sudo xcode-select -switch "$newest"
+          xcodebuild -version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the project
+        run: xcodegen generate
+
+      # Built first and separately, so the recording is the app and not a
+      # compiler.
+      - name: Build for testing
+        run: |
+          udid=$(python3 tools/simrun.py --device)
+          echo "UDID=$udid" >> "$GITHUB_ENV"
+          xcodebuild build-for-testing \
+            -project Arch.xcodeproj \
+            -scheme Arch \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$udid" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            > build.log 2>&1 || {
+              grep -E "error:" build.log | sort -u | head -40 | while IFS= read -r line; do
+                printf '::error::%s\n' "$line"
+              done
+              exit 1
+            }
+
+      # Nine in the morning, when the five arrive.
+      - name: Boot the simulator
+        run: |
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl ui "$UDID" appearance dark || true
+          xcrun simctl status_bar "$UDID" override --time 9:00 \
+            --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 \
+            || echo "status bar override unavailable"
+
+      # `recordVideo` stops cleanly only on SIGINT; anything harsher leaves a file
+      # with no index that will not play.
+      - name: Record the walk-through
+        run: |
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force sneak-peek.mp4 &
+          recorder=$!
+          sleep 3
+          status=0
+          xcodebuild test-without-building \
+            -project Arch.xcodeproj \
+            -scheme Arch \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "id=$UDID" \
+            -derivedDataPath build \
+            -only-testing:ArchUITests/ArchSneakPeek \
+            CODE_SIGNING_ALLOWED=NO \
+            > test.log 2>&1 || status=$?
+          sleep 1
+          kill -INT "$recorder"
+          wait "$recorder" || true
+          grep -E "error:|Test Case|TEST" test.log | tail -20 || true
+          ls -lh sneak-peek.mp4
+          exit $status
+
+      # Kept even when the walk-through failed part-way: a video that stops early
+      # is still the clearest account of where it stopped.
+      - name: Upload the video
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sneak-peek
+          retention-days: 30
+          path: sneak-peek.mp4
+          if-no-files-found: warn
+
+      - name: Keep the log
+        if: failure()
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: sneak-peek-log
+          retention-days: 7
+          path: |
+            build.log
+            test.log
+          if-no-files-found: ignore

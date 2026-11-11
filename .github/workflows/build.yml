@@ -241,6 +241,7 @@ jobs:
             -destination "id=$udid" \
             -derivedDataPath build \
             -resultBundlePath TestResults.xcresult \
+            -skip-testing:ArchUITests/ArchSneakPeek \
             CODE_SIGNING_ALLOWED=NO \
             | tee test.log
 

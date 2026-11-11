@@ -750,12 +750,12 @@ enum MockData {
         work: "Structural engineer",
         gender: .woman,
         pronouns: "she/her",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "nadia-p1", toneIndex: 0),
             Photo(id: "nadia-p2", toneIndex: 3),
             Photo(id: "nadia-p3", toneIndex: 1),
             Photo(id: "nadia-p4", toneIndex: 5)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "nadia-q1",
@@ -791,12 +791,12 @@ enum MockData {
         work: "Pastry cook",
         gender: .man,
         pronouns: "",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "teo-p1", toneIndex: 4),
             Photo(id: "teo-p2", toneIndex: 2),
             Photo(id: "teo-p3", toneIndex: 0),
             Photo(id: "teo-p4", toneIndex: 3)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "teo-q1",
@@ -830,12 +830,12 @@ enum MockData {
         work: "Restores film cameras",
         gender: .woman,
         pronouns: "she/her",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "priya-p1", toneIndex: 2),
             Photo(id: "priya-p2", toneIndex: 5),
             Photo(id: "priya-p3", toneIndex: 1),
             Photo(id: "priya-p4", toneIndex: 4)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "priya-q1",
@@ -869,12 +869,12 @@ enum MockData {
         work: "Nurse, emergency",
         gender: .man,
         pronouns: "he/him",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "marcus-p1", toneIndex: 1),
             Photo(id: "marcus-p2", toneIndex: 4),
             Photo(id: "marcus-p3", toneIndex: 3),
             Photo(id: "marcus-p4", toneIndex: 0)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "marcus-q1",
@@ -908,12 +908,12 @@ enum MockData {
         work: "Translator",
         gender: .woman,
         pronouns: "she/her",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "lena-p1", toneIndex: 5),
             Photo(id: "lena-p2", toneIndex: 0),
             Photo(id: "lena-p3", toneIndex: 2),
             Photo(id: "lena-p4", toneIndex: 1)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "lena-q1",
@@ -947,7 +947,7 @@ enum MockData {
         work: "Landscape architect",
         gender: .woman,
         pronouns: "she/her",
-        photos: [Photo(id: "hana-p1", toneIndex: 2)],
+        photos: MockPhotos.attach([Photo(id: "hana-p1", toneIndex: 2)]),
         prompts: [
             Prompt(
                 id: "hana-q1",
@@ -976,12 +976,12 @@ enum MockData {
         work: "Bookbinder",
         gender: .woman,
         pronouns: "she/they",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "ines-p1", toneIndex: 1),
             Photo(id: "ines-p2", toneIndex: 4),
             Photo(id: "ines-p3", toneIndex: 0),
             Photo(id: "ines-p4", toneIndex: 2)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "ines-q1",
@@ -1015,12 +1015,12 @@ enum MockData {
         work: "Bus mechanic",
         gender: .nonBinary,
         pronouns: "they/them",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "dev-p1", toneIndex: 3),
             Photo(id: "dev-p2", toneIndex: 5),
             Photo(id: "dev-p3", toneIndex: 2),
             Photo(id: "dev-p4", toneIndex: 1)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "dev-q1",
@@ -1055,12 +1055,12 @@ enum MockData {
         work: "Piano tuner",
         gender: .man,
         pronouns: "",
-        photos: [
+        photos: MockPhotos.attach([
             Photo(id: "yusuf-p1", toneIndex: 5),
             Photo(id: "yusuf-p2", toneIndex: 1),
             Photo(id: "yusuf-p3", toneIndex: 3),
             Photo(id: "yusuf-p4", toneIndex: 0)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "yusuf-q1",
@@ -1097,7 +1097,7 @@ enum MockData {
         work: "Sound engineer",
         gender: .woman,
         pronouns: "she/her",
-        photos: [
+        photos: MockPhotos.attach([
             // The first photo, and the one the rule is about: it is fine as a
             // photograph and simply cannot be the one people meet you with. Seeded
             // here because this is the state that needed a rule change to exist —
@@ -1108,7 +1108,7 @@ enum MockData {
             Photo(id: "you-p4", toneIndex: 0),
             Photo(id: "you-p5", toneIndex: 2),
             Photo(id: "you-p6", toneIndex: 5)
-        ],
+        ]),
         prompts: [
             Prompt(
                 id: "you-q1",
