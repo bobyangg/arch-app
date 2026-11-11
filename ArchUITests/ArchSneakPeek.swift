@@ -36,6 +36,8 @@ final class ArchSneakPeek: XCTestCase {
         app.launch()
         XCTAssertTrue(app.buttons["tab.daily"].waitForExistence(timeout: 30),
                       "Arch never got past its launch view, so there is nothing to record.")
+        mark("READY")
+        defer { mark("DONE") }
 
         // This morning's five.
         hold(2.5)
@@ -43,6 +45,7 @@ final class ArchSneakPeek: XCTestCase {
         // One of them.
         guard let card = rosterCard(in: app) else { return }
         card.tap()
+        mark("profile")
         hold(1.5)
 
         // No like button: the photo is what you write about.
@@ -57,6 +60,7 @@ final class ArchSneakPeek: XCTestCase {
         ).firstMatch
         guard write.waitForExistence(timeout: 3) else { return }
         write.tap()
+        mark("composer")
         hold(0.8)
 
         // The composer focuses itself.
@@ -68,6 +72,7 @@ final class ArchSneakPeek: XCTestCase {
         let send = app.buttons["Send"].firstMatch
         guard send.waitForExistence(timeout: 3), send.isEnabled else { return }
         send.tap()
+        mark("sent")
         hold(1.2)
 
         // Where the conversation lives now.
@@ -93,6 +98,13 @@ final class ArchSneakPeek: XCTestCase {
         return app.buttons.allElementsBoundByIndex.first { element in
             element.exists && element.isHittable && !tabs.contains(element.identifier)
         }
+    }
+
+    /// A line in the test log the workflow cuts the video by: `SNEAKPEEK READY`
+    /// and `SNEAKPEEK DONE` are where it starts and stops, the rest say where the
+    /// time went. Wall-clock seconds, which the simulator shares with the Mac.
+    private func mark(_ what: String) {
+        print("SNEAKPEEK \(what) \(Date().timeIntervalSince1970)")
     }
 
     /// A pause a viewer can see.

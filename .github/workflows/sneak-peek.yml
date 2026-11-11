@@ -105,36 +105,42 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             > test.log 2>&1 || status=$?
           sleep 1
+          python3 -c "import time; print(time.time())" > stopped.txt
           kill -INT "$recorder"
           wait "$recorder" || true
-          grep -E "error:|Test Case|TEST" test.log | tail -20 || true
+          grep -E "error:|Test Case|TEST|SNEAKPEEK" test.log | tail -24 || true
           ls -lh raw.mp4
           exit $status
 
       # **Only the walk-through, not the minute before it.** The recorder has to
-      # be running before xcodebuild starts, and xcodebuild spends most of a
-      # minute installing the runner and the app before the first frame of Arch.
-      # The test reports how long it took, and it ends a second before the
-      # recording does, so the last that-many seconds are the part worth keeping.
+      # be running before xcodebuild starts, and xcodebuild spends a minute or
+      # more installing the runner and launching the app before the roster is on
+      # screen -- time the test's own duration includes, so cutting by that kept
+      # it. The test prints the wall-clock moment the roster appeared and the
+      # moment it finished, and the recording stopped at a moment written to
+      # `stopped.txt`; the cut is measured back from that end.
       #
       # Re-encoded rather than cut on keyframes, so it starts on the frame it
-      # says it does. Without a duration -- the test never got going -- the whole
+      # says it does. Without the marks -- the test never got going -- the whole
       # recording is kept, because it shows where it stopped.
       - name: Trim to the walk-through
         if: always()
         run: |
           [ -f raw.mp4 ] || exit 0
-          secs=$(grep -oE "testTheDailyFive\]' passed \(([0-9.]+) seconds\)" test.log \
-                   | grep -oE "[0-9]+(\.[0-9]+)?" | tail -1 || true)
-          if [ -z "$secs" ]; then
-            echo "No duration in the log; keeping the whole recording."
+          ready=$(grep -oE "SNEAKPEEK READY [0-9.]+" test.log | awk '{print $3}' | tail -1 || true)
+          done_at=$(grep -oE "SNEAKPEEK DONE [0-9.]+" test.log | awk '{print $3}' | tail -1 || true)
+          stopped=$(cat stopped.txt 2>/dev/null || true)
+          if [ -z "$ready" ] || [ -z "$done_at" ] || [ -z "$stopped" ]; then
+            echo "No marks in the log; keeping the whole recording."
             cp raw.mp4 sneak-peek.mp4
             exit 0
           fi
+          read -r from length < <(python3 -c "
+          r, d, s = $ready, $done_at, $stopped
+          print(round(s - r + 0.4, 2), round(d - r + 0.6, 2))")
+          echo "Roster on screen ${from}s before the end; keeping ${length}s."
           command -v ffmpeg >/dev/null || brew install ffmpeg
-          keep=$(python3 -c "print(round($secs + 1.5, 1))")
-          echo "Keeping the last $keep seconds."
-          ffmpeg -loglevel error -y -sseof "-$keep" -i raw.mp4 \
+          ffmpeg -loglevel error -y -sseof "-$from" -i raw.mp4 -t "$length" \
             -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -movflags +faststart -an \
             sneak-peek.mp4 || cp raw.mp4 sneak-peek.mp4
           ls -lh sneak-peek.mp4
