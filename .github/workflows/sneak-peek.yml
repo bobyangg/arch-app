@@ -72,15 +72,15 @@ jobs:
 
       # Nine in the morning, when the five arrive.
       #
-      # A full ISO date in the runner's own zone, which is the zone the
-      # simulator draws the clock in. A bare `9:00` is refused by current Xcode
-      # ("Invalid, non-ISO date/time string") and the clock kept the real time.
+      # A full ISO date in UTC, which is the runner's zone and so the zone the
+      # simulator draws the clock in. Current Xcode refuses a bare `9:00`, and
+      # an offset written `+00:00`, as "Invalid, non-ISO date/time string".
       - name: Boot the simulator
         run: |
           xcrun simctl boot "$UDID" 2>/dev/null || true
           xcrun simctl bootstatus "$UDID" -b
           xcrun simctl ui "$UDID" appearance dark || true
-          nine=$(date +%Y-%m-%dT09:00:00%z | sed -E 's/([+-][0-9]{2})([0-9]{2})$/\1:\2/')
+          nine=$(date -u +%Y-%m-%dT09:00:00Z)
           echo "Clock: $nine"
           xcrun simctl status_bar "$UDID" override --time "$nine" \
             --batteryState charged --batteryLevel 100 --wifiBars 3 --cellularBars 4 \
