@@ -19,7 +19,7 @@ final class ArchSneakPeek: XCTestCase {
 
     /// Who is written to. The first person in the mock roster, and the fallback
     /// is whoever is first on screen.
-    private let name = "Priya"
+    private let person = "Priya"
     private let message = "Okay, I need the story behind this photo."
 
     override func setUp() {
@@ -101,10 +101,10 @@ final class ArchSneakPeek: XCTestCase {
         }
     }
 
-    /// The card for `name`, or else the first thing on the roster that opens a
+    /// The card for `person`, or else the first thing on the roster that opens a
     /// profile. The mock names are not a contract, so neither is this.
     private func rosterCard(in app: XCUIApplication) -> XCUIElement? {
-        let named = app.buttons[name].firstMatch
+        let named = app.buttons[person].firstMatch
         if named.waitForExistence(timeout: 3), named.isHittable { return named }
         return app.buttons.allElementsBoundByIndex.first { element in
             element.exists && element.isHittable && !tabs.contains(element.identifier)
