@@ -90,7 +90,7 @@ jobs:
       # with no index that will not play.
       - name: Record the walk-through
         run: |
-          xcrun simctl io "$UDID" recordVideo --codec=h264 --force sneak-peek.mp4 &
+          xcrun simctl io "$UDID" recordVideo --codec=h264 --force raw.mp4 &
           recorder=$!
           sleep 3
           status=0
@@ -108,8 +108,36 @@ jobs:
           kill -INT "$recorder"
           wait "$recorder" || true
           grep -E "error:|Test Case|TEST" test.log | tail -20 || true
-          ls -lh sneak-peek.mp4
+          ls -lh raw.mp4
           exit $status
+
+      # **Only the walk-through, not the minute before it.** The recorder has to
+      # be running before xcodebuild starts, and xcodebuild spends most of a
+      # minute installing the runner and the app before the first frame of Arch.
+      # The test reports how long it took, and it ends a second before the
+      # recording does, so the last that-many seconds are the part worth keeping.
+      #
+      # Re-encoded rather than cut on keyframes, so it starts on the frame it
+      # says it does. Without a duration -- the test never got going -- the whole
+      # recording is kept, because it shows where it stopped.
+      - name: Trim to the walk-through
+        if: always()
+        run: |
+          [ -f raw.mp4 ] || exit 0
+          secs=$(grep -oE "testTheDailyFive\]' passed \(([0-9.]+) seconds\)" test.log \
+                   | grep -oE "[0-9]+(\.[0-9]+)?" | tail -1 || true)
+          if [ -z "$secs" ]; then
+            echo "No duration in the log; keeping the whole recording."
+            cp raw.mp4 sneak-peek.mp4
+            exit 0
+          fi
+          command -v ffmpeg >/dev/null || brew install ffmpeg
+          keep=$(python3 -c "print(round($secs + 1.5, 1))")
+          echo "Keeping the last $keep seconds."
+          ffmpeg -loglevel error -y -sseof "-$keep" -i raw.mp4 \
+            -c:v libx264 -preset veryfast -crf 20 -pix_fmt yuv420p -movflags +faststart -an \
+            sneak-peek.mp4 || cp raw.mp4 sneak-peek.mp4
+          ls -lh sneak-peek.mp4
 
       # Kept even when the walk-through failed part-way: a video that stops early
       # is still the clearest account of where it stopped.

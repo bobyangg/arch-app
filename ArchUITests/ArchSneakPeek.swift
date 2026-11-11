@@ -27,42 +27,29 @@ final class ArchSneakPeek: XCTestCase {
         continueAfterFailure = false
     }
 
+    /// About fifteen seconds once the app is up: the five, one profile, a message
+    /// written about a photo, and where the conversation goes. One idea per shot,
+    /// held just long enough to read -- a sneak peek is watched on a phone, in a
+    /// feed, by somebody who has not decided to stop scrolling yet.
     func testTheDailyFive() {
         let app = XCUIApplication()
         app.launch()
         XCTAssertTrue(app.buttons["tab.daily"].waitForExistence(timeout: 30),
                       "Arch never got past its launch view, so there is nothing to record.")
 
-        // The launch view has gone; let the roster sit on screen.
-        hold(3)
-
-        // The five, top to bottom and back.
-        app.swipeUp(velocity: .slow)
-        hold(1.5)
-        app.swipeUp(velocity: .slow)
-        hold(1.5)
-        app.swipeDown(velocity: .slow)
-        app.swipeDown(velocity: .slow)
-        hold(1.5)
-
-        // Somebody's profile.
-        guard let card = rosterCard(in: app) else { return }
-        card.tap()
+        // This morning's five.
         hold(2.5)
 
-        // Their photos and answers.
-        app.swipeUp(velocity: .slow)
+        // One of them.
+        guard let card = rosterCard(in: app) else { return }
+        card.tap()
         hold(1.5)
-        app.swipeUp(velocity: .slow)
-        hold(1.5)
-        app.swipeDown(velocity: .fast)
-        hold(1)
 
         // No like button: the photo is what you write about.
         let photo = app.buttons["Photo 1"].firstMatch
         if photo.waitForExistence(timeout: 3), photo.isHittable {
             photo.tap()
-            hold(1.5)
+            hold(0.8)
         }
 
         let write = app.buttons.matching(
@@ -70,34 +57,31 @@ final class ArchSneakPeek: XCTestCase {
         ).firstMatch
         guard write.waitForExistence(timeout: 3) else { return }
         write.tap()
-        hold(1.5)
+        hold(0.8)
 
-        // The composer focuses itself. Typed slowly enough to read.
+        // The composer focuses itself.
         if app.keyboards.count == 0 { app.textViews.firstMatch.tap() }
         guard app.keyboards.firstMatch.waitForExistence(timeout: 3) else { return }
-        for word in message.split(separator: " ") {
-            app.typeText(String(word) + " ")
-            usleep(180_000)
-        }
-        hold(2)
+        app.typeText(message)
+        hold(1.2)
 
         let send = app.buttons["Send"].firstMatch
         guard send.waitForExistence(timeout: 3), send.isEnabled else { return }
         send.tap()
-        hold(2.5)
+        hold(1.2)
 
         // Where the conversation lives now.
         let messages = app.buttons["tab.messages"]
         if messages.waitForExistence(timeout: 5), messages.isHittable {
             messages.tap()
-            hold(2.5)
+            hold(1)
         }
-        let thread = app.buttons.matching(
-            NSPredicate(format: "identifier BEGINSWITH 'messages.thread.'")
-        ).firstMatch
+        let thread = app.buttons["messages.thread.priya"].exists
+            ? app.buttons["messages.thread.priya"]
+            : app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH 'messages.thread.'")).firstMatch
         if thread.waitForExistence(timeout: 3), thread.isHittable {
             thread.tap()
-            hold(3)
+            hold(2)
         }
     }
 

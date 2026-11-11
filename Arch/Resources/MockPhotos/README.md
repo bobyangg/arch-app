@@ -25,3 +25,31 @@ at a time. The first file for each person is the one on their roster card.
   real Arch member, and never anyone who has not agreed to it.
 - Square, about 1000 x 1000 pixels. Profile photos are drawn square.
 - Not shipped: the Release build leaves this folder out.
+
+## What is here now
+
+Stock photographs from [Unsplash](https://unsplash.com), under the
+[Unsplash License](https://unsplash.com/license): free for commercial use, no
+permission needed. The license does not cover implying that the person pictured
+endorses Arch or is on it, so anything public made with these (an ad, a sneak
+peek) should say the profiles are illustrative, for example "Profiles shown are
+not real people."
+
+Resized to 800 x 800. Each came from `https://images.unsplash.com/photo-<id>`:
+
+| File | Unsplash photo id |
+| --- | --- |
+| `priya-p1.jpg` | 1488426862026-3ee34a7d66df |
+| `priya-p2.jpg` | 1495121553079-4c61bcce1894 |
+| `priya-p3.jpg` | 1452587925148-ce544e77e70d |
+| `priya-p4.jpg` | 1510127034890-ba27508e9f1c |
+| `marcus-p1.jpg` | 1507003211169-0a1dd7228f2d |
+| `hana-p1.jpg` | 1534528741775-53994a69daeb |
+| `ines-p1.jpg` | 1520813792240-56fc4a3765a7 |
+| `dev-p1.jpg` | 1517841905240-472988babdf9 |
+| `nadia-p1.jpg` | 1494790108377-be9c29b29330 |
+| `teo-p1.jpg` | 1539571696357-5a69c17a67c6 |
+| `lena-p1.jpg` | 1438761681033-6461ffad8d80 |
+| `yusuf-p1.jpg` | 1500648767791-00dcc994a43e |
+
+Everyone else, and everyone's other photos, are still colour blocks.
